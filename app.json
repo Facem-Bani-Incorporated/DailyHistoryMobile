@@ -3,13 +3,13 @@
     "name": "DailyHistoryMobile",
     "slug": "DailyHistoryMobile",
     "version": "1.0.0",
+    "icon": "./assets/icon.png",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
     "scheme": "dailyhistorymobile",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/splash-icon.png",
+      "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -17,8 +17,10 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.rexinus.DailyHistoryMobile",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
@@ -26,14 +28,20 @@
     },
     "web": {
       "bundler": "metro",
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "output": "static"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "40d2f71e-3f11-4574-b212-a7f3cd044377"
+      }
     }
   }
 }

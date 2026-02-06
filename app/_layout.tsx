@@ -1,59 +1,71 @@
-import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
-import 'react-native-reanimated';
-
-import { useColorScheme } from '@/components/useColorScheme';
-
-export {
-  // Catch any errors thrown by the Layout component.
-  ErrorBoundary,
-} from 'expo-router';
-
-export const unstable_settings = {
-  // Ensure that reloading on `/modal` keeps a back button present.
-  initialRouteName: '(tabs)',
-};
-
-// Prevent the splash screen from auto-hiding before asset loading is complete.
-SplashScreen.preventAutoHideAsync();
+import { Stack, useRouter, useSegments } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, View } from 'react-native';
+import { useAuthStore } from '../store/useAuthStore';
 
 export default function RootLayout() {
-  const [loaded, error] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-    ...FontAwesome.font,
-  });
+  const token = useAuthStore((state) => state.token);
+  const segments = useSegments();
+  const router = useRouter();
 
-  // Expo Router uses Error Boundaries to catch errors in the navigation tree.
+  const [ready, setReady] = useState(false);
+
+  /* -------------------- INIT -------------------- */
   useEffect(() => {
-    if (error) throw error;
-  }, [error]);
+    setReady(true);
+  }, []);
+  /* ---------------------------------------------- */
 
+  /* -------------------- JWT GUARD -------------------- */
   useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
-    }
-  }, [loaded]);
+  if (!ready) return;
 
-  if (!loaded) {
-    return null;
+  const inAuthGroup = segments[0] === '(auth)';
+  const isNotificationPrompt = segments[0] === 'notification-prompt';
+
+  // Dacă nu am token și NU sunt în grupul de auth și NU sunt pe prompt-ul de notificări
+  if (!token && !inAuthGroup && !isNotificationPrompt) {
+    router.replace('/(auth)/welcome');
+  } 
+  // Dacă am token și încerc să intru la auth, trimite-mă în main
+  else if (token && inAuthGroup) {
+    router.replace('/(main)');
   }
+}, [token, segments, ready]);
+  /* -------------------------------------------------- */
 
-  return <RootLayoutNav />;
-}
+  /* -------------------- LOADER -------------------- */
+  if (!ready) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: '#0e1117',
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}
+      >
+        <ActivityIndicator size="large" color="#ffd700" />
+      </View>
+    );
+  }
+  /* ------------------------------------------------ */
 
-function RootLayoutNav() {
-  const colorScheme = useColorScheme();
-
+  /* -------------------- STACK -------------------- */
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
-      </Stack>
-    </ThemeProvider>
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="(auth)" />
+      <Stack.Screen name="(main)" />
+
+      {/* Overlay */}
+      <Stack.Screen
+        name="notification-prompt"
+        options={{
+          presentation: 'transparentModal',
+          animation: 'fade', 
+          headerShown: false,
+        }}
+      />
+    </Stack>
   );
 }
