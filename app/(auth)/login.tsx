@@ -1,8 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as GoogleAuth from 'expo-auth-session/providers/google';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as Notifications from 'expo-notifications'; // Import nou
+import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import * as WebBrowser from 'expo-web-browser';
 import {
   Apple,
   ArrowLeft,
@@ -30,13 +32,14 @@ import {
 import api from '../../api';
 import { useAuthStore } from '../../store/useAuthStore';
 
-// CONFIGURARE NOTIFICĂRI: Spunem sistemului să arate alerta chiar dacă aplicația e deschisă
+// Finalizează sesiunea de browser pentru Google Auth
+WebBrowser.maybeCompleteAuthSession();
+
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldVibrate: true,
-    // Proprietățile cerute de noile versiuni de Expo:
     shouldShowBanner: true,
     shouldShowList: true,
     shouldSetBadge: true,
@@ -54,28 +57,109 @@ export default function LoginScreen() {
     password: '',
   });
 
-  // FUNCȚIA DE TEST PENTRU NOTIFICARE REALĂ
+  // --- 1. CONFIGURARE GOOGLE AUTH ---
+  const [request, response, promptAsync] = GoogleAuth.useAuthRequest({
+    androidClientId: 'ID-UL-TAU-ANDROID.apps.googleusercontent.com',
+    iosClientId: 'ID-UL-TAU-IOS.apps.googleusercontent.com',
+  });
+
+  // Logare stare request Google
+  useEffect(() => {
+    if (response) {
+      console.log("🟡 Google Auth Response Type:", response.type);
+      if (response.type === 'success') {
+        const { authentication } = response;
+        console.log("🔑 Google ID Token primit:", authentication?.idToken?.substring(0, 15) + "...");
+        handleBackendGoogleLogin(authentication?.idToken);
+      }
+    }
+  }, [response]);
+
+  // --- 2. HANDLE GOOGLE LOGIN (BACKEND CONTEXT) ---
+  const handleBackendGoogleLogin = async (googleToken: string | undefined | null) => {
+    if (!googleToken) return;
+    
+    console.log("🚀 Trimitere token Google către Sergiu...");
+    setIsLoading(true);
+    try {
+      const res = await api.post('/auth/google', { token: googleToken });
+      console.log("✅ Backend-ul lui Sergiu a validat Google Login!");
+      
+      const { token, user } = res.data;
+      setAuth(token, user);
+      router.replace('/(main)');
+    } catch (error: any) {
+      console.error('❌ Google Backend Error:', error.message);
+      
+      // MOCK pentru testare
+      console.warn('⚠️ Server offline - Activare sesiune fictivă Google.');
+      setAuth('fake-google-jwt-123', { name: 'Google Explorer', email: 'test@google.com' });
+      router.replace('/(main)');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // --- 3. HANDLE CLASSIC LOGIN ---
+  const handleLogin = async () => {
+    if (!form.email || !form.password) {
+      Alert.alert('Atenție', 'Te rugăm să introduci email-ul și parola.');
+      return;
+    }
+
+    console.log("📧 Încercare login clasic pentru:", form.email);
+    setIsLoading(true);
+    try {
+      const res = await api.post('/auth/login', {
+        username: form.email,
+        password: form.password,
+      });
+
+      console.log("✅ Login reușit cu succes!");
+      const { token, user } = res.data;
+      setAuth(token, user);
+      router.replace('/(main)');
+    } catch (e: any) {
+      if (!e.response) {
+        console.warn('⚠️ Backend offline. Activare sesiune fictivă JWT.');
+        // Te lasă să intri chiar dacă serverul e jos (pentru teste front-end)
+        setAuth('fake-jwt-token-999', { name: 'History Explorer', email: form.email });
+        router.replace('/(main)');
+      } else {
+        console.error("❌ Eroare Auth:", e.response?.data?.message || "Credentiale gresite");
+        Alert.alert('Eroare', 'Email sau parolă incorectă.');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // --- 4. HANDLE APPLE (MOCK) ---
+  const handleAppleLogin = () => {
+    console.log("🍏 Apple Login apăsat (Urmează să fie implementat)");
+    Alert.alert("Apple Auth", "Funcționalitatea Apple va fi disponibilă după configurarea contului de Developer Apple.");
+  };
+
+  // --- 5. NOTIFICĂRI & ALTE HANDLE-URI ---
   const triggerNotificationTest = async () => {
+    console.log("🔔 Test notificare & vibrație declanșat");
     try {
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
       let finalStatus = existingStatus;
-      
       if (existingStatus !== 'granted') {
         const { status } = await Notifications.requestPermissionsAsync();
         finalStatus = status;
       }
-
       if (finalStatus !== 'granted') {
         Alert.alert('Eroare', 'Permisiunile pentru notificări au fost respinse.');
         return;
       }
-
       await Notifications.scheduleNotificationAsync({
         content: {
           title: "📜 Daily History Gold",
           body: "A new Archive has been discovered",
           sound: true,
-          badge: 1, // Adăugăm și un badge pentru realism
+          badge: 1,
         },
         trigger: null,
       });
@@ -88,6 +172,7 @@ export default function LoginScreen() {
     const showNotificationPrompt = async () => {
       try {
         const seen = await AsyncStorage.getItem('notif_prompt_seen');
+        console.log("📦 Verificare prompt notificare. Văzut anterior:", seen);
         if (!seen) {
           setTimeout(() => {
             router.push('/notification-prompt');
@@ -99,35 +184,6 @@ export default function LoginScreen() {
     };
     showNotificationPrompt();
   }, []);
-
-  const handleLogin = async () => {
-    if (!form.email || !form.password) {
-      Alert.alert('Atenție', 'Te rugăm să introduci email-ul și parola.');
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const res = await api.post('/auth/login', {
-        username: form.email,
-        password: form.password,
-      });
-
-      const { token, user } = res.data;
-      setAuth(token, user);
-      router.replace('/(main)');
-    } catch (e: any) {
-      if (!e.response) {
-        console.warn('Backend offline. Sesiune fictivă activată.');
-        setAuth('fake-jwt-token', { name: 'History Explorer' });
-        router.replace('/(main)');
-      } else {
-        Alert.alert('Eroare', 'Email sau parolă incorectă.');
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   return (
     <KeyboardAvoidingView
@@ -142,12 +198,14 @@ export default function LoginScreen() {
       >
         <View style={styles.topActions}>
           <TouchableOpacity
-            onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
+            onPress={() => {
+                console.log("⬅️ Back pressed");
+                router.canGoBack() ? router.back() : router.replace('/');
+            }}
           >
             <ArrowLeft color="#ffd700" size={28} />
           </TouchableOpacity>
 
-          {/* BUTONUL TĂU DE TEST CU VIBRAȚIE */}
           <TouchableOpacity style={styles.testNotifButton} onPress={triggerNotificationTest}>
             <BellRing color="#ffd700" size={18} />
             <Text style={styles.testNotifText}>Vibrate Now</Text>
@@ -189,7 +247,10 @@ export default function LoginScreen() {
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity style={styles.forgotPassword}>
+          <TouchableOpacity 
+            style={styles.forgotPassword}
+            onPress={() => console.log("🔗 Forgot password link clicked")}
+          >
             <Text style={styles.forgotText}>Forgot password?</Text>
           </TouchableOpacity>
 
@@ -214,13 +275,20 @@ export default function LoginScreen() {
           </View>
 
           <View style={styles.socialContainer}>
-            <TouchableOpacity style={styles.socialButton}>
+            <TouchableOpacity 
+              style={styles.socialButton} 
+              onPress={() => {
+                console.log("🔵 Google Login Button Pressed");
+                promptAsync();
+              }}
+              disabled={!request || isLoading}
+            >
               <Google color="#fff" size={22} />
               <Text style={styles.socialButtonText}>Google</Text>
             </TouchableOpacity>
 
             {Platform.OS === 'ios' && (
-              <TouchableOpacity style={styles.socialButton}>
+              <TouchableOpacity style={styles.socialButton} onPress={handleAppleLogin}>
                 <Apple color="#fff" size={22} />
                 <Text style={styles.socialButtonText}>Apple</Text>
               </TouchableOpacity>
@@ -229,7 +297,10 @@ export default function LoginScreen() {
 
           <TouchableOpacity
             style={styles.registerLink}
-            onPress={() => router.push('/(auth)/register')}
+            onPress={() => {
+                console.log("🔗 Navigate to Register");
+                router.push('/(auth)/register');
+            }}
           >
             <Text style={styles.registerLinkText}>
               Don't have an account? <Text style={styles.gold}>Join Now</Text>
@@ -258,7 +329,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#ffd700', // Schimbat în Gold să iasă în evidență
+    borderColor: '#ffd700',
     gap: 6,
   },
   testNotifText: {

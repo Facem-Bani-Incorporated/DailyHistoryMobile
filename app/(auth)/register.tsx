@@ -1,43 +1,107 @@
+import * as GoogleAuth from 'expo-auth-session/providers/google';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import {
-    Apple,
-    ArrowLeft, Eye, EyeOff,
-    Chrome as Google,
-    Lock,
-    Mail,
-    User
+  Apple,
+  ArrowLeft, Eye, EyeOff,
+  Chrome as Google,
+  Lock,
+  Mail,
+  User
 } from 'lucide-react-native';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
+
+import api from '../../api';
+import { useAuthStore } from '../../store/useAuthStore';
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function RegisterScreen() {
   const router = useRouter();
+  const setAuth = useAuthStore((state) => state.setAuth);
+  
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [form, setForm] = useState({
     username: '',
     email: '',
     password: '',
-    confirmPassword: ''
   });
+
+  // --- CONFIGURARE GOOGLE AUTH ---
+  const [request, response, promptAsync] = GoogleAuth.useAuthRequest({
+    androidClientId: 'ID-UL-TAU-ANDROID.apps.googleusercontent.com',
+    iosClientId: 'ID-UL-TAU-IOS.apps.googleusercontent.com',
+  });
+
+  useEffect(() => {
+    if (response?.type === 'success') {
+      const { authentication } = response;
+      handleGoogleRegister(authentication?.idToken);
+    }
+  }, [response]);
+
+  const handleGoogleRegister = async (idToken: string | undefined | null) => {
+    if (!idToken) return;
+    setIsLoading(true);
+    try {
+      // De obicei, backend-ul folosește același endpoint de Google pentru login și register (Upsert)
+      const res = await api.post('/auth/google', { token: idToken });
+      const { token, user } = res.data;
+      setAuth(token, user);
+      router.replace('/(main)');
+    } catch (error) {
+      console.error(error);
+      Alert.alert("Google Auth", "Server error. Fake session activated for testing.");
+      setAuth('fake-jwt-google', { name: 'New History Member' });
+      router.replace('/(main)');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleRegister = async () => {
     if (!form.username || !form.email || !form.password) {
       Alert.alert("Error", "Please fill in all fields.");
       return;
     }
-    // Logică viitoare Axios...
-    console.log("Registering with:", form);
+
+    setIsLoading(true);
+    try {
+      const res = await api.post('/auth/register', {
+        username: form.username,
+        email: form.email,
+        password: form.password
+      });
+
+      const { token, user } = res.data;
+      setAuth(token, user);
+      router.replace('/(main)');
+    } catch (e: any) {
+      if (!e.response) {
+        // Fallback pentru testare dacă backend-ul nu e gata
+        console.warn('Backend offline. Mocking register...');
+        setAuth('fake-jwt-token', { username: form.username });
+        router.replace('/(main)');
+      } else {
+        Alert.alert("Registration Failed", e.response?.data?.message || "Something went wrong.");
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -46,7 +110,6 @@ export default function RegisterScreen() {
       style={styles.container}
     >
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Back Button */}
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <ArrowLeft color="#ffd700" size={28} />
         </TouchableOpacity>
@@ -57,7 +120,6 @@ export default function RegisterScreen() {
         </View>
 
         <View style={styles.form}>
-          {/* Inputs */}
           <View style={styles.inputWrapper}>
             <User color="#666" size={20} style={styles.inputIcon} />
             <TextInput 
@@ -97,14 +159,20 @@ export default function RegisterScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Register Button */}
-          <TouchableOpacity style={styles.registerButton} onPress={handleRegister}>
+          <TouchableOpacity 
+            style={styles.registerButton} 
+            onPress={handleRegister}
+            disabled={isLoading}
+          >
             <LinearGradient colors={['#ffd700', '#b8860b']} style={styles.gradientButton}>
-              <Text style={styles.registerButtonText}>BECOME A MEMBER</Text>
+              {isLoading ? (
+                <ActivityIndicator color="#000" />
+              ) : (
+                <Text style={styles.registerButtonText}>BECOME A MEMBER</Text>
+              )}
             </LinearGradient>
           </TouchableOpacity>
 
-          {/* --- SOCIAL AUTH SECTION --- */}
           <View style={styles.dividerContainer}>
             <View style={styles.dividerLine} />
             <Text style={styles.dividerText}>OR CONTINUE WITH</Text>
@@ -112,7 +180,11 @@ export default function RegisterScreen() {
           </View>
 
           <View style={styles.socialContainer}>
-            <TouchableOpacity style={styles.socialButton}>
+            <TouchableOpacity 
+                style={styles.socialButton} 
+                onPress={() => promptAsync()}
+                disabled={!request || isLoading}
+            >
               <Google color="#fff" size={24} />
               <Text style={styles.socialButtonText}>Google</Text>
             </TouchableOpacity>
@@ -163,28 +235,10 @@ const styles = StyleSheet.create({
   registerButton: { marginTop: 10, borderRadius: 15, overflow: 'hidden' },
   gradientButton: { paddingVertical: 18, alignItems: 'center' },
   registerButtonText: { color: '#000', fontWeight: '900', fontSize: 16, letterSpacing: 1 },
-  
-  // Social Styles
-  dividerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 20,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#333',
-  },
-  dividerText: {
-    color: '#666',
-    marginHorizontal: 15,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  socialContainer: {
-    flexDirection: 'row',
-    gap: 15,
-  },
+  dividerContainer: { flexDirection: 'row', alignItems: 'center', marginVertical: 20 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: '#333' },
+  dividerText: { color: '#666', marginHorizontal: 15, fontSize: 12, fontWeight: '700' },
+  socialContainer: { flexDirection: 'row', gap: 15 },
   socialButton: {
     flex: 1,
     flexDirection: 'row',
@@ -197,11 +251,7 @@ const styles = StyleSheet.create({
     borderColor: '#333',
     gap: 10
   },
-  socialButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 15,
-  },
+  socialButtonText: { color: '#fff', fontWeight: '600', fontSize: 15 },
   loginLink: { alignItems: 'center', marginTop: 10 },
   loginLinkText: { color: '#aaa', fontSize: 15 }
 });
