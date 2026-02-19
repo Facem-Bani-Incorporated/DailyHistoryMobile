@@ -15,13 +15,13 @@ const { width, height } = Dimensions.get('window');
 
 // --- 1. CONFIG: URL-urile tale Cloudinary ---
 const HISTORICAL_IMAGES = [
-  'https://res.cloudinary.com/dimwqrltb/image/upload/w_500,c_fill,f_auto,q_auto/v1770387803/history_app/sec_1952_1.jpg',
-  'https://res.cloudinary.com/dimwqrltb/image/upload/w_500,c_fill,f_auto,q_auto/v1770387804/history_app/sec_1862_2.png',
-  'https://res.cloudinary.com/dimwqrltb/image/upload/w_500,c_fill,f_auto,q_auto/v1770387802/history_app/main_1778_2.jpg',
-  'https://res.cloudinary.com/dimwqrltb/image/upload/w_500,c_fill,f_auto,q_auto/v1770387801/history_app/main_1778_1.jpg',
-  'https://res.cloudinary.com/dimwqrltb/image/upload/w_500,c_fill,f_auto,q_auto/v1770387800/history_app/main_1778_0.jpg',
-  'https://res.cloudinary.com/dimwqrltb/image/upload/w_500,c_fill,f_auto,q_auto/v1770387802/history_app/sec_1899_0.jpg',
-  'https://res.cloudinary.com/dimwqrltb/image/upload/w_500,c_fill,f_auto,q_auto/v1770387806/history_app/sec_2023_4.jpg',
+  'https://res.cloudinary.com/dimwqrltb/image/upload/v1771459289/history_app/sec_1942_2.jpg',
+  'https://res.cloudinary.com/dimwqrltb/image/upload/v1771459288/history_app/sec_1915_1.jpg',
+  'https://res.cloudinary.com/dimwqrltb/image/upload/v1771372849/history_app/sec_1938_1.jpg',
+  'https://res.cloudinary.com/dimwqrltb/image/upload/v1771459286/history_app/sec_1942_0.jpg',
+  'https://res.cloudinary.com/dimwqrltb/image/upload/v1771459286/history_app/sec_1942_0.jpg',
+  'https://res.cloudinary.com/dimwqrltb/image/upload/v1771459286/history_app/sec_1942_0.jpg',
+  'https://res.cloudinary.com/dimwqrltb/image/upload/v1771459286/history_app/sec_1942_0.jpg',
 ];
 
 interface ScrollingColumnProps {
@@ -116,23 +116,25 @@ export default function WelcomeScreen() {
           </View>
 
           <View style={styles.buttonContainer}>
-            <TouchableOpacity
-              style={styles.mainButton}
-              onPress={() => router.push('/notification-prompt')} // <-- Modificat aici
-              activeOpacity={0.85}
-            >
-              <Text style={styles.buttonText}>Start Journey</Text>
-            </TouchableOpacity>
+  <TouchableOpacity
+    style={styles.mainButton}
+    // START JOURNEY -> de obicei duce la Înregistrare (Register)
+    onPress={() => router.push('/(auth)/register')} 
+    activeOpacity={0.85}
+  >
+    <Text style={styles.buttonText}>Start Journey</Text>
+  </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.secondaryButton}
-              onPress={() => router.push('/notification-prompt')} // <-- Și aici dacă vrei
-            >
-              <Text style={styles.secondaryButtonText}>
-                Have an account? <Text style={styles.gold}>Sign In</Text>
-              </Text>
-            </TouchableOpacity>
-          </View>
+  <TouchableOpacity
+    style={styles.secondaryButton}
+    // SIGN IN -> trebuie să ducă la ecranul de Login
+    onPress={() => router.push('/(auth)/login')} 
+  >
+    <Text style={styles.secondaryButtonText}>
+      Have an account? <Text style={styles.gold}>Sign In</Text>
+    </Text>
+  </TouchableOpacity>
+</View>
         </View>
       </LinearGradient>
     </View>

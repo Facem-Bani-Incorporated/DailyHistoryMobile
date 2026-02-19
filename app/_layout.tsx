@@ -1,6 +1,7 @@
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import api from '../api';
 import { useAuthStore } from '../store/useAuthStore';
 
 export default function RootLayout() {
@@ -8,61 +9,88 @@ export default function RootLayout() {
   const segments = useSegments();
   const router = useRouter();
 
-  const [ready, setReady] = useState(false);
+  const [isReady, setIsReady] = useState(false);
 
-  /* -------------------- INIT -------------------- */
+  /* -------------------- HYDRATION CHECK -------------------- */
   useEffect(() => {
-    setReady(true);
+    // Dacă deja s-a hidratat (hot reload)
+    if (useAuthStore.persist.hasHydrated()) {
+      console.log('[LAYOUT] Already hydrated on mount');
+      setIsReady(true);
+      return;
+    }
+
+    // Așteptăm hidratarea
+    const unsubFinishHydration = useAuthStore.persist.onFinishHydration(() => {
+      console.log('[LAYOUT] Hydration finished');
+      setIsReady(true);
+    });
+
+    // Fallback: dacă hidratarea durează prea mult, pornim oricum
+    const timeout = setTimeout(() => {
+      console.log('[LAYOUT] Hydration timeout fallback - forcing ready');
+      setIsReady(true);
+    }, 1000);
+
+    return () => {
+      unsubFinishHydration();
+      clearTimeout(timeout);
+    };
   }, []);
-  /* ---------------------------------------------- */
+  /* --------------------------------------------------------- */
+
+  /* ---- SYNC TOKEN ÎN AXIOS DUPĂ HYDRATION ---- */
+  useEffect(() => {
+    if (!isReady) return;
+
+    if (token) {
+      console.log('[LAYOUT] Syncing token to axios headers');
+      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    } else {
+      console.log('[LAYOUT] No token, clearing axios headers');
+      delete api.defaults.headers.common['Authorization'];
+    }
+  }, [token, isReady]);
+  /* -------------------------------------------- */
 
   /* -------------------- JWT GUARD -------------------- */
   useEffect(() => {
-  if (!ready) return;
+    if (!isReady) return;
 
-  const inAuthGroup = segments[0] === '(auth)';
-  const isNotificationPrompt = segments[0] === 'notification-prompt';
+    const inAuthGroup = segments[0] === '(auth)';
+    const isNotificationPrompt = segments[0] === 'notification-prompt';
 
-  // Dacă nu am token și NU sunt în grupul de auth și NU sunt pe prompt-ul de notificări
-  if (!token && !inAuthGroup && !isNotificationPrompt) {
-    router.replace('/(auth)/welcome');
-  } 
-  // Dacă am token și încerc să intru la auth, trimite-mă în main
-  else if (token && inAuthGroup) {
-    router.replace('/(main)');
-  }
-}, [token, segments, ready]);
+    console.log('[GUARD]', { token: !!token, segments });
+
+    if (!token) {
+      if (!inAuthGroup && !isNotificationPrompt) {
+        router.replace('/(auth)/welcome');
+      }
+    } else {
+      if (inAuthGroup) {
+        router.replace('/(main)');
+      }
+    }
+  }, [token, segments, isReady]);
   /* -------------------------------------------------- */
 
-  /* -------------------- LOADER -------------------- */
-  if (!ready) {
+  if (!isReady) {
     return (
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: '#0e1117',
-          justifyContent: 'center',
-          alignItems: 'center',
-        }}
-      >
+      <View style={{ flex: 1, backgroundColor: '#0e1117', justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" color="#ffd700" />
       </View>
     );
   }
-  /* ------------------------------------------------ */
 
-  /* -------------------- STACK -------------------- */
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(main)" />
-
-      {/* Overlay */}
       <Stack.Screen
         name="notification-prompt"
         options={{
           presentation: 'transparentModal',
-          animation: 'fade', 
+          animation: 'fade',
           headerShown: false,
         }}
       />

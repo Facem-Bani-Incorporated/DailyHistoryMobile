@@ -55,54 +55,48 @@ export default function RegisterScreen() {
   }, [response]);
 
   const handleGoogleRegister = async (idToken: string | undefined | null) => {
-    if (!idToken) return;
-    setIsLoading(true);
-    try {
-      // De obicei, backend-ul folosește același endpoint de Google pentru login și register (Upsert)
-      const res = await api.post('/auth/google', { token: idToken });
-      const { token, user } = res.data;
-      setAuth(token, user);
-      router.replace('/(main)');
-    } catch (error) {
-      console.error(error);
-      Alert.alert("Google Auth", "Server error. Fake session activated for testing.");
-      setAuth('fake-jwt-google', { name: 'New History Member' });
-      router.replace('/(main)');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  if (!idToken) return;
+  setIsLoading(true);
+  try {
+    // Backend-ul tău așteaptă 'idToken' conform GoogleSignInRequest.java
+    const res = await api.post('/auth/google', { idToken: idToken });
+    
+    // Destructurare conform JwtResponse (token, id, username, email, roles)
+    const { token, ...user } = res.data;
+    setAuth(token, user);
+    router.replace('/(main)');
+  } catch (error: any) {
+    console.error("Google Auth Error:", error.response?.data);
+    Alert.alert("Eroare", "Autentificarea Google a eșuat pe server.");
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   const handleRegister = async () => {
-    if (!form.username || !form.email || !form.password) {
-      Alert.alert("Error", "Please fill in all fields.");
-      return;
-    }
+  if (!form.username || !form.email || !form.password) {
+    Alert.alert("Eroare", "Toate câmpurile sunt obligatorii.");
+    return;
+  }
 
-    setIsLoading(true);
-    try {
-      const res = await api.post('/auth/register', {
-        username: form.username,
-        email: form.email,
-        password: form.password
-      });
+  setIsLoading(true);
+  try {
+    await api.post('/auth/register', {
+      username: form.username,
+      email: form.email,
+      password: form.password,
+      role: ["user"] // Necesar pentru switch-ul din AuthController.java
+    });
 
-      const { token, user } = res.data;
-      setAuth(token, user);
-      router.replace('/(main)');
-    } catch (e: any) {
-      if (!e.response) {
-        // Fallback pentru testare dacă backend-ul nu e gata
-        console.warn('Backend offline. Mocking register...');
-        setAuth('fake-jwt-token', { username: form.username });
-        router.replace('/(main)');
-      } else {
-        Alert.alert("Registration Failed", e.response?.data?.message || "Something went wrong.");
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    Alert.alert("Succes", "Cont creat! Acum te poți loga.");
+    router.replace('/(auth)/login');
+  } catch (e: any) {
+    console.log("Register Error Details:", e.response?.data || e.message);
+    Alert.alert("Eroare", e.response?.data?.message || "Nu s-a putut crea contul.");
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   return (
     <KeyboardAvoidingView 
