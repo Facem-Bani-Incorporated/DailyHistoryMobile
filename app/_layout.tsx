@@ -1,78 +1,51 @@
+import { GoogleSignin } from '@react-native-google-signin/google-signin'; // <--- IMPORTĂ ASTA
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
-import api from '../api';
 import { useAuthStore } from '../store/useAuthStore';
 
 export default function RootLayout() {
   const token = useAuthStore((state) => state.token);
   const segments = useSegments();
   const router = useRouter();
-
   const [isReady, setIsReady] = useState(false);
 
-  /* -------------------- HYDRATION CHECK -------------------- */
+  // 1. CONFIGURARE INITIALA (Google + Hydration)
   useEffect(() => {
-    // Dacă deja s-a hidratat (hot reload)
-    if (useAuthStore.persist.hasHydrated()) {
-      console.log('[LAYOUT] Already hydrated on mount');
-      setIsReady(true);
-      return;
-    }
-
-    // Așteptăm hidratarea
-    const unsubFinishHydration = useAuthStore.persist.onFinishHydration(() => {
-      console.log('[LAYOUT] Hydration finished');
-      setIsReady(true);
+    // CONFIGURARE GOOGLE - Fără asta nu apar conturile!
+    GoogleSignin.configure({
+      webClientId: '937397754645-8m819hke8eul773o681lre9960787p98.apps.googleusercontent.com', // Pune ID-ul tău Web aici
+      offlineAccess: true,
     });
 
-    // Fallback: dacă hidratarea durează prea mult, pornim oricum
-    const timeout = setTimeout(() => {
-      console.log('[LAYOUT] Hydration timeout fallback - forcing ready');
+    if (useAuthStore.persist.hasHydrated()) {
       setIsReady(true);
-    }, 1000);
-
-    return () => {
-      unsubFinishHydration();
-      clearTimeout(timeout);
-    };
-  }, []);
-  /* --------------------------------------------------------- */
-
-  /* ---- SYNC TOKEN ÎN AXIOS DUPĂ HYDRATION ---- */
-  useEffect(() => {
-    if (!isReady) return;
-
-    if (token) {
-      console.log('[LAYOUT] Syncing token to axios headers');
-      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     } else {
-      console.log('[LAYOUT] No token, clearing axios headers');
-      delete api.defaults.headers.common['Authorization'];
+      const unsub = useAuthStore.persist.onFinishHydration(() => setIsReady(true));
+      return () => unsub();
     }
-  }, [token, isReady]);
-  /* -------------------------------------------- */
+  }, []);
 
-  /* -------------------- JWT GUARD -------------------- */
+  // 2. JWT GUARD (Sincronizat cu procesul de navigare)
   useEffect(() => {
     if (!isReady) return;
 
     const inAuthGroup = segments[0] === '(auth)';
     const isNotificationPrompt = segments[0] === 'notification-prompt';
 
-    console.log('[GUARD]', { token: !!token, segments });
-
-    if (!token) {
-      if (!inAuthGroup && !isNotificationPrompt) {
+    // Folosim un mic delay (0ms) pentru a lăsa starea Zustand să se propage
+    const timeout = setTimeout(() => {
+      if (!token && !inAuthGroup && !isNotificationPrompt) {
+        console.log('[GUARD] Redirecting to welcome...');
         router.replace('/(auth)/welcome');
-      }
-    } else {
-      if (inAuthGroup) {
+      } else if (token && inAuthGroup) {
+        console.log('[GUARD] Redirecting to main...');
         router.replace('/(main)');
       }
-    }
+    }, 0);
+
+    return () => clearTimeout(timeout);
   }, [token, segments, isReady]);
-  /* -------------------------------------------------- */
 
   if (!isReady) {
     return (
@@ -88,11 +61,7 @@ export default function RootLayout() {
       <Stack.Screen name="(main)" />
       <Stack.Screen
         name="notification-prompt"
-        options={{
-          presentation: 'transparentModal',
-          animation: 'fade',
-          headerShown: false,
-        }}
+        options={{ presentation: 'transparentModal', animation: 'fade' }}
       />
     </Stack>
   );
