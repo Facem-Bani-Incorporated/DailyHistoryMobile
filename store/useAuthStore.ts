@@ -6,8 +6,14 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 export interface User {
   id: string;
   email: string;
-  name?: string;
-  picture?: string;
+  username?: string;
+  avatar_url?: string | null;
+  picture?: string | null;
+  provider: 'google' | 'standard';
+  roles?: string[];
+
+  // permite orice alt câmp din backend
+  [key: string]: any;
 }
 
 interface AuthState {
@@ -24,8 +30,18 @@ export const useAuthStore = create<AuthState>()(
       token: null,
       user: null,
       isAuthenticated: false,
-      setAuth: (token, user) => set({ token, user, isAuthenticated: true }),
-      logout: () => set({ token: null, user: null, isAuthenticated: false }),
+      setAuth: (token, user) =>
+        set({
+          token,
+          user,
+          isAuthenticated: true,
+        }),
+      logout: () =>
+        set({
+          token: null,
+          user: null,
+          isAuthenticated: false,
+        }),
     }),
     {
       name: 'auth-storage',
