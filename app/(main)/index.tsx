@@ -9,10 +9,10 @@ import {
   StatusBar,
   StyleSheet,
   Text,
-  View
+  View,
 } from 'react-native';
-// Importăm componenta de profil
 import ProfileAvatar from '../../components/ProfileAvatar';
+import { useTheme } from '../../context/ThemeContext';
 import { useAuthStore } from '../../store/useAuthStore';
 
 const MOCK_DATA = {
@@ -30,7 +30,8 @@ const MOCK_DATA = {
 export default function HomeScreen() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const user = useAuthStore((state) => state.user); 
+  const user = useAuthStore((state) => state.user);
+  const { theme } = useTheme();
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -42,47 +43,46 @@ export default function HomeScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.container, { justifyContent: 'center' }]}>
-        <ActivityIndicator size="large" color="#ffd700" />
+      <View style={[styles(theme).container, { justifyContent: 'center' }]}>
+        <ActivityIndicator size="large" color={theme.gold} />
       </View>
     );
   }
 
   const main = data?.main_event;
+  const s = styles(theme);
 
   return (
-    <View style={styles.container}>
-      {/* StatusBar ne asigură că pictogramele de sus (baterie, wifi) rămân albe */}
-      <StatusBar barStyle="light-content" />
-      
-      <SafeAreaView style={styles.header}>
-        <View style={styles.headerContent}>
+    <View style={s.container}>
+      <StatusBar barStyle={theme.background === '#0e1117' ? 'light-content' : 'dark-content'} />
+
+      <SafeAreaView style={s.header}>
+        <View style={s.headerContent}>
           <View>
-            <Text style={styles.headerTitle}>
-              HISTORY<Text style={styles.goldTextInline}>GOLD</Text>
+            <Text style={s.headerTitle}>
+              HISTORY<Text style={s.goldTextInline}>GOLD</Text>
             </Text>
-            <Text style={styles.userEmail}>{user?.email}</Text>
+            <Text style={s.userEmail}>{user?.email}</Text>
           </View>
-          
-          {/* Noul tău Profil care conține și Modalul și Logout-ul */}
+
           <ProfileAvatar />
         </View>
       </SafeAreaView>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
         {main?.gallery?.length > 0 && (
-          <Image source={{ uri: main.gallery[0] }} style={styles.heroImage} />
+          <Image source={{ uri: main.gallery[0] }} style={s.heroImage} />
         )}
-        <View style={styles.content}>
-          <Text style={styles.goldText}>
+        <View style={s.content}>
+          <Text style={s.goldText}>
             ANUL {main?.year} • IMPACT: {main?.impact_score}%
           </Text>
-          <Text style={styles.title}>{main?.title_translations?.ro}</Text>
-          <Text style={styles.narrative}>{main?.narrative_translations?.ro}</Text>
-          
-          <View style={styles.infoBox}>
-            <Ionicons name="information-circle-outline" size={20} color="#ffd700" />
-            <Text style={styles.infoText}>
+          <Text style={s.title}>{main?.title_translations?.ro}</Text>
+          <Text style={s.narrative}>{main?.narrative_translations?.ro}</Text>
+
+          <View style={s.infoBox}>
+            <Ionicons name="information-circle-outline" size={20} color={theme.gold} />
+            <Text style={s.infoText}>
               Apasă pe cercul auriu din dreapta sus pentru a vedea detaliile profilului tău.
             </Text>
           </View>
@@ -92,40 +92,51 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: '#0e1117' 
-  },
-  header: {
-    backgroundColor: '#1a1c23',
-    borderBottomWidth: 1,
-    borderBottomColor: '#2c2f36',
-    // Rezolvă suprapunerea cu bara de notificări pe Android
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
-  },
-  headerContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-  },
-  headerTitle: { color: 'white', fontWeight: '900', fontSize: 18, letterSpacing: 1 },
-  goldTextInline: { color: '#ffd700' },
-  userEmail: { color: '#666', fontSize: 11, marginTop: 2 },
-  heroImage: { width: '100%', height: 350, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 },
-  content: { padding: 25 },
-  goldText: { color: '#ffd700', fontWeight: 'bold', fontSize: 14, letterSpacing: 1.2, marginBottom: 10 },
-  title: { color: 'white', fontSize: 32, fontWeight: '900', marginBottom: 15 },
-  narrative: { color: '#bdc3c7', fontSize: 17, lineHeight: 28 },
-  infoBox: { 
-    flexDirection: 'row', 
-    backgroundColor: '#1a1c23', 
-    padding: 15, 
-    borderRadius: 12, 
-    marginTop: 30, 
-    alignItems: 'center' 
-  },
-  infoText: { color: '#ffd700', marginLeft: 10, fontSize: 13, flex: 1 }
-});
+const styles = (theme: ReturnType<typeof import('../../context/ThemeContext').useTheme>['theme']) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.background,
+    },
+    header: {
+      backgroundColor: theme.card,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.border,
+      paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+    },
+    headerContent: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: 20,
+      paddingVertical: 15,
+    },
+    headerTitle: { color: theme.text, fontWeight: '900', fontSize: 18, letterSpacing: 1 },
+    goldTextInline: { color: theme.gold },
+    userEmail: { color: theme.subtext, fontSize: 11, marginTop: 2 },
+    heroImage: {
+      width: '100%',
+      height: 350,
+      borderBottomLeftRadius: 30,
+      borderBottomRightRadius: 30,
+    },
+    content: { padding: 25 },
+    goldText: {
+      color: theme.gold,
+      fontWeight: 'bold',
+      fontSize: 14,
+      letterSpacing: 1.2,
+      marginBottom: 10,
+    },
+    title: { color: theme.text, fontSize: 32, fontWeight: '900', marginBottom: 15 },
+    narrative: { color: theme.subtext, fontSize: 17, lineHeight: 28 },
+    infoBox: {
+      flexDirection: 'row',
+      backgroundColor: theme.card,
+      padding: 15,
+      borderRadius: 12,
+      marginTop: 30,
+      alignItems: 'center',
+    },
+    infoText: { color: theme.gold, marginLeft: 10, fontSize: 13, flex: 1 },
+  });

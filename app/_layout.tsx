@@ -1,7 +1,8 @@
-import { GoogleSignin } from '@react-native-google-signin/google-signin'; // <--- IMPORTĂ ASTA
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import { ThemeProvider } from '../context/ThemeContext';
 import { useAuthStore } from '../store/useAuthStore';
 
 export default function RootLayout() {
@@ -14,7 +15,7 @@ export default function RootLayout() {
   useEffect(() => {
     // CONFIGURARE GOOGLE - Fără asta nu apar conturile!
     GoogleSignin.configure({
-      webClientId: '937397754645-8m819hke8eul773o681lre9960787p98.apps.googleusercontent.com', // Pune ID-ul tău Web aici
+      webClientId: '937397754645-8m819hke8eul773o681lre9960787p98.apps.googleusercontent.com',
       offlineAccess: true,
     });
 
@@ -33,7 +34,6 @@ export default function RootLayout() {
     const inAuthGroup = segments[0] === '(auth)';
     const isNotificationPrompt = segments[0] === 'notification-prompt';
 
-    // Folosim un mic delay (0ms) pentru a lăsa starea Zustand să se propage
     const timeout = setTimeout(() => {
       if (!token && !inAuthGroup && !isNotificationPrompt) {
         console.log('[GUARD] Redirecting to welcome...');
@@ -56,13 +56,15 @@ export default function RootLayout() {
   }
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(auth)" />
-      <Stack.Screen name="(main)" />
-      <Stack.Screen
-        name="notification-prompt"
-        options={{ presentation: 'transparentModal', animation: 'fade' }}
-      />
-    </Stack>
+    <ThemeProvider>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(auth)" />
+        <Stack.Screen name="(main)" />
+        <Stack.Screen
+          name="notification-prompt"
+          options={{ presentation: 'transparentModal', animation: 'fade' }}
+        />
+      </Stack>
+    </ThemeProvider>
   );
 }
