@@ -17,15 +17,15 @@
       "supportsTablet": true
     },
     "android": {
-      "package": "com.rexinus.DailyHistoryMobile",
-      "googleServicesFile": "./google-services.json",
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
-      },
-      "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
-    },
+  "package": "com.rexinus.DailyHistoryMobile",
+  "googleServicesFile": "./google-services.json",
+  "adaptiveIcon": {
+    "foregroundImage": "./assets/adaptive-icon.png",
+    "backgroundColor": "#ffffff"
+  },
+  "edgeToEdgeEnabled": true,
+  "predictiveBackGestureEnabled": false
+},
     "web": {
       "bundler": "metro",
       "output": "static"
