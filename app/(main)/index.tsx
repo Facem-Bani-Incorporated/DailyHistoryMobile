@@ -7,6 +7,8 @@ import {
   Dimensions,
   Easing,
   PanResponder,
+  RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -23,7 +25,10 @@ import { useTheme } from '../../context/ThemeContext';
 
 const { width: W } = Dimensions.get('window');
 const SWIPE_THRESHOLD = W * 0.18;
-const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+const CACHE_TTL_MS = 30 * 60 * 1000; // 30 min — suficient pentru refresh rapid
+
+// Câte zile în viitor permitem (mâine = +1)
+const MAX_FUTURE_OFFSET = 1;
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 
@@ -46,6 +51,7 @@ const labelFor = (offset: number, lang: string) => {
     weekday: d.toLocaleString(loc, { weekday: 'short' }).toUpperCase(),
     iso: toISO(d),
     isToday: offset === 0,
+    isTomorrow: offset === 1,
   };
 };
 
@@ -70,6 +76,12 @@ const writeCache = async (iso: string, data: any[], empty: boolean) => {
   } catch {}
 };
 
+const clearCacheForDate = async (iso: string) => {
+  try {
+    await AsyncStorage.removeItem(cacheKey(iso));
+  } catch {}
+};
+
 // ─── COMPONENTS ───────────────────────────────────────────────────────────────
 
 const Divider = ({ color, gold }: { color: string; gold: string }) => (
@@ -88,7 +100,9 @@ const DateCircle = ({
 }: {
   offset: number; theme: any; lang: string; slideX: Animated.Value;
 }) => {
-  const { day, month, weekday, isToday } = labelFor(offset, lang);
+  const { day, month, weekday, isToday, isTomorrow } = labelFor(offset, lang);
+  const isHighlighted = isToday || isTomorrow;
+
   return (
     <Animated.View style={{ alignItems: 'center', transform: [{ translateX: slideX }] }}>
       {isToday && (
@@ -100,9 +114,9 @@ const DateCircle = ({
       )}
       <View style={{
         width: 46, height: 46, borderRadius: 23,
-        backgroundColor: isToday ? theme.gold : 'transparent',
-        borderWidth: isToday ? 0 : StyleSheet.hairlineWidth,
-        borderColor: theme.border,
+        backgroundColor: isToday ? theme.gold : isTomorrow ? theme.gold + '22' : 'transparent',
+        borderWidth: isHighlighted ? (isToday ? 0 : 1) : StyleSheet.hairlineWidth,
+        borderColor: isTomorrow ? theme.gold : theme.border,
         alignItems: 'center', justifyContent: 'center',
         shadowColor: isToday ? theme.gold : 'transparent',
         shadowOffset: { width: 0, height: 0 },
@@ -116,7 +130,7 @@ const DateCircle = ({
           {month}
         </Text>
       </View>
-      <Text style={{ marginTop: 4, fontSize: 8, fontWeight: '700', letterSpacing: 2, color: isToday ? theme.gold : theme.subtext, opacity: isToday ? 1 : 0.55 }}>
+      <Text style={{ marginTop: 4, fontSize: 8, fontWeight: '700', letterSpacing: 2, color: isHighlighted ? theme.gold : theme.subtext, opacity: isHighlighted ? 1 : 0.55 }}>
         {weekday}
       </Text>
     </Animated.View>
@@ -154,13 +168,14 @@ type Tab = 'today' | 'discover';
 
 export default function HomeScreen() {
   const { theme, isDark } = useTheme();
-  const { t, language } = useLanguage(); // no setLanguage needed here anymore
+  const { t, language } = useLanguage();
   const insets = useSafeAreaInsets();
 
   const [dayOffset, setDayOffset] = useState(0);
   const [events, setEvents] = useState<any[]>([]);
   const [isEmpty, setIsEmpty] = useState(false);
   const [initialLoad, setInitialLoad] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('today');
 
   const prefetchCache = useRef<Record<string, { data: any[]; empty: boolean }>>({});
@@ -168,30 +183,58 @@ export default function HomeScreen() {
 
   // ── Data fetching ──────────────────────────────────────────────────────────
 
-  const fetchData = useCallback(async (offset: number): Promise<{ data: any[]; empty: boolean }> => {
+  const fetchData = useCallback(async (
+    offset: number,
+    forceRefresh = false
+  ): Promise<{ data: any[]; empty: boolean }> => {
     const iso = toISO(offsetDate(offset));
-    if (prefetchCache.current[iso]) return prefetchCache.current[iso];
-    const cached = await readCache(iso);
-    if (cached) {
-      const result = { data: cached.data, empty: cached.empty };
-      prefetchCache.current[iso] = result;
-      return result;
+
+    if (!forceRefresh) {
+      if (prefetchCache.current[iso]) return prefetchCache.current[iso];
+      const cached = await readCache(iso);
+      if (cached) {
+        const result = { data: cached.data, empty: cached.empty };
+        prefetchCache.current[iso] = result;
+        return result;
+      }
     }
+
     try {
-      const response = await api.get('/daily-content/by-date', { params: { date: iso } });
+      const response = await api.get('/daily-content/by-date', {
+        params: { date: iso, _t: Date.now() },
+      });
       const data: any[] = response.data?.events ?? [];
       const result = { data, empty: data.length === 0 };
+
       prefetchCache.current[iso] = result;
       await writeCache(iso, data, data.length === 0);
       return result;
-    } catch {
+    } catch (error) {
+      console.error('Fetch failed:', error);
       return { data: [], empty: true };
     }
   }, []);
 
+  // Pull-to-refresh — șterge cache-ul zilei curente și re-fetch forțat
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    const iso = toISO(offsetDate(dayOffset));
+
+    // Ștergem cache-ul local pentru ziua asta
+    delete prefetchCache.current[iso];
+    await clearCacheForDate(iso);
+
+    const { data, empty } = await fetchData(dayOffset, true);
+    setEvents(data);
+    setIsEmpty(empty);
+    setIsRefreshing(false);
+  }, [dayOffset, fetchData]);
+
   const prefetchNeighbours = useCallback((offset: number) => {
+    // Prefetch trecut
     fetchData(offset - 1).catch(() => {});
-    if (offset < 0) fetchData(offset + 1).catch(() => {});
+    // Prefetch viitor (dacă nu suntem deja la limită)
+    if (offset < MAX_FUTURE_OFFSET) fetchData(offset + 1).catch(() => {});
   }, [fetchData]);
 
   useEffect(() => {
@@ -209,6 +252,8 @@ export default function HomeScreen() {
 
   const navigateToOffset = useCallback(async (newOffset: number, direction: 'left' | 'right') => {
     if (navigating.current) return;
+    // Blocare la limita viitorului
+    if (newOffset > MAX_FUTURE_OFFSET) return;
     navigating.current = true;
 
     const promise = fetchData(newOffset);
@@ -241,7 +286,9 @@ export default function HomeScreen() {
   }, [slideX, fetchData, prefetchNeighbours]);
 
   const goBack = useCallback(() => navigateToOffset(dayOffset - 1, 'right'), [dayOffset, navigateToOffset]);
-  const goForward = useCallback(() => { if (dayOffset < 0) navigateToOffset(dayOffset + 1, 'left'); }, [dayOffset, navigateToOffset]);
+  const goForward = useCallback(() => {
+    if (dayOffset < MAX_FUTURE_OFFSET) navigateToOffset(dayOffset + 1, 'left');
+  }, [dayOffset, navigateToOffset]);
 
   const navRef = useRef({ goBack, goForward, dayOffset });
   useEffect(() => { navRef.current = { goBack, goForward, dayOffset }; }, [goBack, goForward, dayOffset]);
@@ -253,18 +300,28 @@ export default function HomeScreen() {
       onPanResponderGrant: () => { navigating.current = false; },
       onPanResponderMove: (_, g) => {
         const { dayOffset: off } = navRef.current;
-        if (g.dx > 0 || off < 0) {
-          const resistance = (off === 0 && g.dx > 0) ? 0.2 : 1;
+        const atFutureLimit = off >= MAX_FUTURE_OFFSET;
+        // Rezistență la swipe stânga când ești la limita viitorului
+        if (g.dx < 0 && atFutureLimit) {
+          slideX.setValue(g.dx * 0.2);
+        } else if (g.dx > 0 && off <= -999) {
+          // Rezistență extremă la trecut dacă vrei să limitezi
+          slideX.setValue(g.dx * 0.2);
+        } else {
+          // Rezistență ușoară la dreapta când ești pe today
+          const resistance = (off === 0 && g.dx > 0) ? 0.3 : 1;
           slideX.setValue(g.dx * resistance);
         }
       },
       onPanResponderRelease: (_, g) => {
         const { dayOffset: off, goBack: gb, goForward: gf } = navRef.current;
         const vel = Math.abs(g.vx);
-        if ((g.dx < -SWIPE_THRESHOLD || (vel > 0.7 && g.dx < -20)) && off < 0) {
-          gf();
+        const atFutureLimit = off >= MAX_FUTURE_OFFSET;
+
+        if ((g.dx < -SWIPE_THRESHOLD || (vel > 0.7 && g.dx < -20)) && !atFutureLimit) {
+          gf(); // swipe stânga → ziua următoare
         } else if (g.dx > SWIPE_THRESHOLD || (vel > 0.7 && g.dx > 20)) {
-          gb();
+          gb(); // swipe dreapta → ziua anterioară
         } else {
           Animated.spring(slideX, { toValue: 0, tension: 80, friction: 14, useNativeDriver: true }).start();
         }
@@ -275,9 +332,11 @@ export default function HomeScreen() {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   const s = makeStyles(theme);
-  const { isToday, weekday, iso } = labelFor(dayOffset, language);
-  const todayEvent = events[0] ?? null;
-  const discoverEvents = events.slice(1);
+  const { isToday, isTomorrow, weekday, iso } = labelFor(dayOffset, language);
+  const sortedEvents = [...events].sort((a, b) => (b.impactScore ?? 0) - (a.impactScore ?? 0));
+  const todayEvent = sortedEvents[0] ?? null;
+  const discoverEvents = sortedEvents.slice(1);
+  const canGoForward = dayOffset < MAX_FUTURE_OFFSET;
 
   return (
     <View style={s.root}>
@@ -285,16 +344,11 @@ export default function HomeScreen() {
 
       {/* ── HEADER ────────────────────────────────────────────────────── */}
       <View style={[s.header, { paddingTop: insets.top + 8 }]}>
-        {/* Left spacer — same width as avatar so brand stays centered */}
         <View style={{ width: 40 }} />
-
-        {/* Centered brand */}
         <View style={s.brandCenter}>
           <Text style={s.brandSub}>{t('Daily').toUpperCase()}</Text>
           <Text style={s.brandMain}>{t('History')}</Text>
         </View>
-
-        {/* Right: avatar */}
         <View style={{ width: 40, alignItems: 'flex-end' }}>
           <ProfileAvatar />
         </View>
@@ -317,18 +371,23 @@ export default function HomeScreen() {
           <Animated.Text
             style={[
               s.dayLabel,
-              { color: isToday ? theme.gold : theme.subtext },
+              { color: (isToday || isTomorrow) ? theme.gold : theme.subtext },
               { transform: [{ translateX: Animated.multiply(slideX, 0.25) }] },
             ]}
           >
-            {isToday ? t('today').toUpperCase() : `${weekday}  ·  ${iso}`}
+            {isToday
+              ? t('today').toUpperCase()
+              : isTomorrow
+                ? t('tomorrow') ? t('tomorrow').toUpperCase() : 'TOMORROW'
+                : `${weekday}  ·  ${iso}`}
           </Animated.Text>
         </View>
 
+        {/* Săgeată dreapta — activă când mai există zile în viitor */}
         <TouchableOpacity
           onPress={goForward}
-          style={[s.arrowBtn, dayOffset >= 0 && s.arrowDisabled]}
-          disabled={dayOffset >= 0}
+          style={[s.arrowBtn, !canGoForward && s.arrowDisabled]}
+          disabled={!canGoForward}
           hitSlop={{ top: 14, bottom: 14, left: 10, right: 10 }}
         >
           <Text style={[s.arrowText, { color: theme.subtext }]}>›</Text>
@@ -354,11 +413,31 @@ export default function HomeScreen() {
                   isToday={isToday} theme={theme} t={t}
                   onRetry={() => {
                     prefetchCache.current = {};
-                    fetchData(dayOffset).then(({ data, empty }) => { setEvents(data); setIsEmpty(empty); });
+                    fetchData(dayOffset, true).then(({ data, empty }) => {
+                      setEvents(data);
+                      setIsEmpty(empty);
+                    });
                   }}
                 />
               ) : (
-                <HistoryCard event={todayEvent} />
+                // ScrollView cu pull-to-refresh pe card
+                <ScrollView
+                  style={{ flex: 1 }}
+                  contentContainerStyle={{ flexGrow: 1 }}
+                  showsVerticalScrollIndicator={false}
+                  scrollEventThrottle={16}
+                  refreshControl={
+                    <RefreshControl
+                      refreshing={isRefreshing}
+                      onRefresh={handleRefresh}
+                      tintColor={theme.gold}
+                      colors={[theme.gold]}
+                      progressBackgroundColor={theme.card}
+                    />
+                  }
+                >
+                  <HistoryCard event={todayEvent} />
+                </ScrollView>
               )
             ) : (
               <DiscoverSection events={discoverEvents} theme={theme} t={t} />
