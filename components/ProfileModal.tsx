@@ -1,330 +1,361 @@
+// components/ProfileModal.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import {
     Image,
     Modal,
     Platform,
-    SafeAreaView,
+    ScrollView,
     StatusBar,
     StyleSheet,
     Text,
     TouchableOpacity,
     View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { Language, useLanguage } from '../context/LanguageContext';
 import { ThemeMode, useTheme } from '../context/ThemeContext';
 import { useAuthStore } from '../store/useAuthStore';
 
 interface Props {
-    visible: boolean;
-    onClose: () => void;
+  visible: boolean;
+  onClose: () => void;
 }
 
-const THEME_OPTIONS: { label: string; value: ThemeMode; icon: string }[] = [
-    { label: 'Light', value: 'light', icon: 'sunny-outline' },
-    { label: 'System', value: 'system', icon: 'phone-portrait-outline' },
-    { label: 'Dark', value: 'dark', icon: 'moon-outline' },
+const THEME_OPTIONS: {
+  label: string;
+  value: ThemeMode;
+  icon: keyof typeof Ionicons.glyphMap;
+}[] = [
+  { label: 'Light',  value: 'light',  icon: 'sunny-outline' },
+  { label: 'System', value: 'system', icon: 'phone-portrait-outline' },
+  { label: 'Dark',   value: 'dark',   icon: 'moon-outline' },
+];
+
+const LANGUAGES: { code: Language; label: string }[] = [
+  { code: 'en', label: 'English' },
+  { code: 'ro', label: 'Română' },
+  { code: 'fr', label: 'Français' },
+  { code: 'de', label: 'Deutsch' },
+  { code: 'es', label: 'Español' },
 ];
 
 export default function ProfileModal({ visible, onClose }: Props) {
-    const user = useAuthStore((state) => state.user);
-    const logout = useAuthStore((state) => state.logout);
-    const router = useRouter();
-    const { mode, setMode, theme } = useTheme();
+  const user = useAuthStore((state) => state.user);
+  const logout = useAuthStore((state) => state.logout);
+  const router = useRouter();
+  const { mode, setMode, theme } = useTheme();
+  const { t, language, setLanguage } = useLanguage();
+  const insets = useSafeAreaInsets();
 
-    if (!user) return null;
+  if (!user) return null;
 
-    const isGoogleUser = user.provider === 'google';
-    const displayName = user.username || user.email || 'Explorer';
+  const isGoogleUser = user.provider === 'google';
+  const displayName = user.username || user.email?.split('@')[0] || 'Explorer';
+  const displayEmail = user.email || '';
 
-    const getProfileImage = () => {
-        const uri = user.avatar_url || user.avatarUrl || user.picture;
-        if (uri) return uri;
-        return `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=ffd700&color=000`;
-    };
+  const getProfileImage = () => {
+    const uri = user.avatar_url || user.avatarUrl || user.picture;
+    if (uri) return uri;
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=ffd700&color=000&size=256&bold=true`;
+  };
 
-    const imageUrl = getProfileImage();
+  const handleLogout = async () => {
+    try {
+      if (isGoogleUser) await GoogleSignin.signOut();
+    } catch {}
+    finally {
+      onClose();
+      logout();
+      router.replace('/(auth)/welcome');
+    }
+  };
 
-    const handleLogout = async () => {
-        try {
-            if (isGoogleUser) {
-                await GoogleSignin.signOut();
-            }
-        } catch (e) {
-            console.log('Google signout skipped');
-        } finally {
-            onClose();
-            logout();
-            router.replace('/(auth)/welcome');
-        }
-    };
+  const s = makeStyles(theme);
 
-    const s = makeStyles(theme);
+  return (
+    <Modal visible={visible} animationType="slide" transparent={false} statusBarTranslucent>
+      <StatusBar
+        barStyle={Platform.OS === 'ios' ? 'dark-content' : 'light-content'}
+        translucent
+        backgroundColor="transparent"
+      />
+      <View style={[s.root, { paddingTop: insets.top }]}>
 
-    return (
-        <Modal visible={visible} animationType="slide" transparent={false}>
-            <View style={s.container}>
-                <SafeAreaView style={s.safeArea}>
-                    <View style={s.header}>
-                        <TouchableOpacity
-                            onPress={onClose}
-                            style={s.closeButton}
-                            hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
-                        >
-                            <Ionicons name="close" size={32} color={theme.gold} />
-                        </TouchableOpacity>
-                        <Text style={s.headerTitle}>YOUR PROFILE</Text>
-                        <View style={{ width: 32 }} />
-                    </View>
+        {/* ── HEADER ──────────────────────────────────────────────────── */}
+        <View style={s.header}>
+          <TouchableOpacity
+            onPress={onClose}
+            style={s.headerBtn}
+            hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+          >
+            <Ionicons name="close" size={22} color={theme.text} />
+          </TouchableOpacity>
+          <Text style={[s.headerTitle, { color: theme.text }]}>{t('profile_title')}</Text>
+          <View style={s.headerBtn} />
+        </View>
 
-                    <View style={s.content}>
-                        <View style={s.imageContainer}>
-                            <Image
-                                source={{ uri: imageUrl }}
-                                style={s.bigAvatar}
-                                key={imageUrl}
-                                resizeMode="cover"
-                            />
-                            <LinearGradient
-                                colors={['transparent', theme.background]}
-                                style={s.fade}
-                            />
-                        </View>
-
-                        <View style={s.infoCard}>
-                            <Text style={s.mainName}>{displayName}</Text>
-
-                            <View style={s.badgeContainer}>
-                                <View
-                                    style={[
-                                        s.methodBadge,
-                                        { backgroundColor: isGoogleUser ? '#4285F4' : theme.gold },
-                                    ]}
-                                >
-                                    <Ionicons
-                                        name={isGoogleUser ? 'logo-google' : 'mail-outline'}
-                                        size={16}
-                                        color={isGoogleUser ? 'white' : 'black'}
-                                    />
-                                    <Text
-                                        style={[
-                                            s.methodText,
-                                            { color: isGoogleUser ? 'white' : 'black' },
-                                        ]}
-                                    >
-                                        {isGoogleUser ? 'Google Account' : 'Standard User'}
-                                    </Text>
-                                </View>
-                            </View>
-
-                            <View style={s.statsRow}>
-                                <View style={s.stat}>
-                                    <Text style={s.statLabel}>Status</Text>
-                                    <Text style={s.statValue}>Active</Text>
-                                </View>
-                                <View style={[s.stat, s.borderLeft]}>
-                                    <Text style={s.statLabel}>Role</Text>
-                                    <Text style={s.statValue}>
-                                        {user.roles?.[0]?.replace('ROLE_', '') || 'USER'}
-                                    </Text>
-                                </View>
-                            </View>
-
-                            {/* Theme Selector */}
-                            <View style={s.themeSection}>
-                                <Text style={s.themeTitle}>Appearance</Text>
-                                <View style={s.themeToggleRow}>
-                                    {THEME_OPTIONS.map((opt) => {
-                                        const isActive = mode === opt.value;
-                                        return (
-                                            <TouchableOpacity
-                                                key={opt.value}
-                                                style={[
-                                                    s.themeOption,
-                                                    isActive && s.themeOptionActive,
-                                                ]}
-                                                onPress={() => setMode(opt.value)}
-                                            >
-                                                <Ionicons
-                                                    name={opt.icon as any}
-                                                    size={18}
-                                                    color={isActive ? theme.background : theme.subtext}
-                                                />
-                                                <Text
-                                                    style={[
-                                                        s.themeOptionLabel,
-                                                        isActive && s.themeOptionLabelActive,
-                                                    ]}
-                                                >
-                                                    {opt.label}
-                                                </Text>
-                                            </TouchableOpacity>
-                                        );
-                                    })}
-                                </View>
-                            </View>
-
-                            <TouchableOpacity style={s.logoutBtn} onPress={handleLogout}>
-                                <Ionicons name="log-out-outline" size={22} color="#ff4444" />
-                                <Text style={s.logoutText}>Sign Out</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </SafeAreaView>
+        <ScrollView
+          contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 40 }]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* ── AVATAR ────────────────────────────────────────────────── */}
+          <View style={s.profileTop}>
+            <View style={s.avatarWrap}>
+              <Image source={{ uri: getProfileImage() }} style={s.avatar} />
+              {isGoogleUser && (
+                <View style={[s.googleBadge, { borderColor: theme.background }]}>
+                  <Ionicons name="logo-google" size={12} color="#fff" />
+                </View>
+              )}
             </View>
-        </Modal>
-    );
+            <Text style={[s.displayName, { color: theme.text }]}>{displayName}</Text>
+            {displayEmail !== '' && (
+              <Text style={[s.email, { color: theme.subtext }]}>{displayEmail}</Text>
+            )}
+            {user.roles?.[0] && (
+              <View style={[s.roleChip, { backgroundColor: theme.gold + '1A' }]}>
+                <Text style={[s.roleText, { color: theme.gold }]}>
+                  {user.roles[0].replace('ROLE_', '')}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* ── LANGUAGE ──────────────────────────────────────────────── */}
+          <Text style={[s.sectionLabel, { color: theme.subtext }]}>
+            {t('language').toUpperCase()}
+          </Text>
+
+          {/* Language chips rendered outside ScrollView nesting — plain View */}
+          <View style={[s.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <View style={s.langRow}>
+              {LANGUAGES.map((lang) => {
+                const isActive = language === lang.code;
+                return (
+                  <TouchableOpacity
+                    key={lang.code}
+                    onPress={() => setLanguage(lang.code)}
+                    activeOpacity={0.6}
+                    style={[
+                      s.langChip,
+                      {
+                        backgroundColor: isActive ? theme.gold : theme.background,
+                        borderColor: isActive ? theme.gold : theme.border,
+                      },
+                    ]}
+                  >
+                    <Text style={[
+                      s.langChipCode,
+                      { color: isActive ? theme.background : theme.subtext },
+                    ]}>
+                      {lang.code.toUpperCase()}
+                    </Text>
+                    <Text style={[
+                      s.langChipLabel,
+                      { color: isActive ? theme.background : theme.subtext },
+                    ]}>
+                      {lang.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* ── APPEARANCE ────────────────────────────────────────────── */}
+          <Text style={[s.sectionLabel, { color: theme.subtext }]}>
+            {t('appearance').toUpperCase()}
+          </Text>
+
+          <View style={[s.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <View style={[s.themeToggle, { backgroundColor: theme.background }]}>
+              {THEME_OPTIONS.map((opt) => {
+                const active = mode === opt.value;
+                return (
+                  <TouchableOpacity
+                    key={opt.value}
+                    onPress={() => setMode(opt.value)}
+                    activeOpacity={0.7}
+                    style={[s.themeOpt, active && { backgroundColor: theme.text }]}
+                  >
+                    <Ionicons
+                      name={opt.icon}
+                      size={16}
+                      color={active ? theme.background : theme.subtext}
+                    />
+                    <Text style={[
+                      s.themeOptLabel,
+                      { color: active ? theme.background : theme.subtext },
+                    ]}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* ── ACCOUNT ───────────────────────────────────────────────── */}
+          <Text style={[s.sectionLabel, { color: theme.subtext }]}>
+            {t('account').toUpperCase()}
+          </Text>
+
+          <View style={[s.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <View style={s.row}>
+              <View style={s.rowLeft}>
+                <Ionicons name="shield-checkmark-outline" size={18} color={theme.subtext} />
+                <Text style={[s.rowText, { color: theme.text }]}>{t('status')}</Text>
+              </View>
+              <Text style={s.statusValue}>{t('active')}</Text>
+            </View>
+
+            <View style={[s.divider, { backgroundColor: theme.border }]} />
+
+            <View style={s.row}>
+              <View style={s.rowLeft}>
+                <Ionicons name="log-in-outline" size={18} color={theme.subtext} />
+                <Text style={[s.rowText, { color: theme.text }]}>{t('sign_in_method')}</Text>
+              </View>
+              <Text style={[s.rowValue, { color: theme.subtext }]}>
+                {isGoogleUser ? 'Google' : 'Email'}
+              </Text>
+            </View>
+          </View>
+
+          {/* ── SIGN OUT ──────────────────────────────────────────────── */}
+          <TouchableOpacity
+            style={s.logoutBtn}
+            onPress={handleLogout}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="log-out-outline" size={18} color="#ff4444" />
+            <Text style={s.logoutText}>{t('sign_out')}</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
+    </Modal>
+  );
 }
 
-const makeStyles = (theme: ReturnType<typeof useTheme>['theme']) =>
-    StyleSheet.create({
-        container: { flex: 1, backgroundColor: theme.background },
-        safeArea: {
-            flex: 1,
-            paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
-        },
-        header: {
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            paddingHorizontal: 20,
-            paddingVertical: 15,
-            height: 70,
-        },
-        closeButton: { zIndex: 10 },
-        headerTitle: {
-            color: theme.text,
-            fontSize: 14,
-            fontWeight: '900',
-            letterSpacing: 2,
-        },
-        content: {
-            flex: 1,
-            alignItems: 'center',
-            justifyContent: 'center',
-            paddingBottom: 40,
-        },
-        imageContainer: {
-            width: 100,
-            height: 100,
-            marginBottom: -30,
-            zIndex: 5,
-            alignSelf: 'center',
-        },
-        bigAvatar: {
-            width: '100%',
-            height: '100%',
-            borderRadius: 60,
-            borderWidth: 3,
-            borderColor: theme.gold,
-            backgroundColor: theme.card,
-        },
-        infoCard: {
-            width: '85%',
-            backgroundColor: theme.card,
-            borderRadius: 30,
-            paddingTop: 50,
-            paddingBottom: 25,
-            paddingHorizontal: 20,
-            alignItems: 'center',
-            borderWidth: 1,
-            borderColor: theme.border,
-        },
-        mainName: {
-            color: theme.text,
-            fontSize: 22,
-            fontWeight: 'bold',
-            marginBottom: 10,
-            textAlign: 'center',
-        },
-        badgeContainer: { marginBottom: 25 },
-        methodBadge: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            paddingHorizontal: 14,
-            paddingVertical: 6,
-            borderRadius: 15,
-            gap: 6,
-        },
-        methodText: { fontWeight: 'bold', fontSize: 11, textTransform: 'uppercase' },
-        statsRow: {
-            flexDirection: 'row',
-            width: '100%',
-            borderTopWidth: 1,
-            borderTopColor: theme.border,
-            paddingTop: 20,
-            marginBottom: 10,
-        },
-        stat: { flex: 1, alignItems: 'center' },
-        statLabel: {
-            color: theme.subtext,
-            fontSize: 11,
-            marginBottom: 4,
-            textTransform: 'uppercase',
-        },
-        statValue: { color: theme.gold, fontWeight: 'bold', fontSize: 16 },
-        borderLeft: { borderLeftWidth: 1, borderLeftColor: theme.border },
-        fade: {
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: 30,
-            borderRadius: 60,
-        },
-        themeSection: {
-            width: '100%',
-            borderTopWidth: 1,
-            borderTopColor: theme.border,
-            paddingTop: 18,
-            marginTop: 5,
-            marginBottom: 5,
-            alignItems: 'center',
-            gap: 12,
-        },
-        themeTitle: {
-            color: theme.subtext,
-            fontSize: 11,
-            textTransform: 'uppercase',
-            letterSpacing: 1,
-            alignSelf: 'flex-start',
-        },
-        themeToggleRow: {
-            flexDirection: 'row',
-            backgroundColor: theme.background,
-            borderRadius: 14,
-            padding: 4,
-            gap: 4,
-            width: '100%',
-        },
-        themeOption: {
-            flex: 1,
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'center',
-            paddingVertical: 8,
-            borderRadius: 10,
-            gap: 5,
-        },
-        themeOptionActive: {
-            backgroundColor: theme.gold,
-        },
-        themeOptionLabel: {
-            fontSize: 12,
-            fontWeight: '600',
-            color: theme.subtext,
-        },
-        themeOptionLabelActive: {
-            color: theme.background,
-        },
-        logoutBtn: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            marginTop: 15,
-            gap: 8,
-            padding: 10,
-        },
-        logoutText: { color: '#ff4444', fontWeight: 'bold', fontSize: 15 },
-    });
+const makeStyles = (theme: any) => StyleSheet.create({
+  root: { flex: 1, backgroundColor: theme.background },
+
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.border,
+  },
+  headerBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { fontSize: 15, fontWeight: '700', letterSpacing: 0.3 },
+
+  scroll: { paddingHorizontal: 20, paddingTop: 8 },
+
+  profileTop: {
+    alignItems: 'center',
+    paddingTop: 24,
+    paddingBottom: 28,
+  },
+  avatarWrap: { position: 'relative', marginBottom: 14 },
+  avatar: { width: 88, height: 88, borderRadius: 44, backgroundColor: theme.card },
+  googleBadge: {
+    position: 'absolute', bottom: 0, right: 0,
+    width: 26, height: 26, borderRadius: 13,
+    backgroundColor: '#4285F4',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2,
+  },
+  displayName: { fontSize: 22, fontWeight: '700', letterSpacing: 0.2, marginBottom: 4 },
+  email: { fontSize: 13, marginBottom: 12, letterSpacing: 0.1 },
+  roleChip: { paddingHorizontal: 14, paddingVertical: 5, borderRadius: 20 },
+  roleText: { fontSize: 11, fontWeight: '800', letterSpacing: 1.5 },
+
+  sectionLabel: {
+    fontSize: 11, fontWeight: '700', letterSpacing: 1.5,
+    marginBottom: 8, marginLeft: 2,
+  },
+
+  card: {
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 14,
+    marginBottom: 22,
+  },
+
+  // Language
+  langRow: {
+    flexDirection: 'column',
+    gap: 8,
+  },
+  langChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  langChipCode: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 2,
+    width: 28,
+  },
+  langChipLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+
+  // Theme
+  themeToggle: {
+    flexDirection: 'row',
+    borderRadius: 12,
+    padding: 3,
+  },
+  themeOpt: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 6,
+  },
+  themeOptLabel: { fontSize: 12, fontWeight: '600' },
+
+  // Account
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+  },
+  rowLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  rowText: { fontSize: 15, fontWeight: '500' },
+  rowValue: { fontSize: 14 },
+  statusValue: { color: '#34C759', fontSize: 14, fontWeight: '600' },
+  divider: { height: StyleSheet.hairlineWidth, marginVertical: 2 },
+
+  // Logout
+  logoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 15,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#ff444430',
+    backgroundColor: '#ff444410',
+    gap: 8,
+  },
+  logoutText: { color: '#ff4444', fontSize: 15, fontWeight: '700' },
+});
