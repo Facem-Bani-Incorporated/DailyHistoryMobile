@@ -22,6 +22,7 @@ import { HistoryCard } from '../../components/HistoryCard';
 import ProfileAvatar from '../../components/ProfileAvatar';
 import { useLanguage } from '../../context/LanguageContext';
 import { useTheme } from '../../context/ThemeContext';
+import { scheduleMidnightNotification } from '../../utils/Notifications';
 
 const { width: W } = Dimensions.get('window');
 const SWIPE_THRESHOLD = W * 0.18;
@@ -180,6 +181,8 @@ export default function HomeScreen() {
 
   const prefetchCache = useRef<Record<string, { data: any[]; empty: boolean }>>({});
   const slideX = useRef(new Animated.Value(0)).current;
+  const cardOpacity = useRef(new Animated.Value(1)).current;
+  const cardScale = useRef(new Animated.Value(1)).current;
 
   // ── Data fetching ──────────────────────────────────────────────────────────
 
@@ -243,6 +246,12 @@ export default function HomeScreen() {
       setIsEmpty(empty);
       setInitialLoad(false);
       prefetchNeighbours(0);
+
+      // Programează notificarea de miezul nopții cu titlul evenimentului de mâine
+      const topEvent = [...data].sort((a, b) => (b.impactScore ?? 0) - (a.impactScore ?? 0))[0];
+      const notifTitle = topEvent?.titleTranslations?.[language] ?? 'Daily History';
+      const notifBody = topEvent?.narrativeTranslations?.[language]?.slice(0, 80) ?? 'A new historical event awaits you!';
+      scheduleMidnightNotification(`📅 ${notifTitle}`, notifBody);
     });
   }, []);
 
@@ -252,38 +261,72 @@ export default function HomeScreen() {
 
   const navigateToOffset = useCallback(async (newOffset: number, direction: 'left' | 'right') => {
     if (navigating.current) return;
-    // Blocare la limita viitorului
     if (newOffset > MAX_FUTURE_OFFSET) return;
     navigating.current = true;
 
     const promise = fetchData(newOffset);
-    const exitX = direction === 'left' ? -W : W;
-    const enterX = direction === 'left' ? W : -W;
 
+    // ── PHASE 1: Fade out + scale down (Material You "exit" — 120ms)
     await new Promise<void>(resolve => {
-      Animated.timing(slideX, {
-        toValue: exitX,
-        duration: 240,
-        easing: Easing.bezier(0.4, 0, 0.2, 1),
-        useNativeDriver: true,
-      }).start(() => resolve());
+      Animated.parallel([
+        Animated.timing(cardOpacity, {
+          toValue: 0,
+          duration: 120,
+          easing: Easing.bezier(0.4, 0, 1, 1),
+          useNativeDriver: true,
+        }),
+        Animated.timing(cardScale, {
+          toValue: 0.94,
+          duration: 120,
+          easing: Easing.bezier(0.4, 0, 1, 1),
+          useNativeDriver: true,
+        }),
+        // Date strip slide out sincronizat
+        Animated.timing(slideX, {
+          toValue: direction === 'left' ? -W * 0.15 : W * 0.15,
+          duration: 120,
+          easing: Easing.bezier(0.4, 0, 1, 1),
+          useNativeDriver: true,
+        }),
+      ]).start(() => resolve());
     });
 
+    // ── PHASE 2: Swap content + reset pentru enter (instant, invizibil)
     const { data, empty } = await promise;
-    slideX.setValue(enterX);
+    cardScale.setValue(0.94);
+    cardOpacity.setValue(0);
+    slideX.setValue(direction === 'left' ? W * 0.15 : -W * 0.15);
     setDayOffset(newOffset);
     setEvents(data);
     setIsEmpty(empty);
 
+    // ── PHASE 3: Fade in + scale up (Material You "enter" — 220ms, spring ușor)
     await new Promise<void>(resolve => {
-      Animated.spring(slideX, {
-        toValue: 0, tension: 72, friction: 12, useNativeDriver: true,
-      }).start(() => resolve());
+      Animated.parallel([
+        Animated.timing(cardOpacity, {
+          toValue: 1,
+          duration: 220,
+          easing: Easing.bezier(0.0, 0, 0.2, 1),
+          useNativeDriver: true,
+        }),
+        Animated.spring(cardScale, {
+          toValue: 1,
+          tension: 300,
+          friction: 26,
+          useNativeDriver: true,
+        }),
+        Animated.spring(slideX, {
+          toValue: 0,
+          tension: 300,
+          friction: 26,
+          useNativeDriver: true,
+        }),
+      ]).start(() => resolve());
     });
 
     navigating.current = false;
     prefetchNeighbours(newOffset);
-  }, [slideX, fetchData, prefetchNeighbours]);
+  }, [slideX, cardOpacity, cardScale, fetchData, prefetchNeighbours]);
 
   const goBack = useCallback(() => navigateToOffset(dayOffset - 1, 'right'), [dayOffset, navigateToOffset]);
   const goForward = useCallback(() => {
@@ -301,15 +344,19 @@ export default function HomeScreen() {
       onPanResponderMove: (_, g) => {
         const { dayOffset: off } = navRef.current;
         const atFutureLimit = off >= MAX_FUTURE_OFFSET;
-        // Rezistență la swipe stânga când ești la limita viitorului
+        const absDx = Math.abs(g.dx);
+
+        // Progres drag 0→1 bazat pe SWIPE_THRESHOLD
+        const progress = Math.min(absDx / SWIPE_THRESHOLD, 1);
+
+        // Feedback live Material You: opacity + scale scad ușor pe măsură ce tragi
+        cardOpacity.setValue(1 - progress * 0.18);
+        cardScale.setValue(1 - progress * 0.04);
+
         if (g.dx < 0 && atFutureLimit) {
-          slideX.setValue(g.dx * 0.2);
-        } else if (g.dx > 0 && off <= -999) {
-          // Rezistență extremă la trecut dacă vrei să limitezi
-          slideX.setValue(g.dx * 0.2);
+          slideX.setValue(g.dx * 0.15);
         } else {
-          // Rezistență ușoară la dreapta când ești pe today
-          const resistance = (off === 0 && g.dx > 0) ? 0.3 : 1;
+          const resistance = (off === 0 && g.dx > 0) ? 0.25 : 1;
           slideX.setValue(g.dx * resistance);
         }
       },
@@ -323,7 +370,12 @@ export default function HomeScreen() {
         } else if (g.dx > SWIPE_THRESHOLD || (vel > 0.7 && g.dx > 20)) {
           gb(); // swipe dreapta → ziua anterioară
         } else {
-          Animated.spring(slideX, { toValue: 0, tension: 80, friction: 14, useNativeDriver: true }).start();
+          // Cancel — snap back cu fade in + scale up (Material You cancel gesture)
+          Animated.parallel([
+            Animated.spring(slideX, { toValue: 0, tension: 280, friction: 26, useNativeDriver: true }),
+            Animated.spring(cardOpacity, { toValue: 1, tension: 280, friction: 26, useNativeDriver: true }),
+            Animated.spring(cardScale, { toValue: 1, tension: 280, friction: 26, useNativeDriver: true }),
+          ]).start();
         }
       },
     }),
@@ -403,8 +455,8 @@ export default function HomeScreen() {
             <Text style={{ color: theme.gold, fontSize: 26, opacity: 0.3 }}>◌</Text>
           </View>
         ) : (
-          <Animated.View
-            style={[s.contentArea, { transform: [{ translateX: slideX }] }]}
+          <View
+            style={s.contentArea}
             {...(activeTab === 'today' ? pan.panHandlers : {})}
           >
             {activeTab === 'today' ? (
@@ -420,29 +472,37 @@ export default function HomeScreen() {
                   }}
                 />
               ) : (
-                // ScrollView cu pull-to-refresh pe card
-                <ScrollView
-                  style={{ flex: 1 }}
-                  contentContainerStyle={{ flexGrow: 1 }}
-                  showsVerticalScrollIndicator={false}
-                  scrollEventThrottle={16}
-                  refreshControl={
-                    <RefreshControl
-                      refreshing={isRefreshing}
-                      onRefresh={handleRefresh}
-                      tintColor={theme.gold}
-                      colors={[theme.gold]}
-                      progressBackgroundColor={theme.card}
-                    />
-                  }
+                // Card animat — cade în jos la exit, intră de sus la enter
+                <Animated.View
+                  style={{
+                    flex: 1,
+                    opacity: cardOpacity,
+                    transform: [{ scale: cardScale }],
+                  }}
                 >
-                  <HistoryCard event={todayEvent} />
-                </ScrollView>
+                  <ScrollView
+                    style={{ flex: 1 }}
+                    contentContainerStyle={{ flexGrow: 1 }}
+                    showsVerticalScrollIndicator={false}
+                    scrollEventThrottle={16}
+                    refreshControl={
+                      <RefreshControl
+                        refreshing={isRefreshing}
+                        onRefresh={handleRefresh}
+                        tintColor={theme.gold}
+                        colors={[theme.gold]}
+                        progressBackgroundColor={theme.card}
+                      />
+                    }
+                  >
+                    <HistoryCard event={todayEvent} />
+                  </ScrollView>
+                </Animated.View>
               )
             ) : (
               <DiscoverSection events={discoverEvents} theme={theme} t={t} />
             )}
-          </Animated.View>
+          </View>
         )}
       </View>
 

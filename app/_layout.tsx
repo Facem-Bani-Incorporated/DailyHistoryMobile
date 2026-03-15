@@ -2,6 +2,7 @@ import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import { LanguageProvider } from '../context/LanguageContext'; // ← ADĂUGAT
 import { ThemeProvider } from '../context/ThemeContext';
 import { useAuthStore } from '../store/useAuthStore';
 
@@ -11,9 +12,7 @@ export default function RootLayout() {
   const router = useRouter();
   const [isReady, setIsReady] = useState(false);
 
-  // 1. CONFIGURARE INITIALA (Google + Hydration)
   useEffect(() => {
-    // CONFIGURARE GOOGLE - Fără asta nu apar conturile!
     GoogleSignin.configure({
       webClientId: '937397754645-8m819hke8eul773o681lre9960787p98.apps.googleusercontent.com',
       offlineAccess: true,
@@ -27,7 +26,6 @@ export default function RootLayout() {
     }
   }, []);
 
-  // 2. JWT GUARD (Sincronizat cu procesul de navigare)
   useEffect(() => {
     if (!isReady) return;
 
@@ -56,15 +54,17 @@ export default function RootLayout() {
   }
 
   return (
-    <ThemeProvider>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(auth)" />
-        <Stack.Screen name="(main)" />
-        <Stack.Screen
-          name="notification-prompt"
-          options={{ presentation: 'transparentModal', animation: 'fade' }}
-        />
-      </Stack>
-    </ThemeProvider>
+    <LanguageProvider>  {/* ← ADĂUGAT — wrappuiește tot app-ul */}
+      <ThemeProvider>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(auth)" />
+          <Stack.Screen name="(main)" />
+          <Stack.Screen
+            name="notification-prompt"
+            options={{ presentation: 'transparentModal', animation: 'fade' }}
+          />
+        </Stack>
+      </ThemeProvider>
+    </LanguageProvider>
   );
 }
