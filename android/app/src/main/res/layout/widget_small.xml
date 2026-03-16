@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="12dp"
+    android:background="@drawable/widget_background"
+    android:gravity="center_vertical">
+
+    <View
+        android:layout_width="32dp"
+        android:layout_height="2dp"
+        android:background="#FFD700"
+        android:layout_marginBottom="8dp"/>
+
+    <TextView
+        android:id="@+id/widget_year"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="2024"
+        android:textColor="#FFD700"
+        android:textSize="11sp"
+        android:fontFamily="sans-serif-black"
+        android:letterSpacing="0.15"
+        android:layout_marginBottom="4dp"/>
+
+    <TextView
+        android:id="@+id/widget_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Daily History"
+        android:textColor="#FFFFFF"
+        android:textSize="13sp"
+        android:fontFamily="sans-serif-black"
+        android:maxLines="2"
+        android:ellipsize="end"
+        android:layout_marginBottom="8dp"/>
+
+    <TextView
+        android:id="@+id/widget_impact"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="⚡ 0%"
+        android:textColor="#FFD700"
+        android:textSize="10sp"
+        android:layout_marginBottom="4dp"/>
+
+    <TextView
+        android:id="@+id/widget_countdown"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Next in 0h 0m"
+        android:textColor="#80FFFFFF"
+        android:textSize="9sp"/>
+
+</LinearLayout>

@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="18dp"
+    android:background="@drawable/widget_background">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="14dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="DAILY  HISTORY"
+            android:textColor="#60FFFFFF"
+            android:textSize="9sp"
+            android:fontFamily="sans-serif-black"
+            android:letterSpacing="0.25"/>
+
+        <TextView
+            android:id="@+id/widget_countdown"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Next in 0h 0m"
+            android:textColor="#60FFFFFF"
+            android:textSize="9sp"/>
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#20FFD700"
+        android:layout_marginBottom="14dp"/>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="8dp">
+
+        <TextView
+            android:id="@+id/widget_year"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="2024"
+            android:textColor="#FFD700"
+            android:textSize="20sp"
+            android:fontFamily="sans-serif-black"/>
+
+        <View
+            android:layout_width="36dp"
+            android:layout_height="3dp"
+            android:background="#FFD700"
+            android:layout_marginStart="10dp"/>
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/widget_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Daily History"
+        android:textColor="#FFFFFF"
+        android:textSize="20sp"
+        android:fontFamily="sans-serif-black"
+        android:maxLines="3"
+        android:ellipsize="end"
+        android:lineSpacingMultiplier="1.2"
+        android:layout_marginBottom="12dp"/>
+
+    <TextView
+        android:id="@+id/widget_impact"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="⚡ 0%"
+        android:textColor="#FFD700"
+        android:textSize="12sp"
+        android:fontFamily="sans-serif-black"
+        android:layout_marginBottom="12dp"/>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#15FFD700"
+        android:layout_marginBottom="12dp"/>
+
+    <TextView
+        android:id="@+id/widget_narrative"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:text="Tap to discover today's historical event."
+        android:textColor="#80FFFFFF"
+        android:textSize="12sp"
+        android:maxLines="4"
+        android:ellipsize="end"
+        android:lineSpacingMultiplier="1.4"/>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="TAP TO READ STORY"
+        android:textColor="#40FFFFFF"
+        android:textSize="8sp"
+        android:fontFamily="sans-serif-black"
+        android:letterSpacing="0.25"
+        android:gravity="center"
+        android:layout_marginTop="8dp"/>
+
+</LinearLayout>

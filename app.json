@@ -7,12 +7,12 @@
     "orientation": "portrait",
     "scheme": "dailyhistorymobile",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
+    
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.rexinus.DailyHistoryMobile"
@@ -20,12 +20,20 @@
     "android": {
       "package": "com.rexinus.DailyHistoryMobile",
       "googleServicesFile": "./google-services.json",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyBbop9-i1QUSjUD6WUUFvFEvv7xQgYKqrw"
+        }
+      },
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.RECEIVE_BOOT_COMPLETED"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -45,9 +53,7 @@
       }
     },
     "owner": "rexinus",
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
+    "runtimeVersion": "1.0.0",
     "updates": {
       "url": "https://u.expo.dev/40d2f71e-3f11-4574-b212-a7f3cd044377"
     }
