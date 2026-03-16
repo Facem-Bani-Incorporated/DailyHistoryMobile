@@ -2,37 +2,36 @@
 import axios from 'axios';
 import { useAuthStore } from './store/useAuthStore';
 
-// Păstrăm baseURL la nivel de domeniu + /api, fără versiune fixă aici
 const api = axios.create({
-  baseURL: 'https://daily-history-server-dev-development.up.railway.app/api',
+  baseURL: 'https://daily-history-server-dev-development.up.railway.app/api/v1',
   timeout: 15000,
 });
 
 api.interceptors.request.use(async (config) => {
-  const token = useAuthStore.getState().token;
-
-  // --- LOGICA DE RATARE DINAMICĂ (FĂRĂ REDEPLOY) ---
-  
-  // 1. Dacă e cerere de login/register, forțăm /v1 în URL
+  // Auth endpoints — fără token
   if (config.url?.includes('/auth')) {
-    if (!config.url.startsWith('/v1')) {
-      config.url = `/v1${config.url.startsWith('/') ? '' : '/'}${config.url}`;
-    }
-    // Nu punem token pe auth
     return config;
   }
 
-  // 2. Pentru restul (Daily Content), verificăm dacă are deja /v1. 
-  // Dacă are și știm că dă 404, îl scoatem (sau invers).
-  // În cazul tău: Daily Content NU are v1 în Java, deci ne asigurăm că url-ul e curat.
-  if (config.url?.includes('/daily-content') && config.url.includes('/v1')) {
-     config.url = config.url.replace('/v1', '');
+  // Dacă store-ul nu s-a hidratat încă din AsyncStorage, așteptăm
+  if (!useAuthStore.persist.hasHydrated()) {
+    await new Promise<void>(resolve => {
+      const unsub = useAuthStore.persist.onFinishHydration(() => {
+        unsub();
+        resolve();
+      });
+      // Timeout de siguranță — maxim 3 secunde
+      setTimeout(resolve, 3000);
+    });
   }
 
-  // Adăugare Token
+  const token = useAuthStore.getState().token;
+
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
     console.log(`[API] 🚀 Trimitere către: ${config.url}`);
+  } else {
+    console.warn(`[API] ⚠️ No token for: ${config.url}`);
   }
 
   return config;

@@ -17,9 +17,7 @@ import { StoryModal } from './StoryModal';
 const { width: W } = Dimensions.get('window');
 const H_PADDING = 16;
 const GAP = 10;
-// Two columns
 const CARD_W = (W - H_PADDING * 2 - GAP) / 2;
-// First featured card is full-width
 const FEATURED_H = W * 0.52;
 const SMALL_H = CARD_W * 1.18;
 
@@ -38,10 +36,7 @@ const extractYear = (event: any): string => {
   return isNaN(y) ? '' : String(y);
 };
 
-// ── Featured (first) card ─────────────────────────────────────────────────────
-const FeaturedCard = ({
-  event, lang, theme, onPress,
-}: { event: any; lang: string; theme: any; onPress: () => void }) => {
+const FeaturedCard = ({ event, lang, theme, onPress }: { event: any; lang: string; theme: any; onPress: () => void }) => {
   const title = event.titleTranslations?.[lang] ?? event.titleTranslations?.en ?? '';
   const narrative = event.narrativeTranslations?.[lang] ?? event.narrativeTranslations?.en ?? '';
   const category = (event.category ?? 'HISTORY').toUpperCase();
@@ -50,30 +45,12 @@ const FeaturedCard = ({
   const impact = event.impactScore ?? 0;
 
   return (
-    <TouchableOpacity
-      activeOpacity={0.92}
-      onPress={onPress}
-      style={[styles.featuredCard, { height: FEATURED_H }]}
-    >
-      {imageUri ? (
-        <Image
-          source={{ uri: imageUri }}
-          style={StyleSheet.absoluteFill}
-          contentFit="cover"
-          transition={500}
-        />
-      ) : (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.card }]} />
-      )}
-
-      {/* Subtle noise/vignette overlay */}
-      <LinearGradient
-        colors={['rgba(0,0,0,0.0)', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0.82)']}
-        locations={[0, 0.45, 1]}
-        style={StyleSheet.absoluteFill}
-      />
-
-      {/* Top row */}
+    <TouchableOpacity activeOpacity={0.92} onPress={onPress} style={[styles.featuredCard, { height: FEATURED_H }]}>
+      {imageUri
+        ? <Image source={{ uri: imageUri }} style={StyleSheet.absoluteFill} contentFit="cover" transition={500} />
+        : <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.card }]} />
+      }
+      <LinearGradient colors={['rgba(0,0,0,0.0)', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0.82)']} locations={[0, 0.45, 1]} style={StyleSheet.absoluteFill} />
       <View style={styles.featuredTop}>
         <View style={styles.categoryPill}>
           <Text style={styles.categoryPillText}>{category}</Text>
@@ -84,14 +61,10 @@ const FeaturedCard = ({
           </View>
         )}
       </View>
-
-      {/* Bottom content */}
       <View style={styles.featuredBottom}>
         {year !== '' && <Text style={styles.featuredYear}>{year}</Text>}
         <Text style={styles.featuredTitle} numberOfLines={2}>{title}</Text>
-        {narrative !== '' && (
-          <Text style={styles.featuredNarrative} numberOfLines={2}>{narrative}</Text>
-        )}
+        {narrative !== '' && <Text style={styles.featuredNarrative} numberOfLines={2}>{narrative}</Text>}
         <View style={styles.readMore}>
           <Text style={styles.readMoreText}>Read story</Text>
           <View style={styles.readMoreLine} />
@@ -101,38 +74,19 @@ const FeaturedCard = ({
   );
 };
 
-// ── Small grid card ───────────────────────────────────────────────────────────
-const SmallCard = ({
-  event, lang, theme, onPress,
-}: { event: any; lang: string; theme: any; onPress: () => void }) => {
+const SmallCard = ({ event, lang, theme, onPress }: { event: any; lang: string; theme: any; onPress: () => void }) => {
   const title = event.titleTranslations?.[lang] ?? event.titleTranslations?.en ?? '';
   const category = (event.category ?? 'HISTORY').toUpperCase();
   const year = extractYear(event);
   const imageUri = event.gallery?.[0];
 
   return (
-    <TouchableOpacity
-      activeOpacity={0.92}
-      onPress={onPress}
-      style={[styles.smallCard, { width: CARD_W, height: SMALL_H }]}
-    >
-      {imageUri ? (
-        <Image
-          source={{ uri: imageUri }}
-          style={StyleSheet.absoluteFill}
-          contentFit="cover"
-          transition={400}
-        />
-      ) : (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.card }]} />
-      )}
-
-      <LinearGradient
-        colors={['transparent', 'rgba(0,0,0,0.78)']}
-        locations={[0.3, 1]}
-        style={StyleSheet.absoluteFill}
-      />
-
+    <TouchableOpacity activeOpacity={0.92} onPress={onPress} style={[styles.smallCard, { width: CARD_W, height: SMALL_H }]}>
+      {imageUri
+        ? <Image source={{ uri: imageUri }} style={StyleSheet.absoluteFill} contentFit="cover" transition={400} />
+        : <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.card }]} />
+      }
+      <LinearGradient colors={['transparent', 'rgba(0,0,0,0.78)']} locations={[0.3, 1]} style={StyleSheet.absoluteFill} />
       <View style={styles.smallContent}>
         <Text style={styles.smallCategory}>{category}</Text>
         <Text style={styles.smallTitle} numberOfLines={3}>{title}</Text>
@@ -142,7 +96,6 @@ const SmallCard = ({
   );
 };
 
-// ── Section header ────────────────────────────────────────────────────────────
 const SectionLabel = ({ label, theme }: { label: string; theme: any }) => (
   <View style={styles.sectionLabelRow}>
     <View style={[styles.sectionLabelDot, { backgroundColor: theme.gold }]} />
@@ -150,7 +103,6 @@ const SectionLabel = ({ label, theme }: { label: string; theme: any }) => (
   </View>
 );
 
-// ── Main export ───────────────────────────────────────────────────────────────
 export const DiscoverSection = ({ events, theme, t }: DiscoverSectionProps) => {
   const { language } = useLanguage();
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
@@ -167,51 +119,28 @@ export const DiscoverSection = ({ events, theme, t }: DiscoverSectionProps) => {
   }
 
   const [featured, ...rest] = events;
-
-  // Pair remaining events into rows of 2
   const rows: any[][] = [];
-  for (let i = 0; i < rest.length; i += 2) {
-    rows.push(rest.slice(i, i + 2));
-  }
+  for (let i = 0; i < rest.length; i += 2) rows.push(rest.slice(i, i + 2));
 
   return (
     <View style={{ flex: 1 }}>
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-        overScrollMode="never"
-      >
-        {/* Featured */}
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} overScrollMode="never">
         <SectionLabel label={t('featured') || 'Featured'} theme={theme} />
-        <FeaturedCard
-          event={featured}
-          lang={language}
-          theme={theme}
-          onPress={() => setSelectedEvent(featured)}
-        />
+        <FeaturedCard event={featured} lang={language} theme={theme} onPress={() => setSelectedEvent(featured)} />
 
-        {/* Grid */}
         {rows.length > 0 && (
           <>
             <SectionLabel label={t('more_today') || 'More from today'} theme={theme} />
             {rows.map((row, ri) => (
               <View key={ri} style={styles.row}>
                 {row.map((ev, ci) => (
-                  <SmallCard
-                    key={ci}
-                    event={ev}
-                    lang={language}
-                    theme={theme}
-                    onPress={() => setSelectedEvent(ev)}
-                  />
+                  <SmallCard key={ci} event={ev} lang={language} theme={theme} onPress={() => setSelectedEvent(ev)} />
                 ))}
-                {/* Fill empty slot if odd */}
                 {row.length === 1 && <View style={{ width: CARD_W }} />}
               </View>
             ))}
           </>
         )}
-
         <View style={{ height: 28 }} />
       </ScrollView>
 
@@ -227,105 +156,27 @@ export const DiscoverSection = ({ events, theme, t }: DiscoverSectionProps) => {
 
 const styles = StyleSheet.create({
   scroll: { paddingBottom: 8 },
-  empty: {
-    alignItems: 'center', justifyContent: 'center',
-    paddingTop: 70, paddingHorizontal: 30, gap: 6,
-  },
-
-  // Section label
-  sectionLabelRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 7,
-    marginTop: 14, marginBottom: 10,
-  },
+  empty: { alignItems: 'center', justifyContent: 'center', paddingTop: 70, paddingHorizontal: 30, gap: 6 },
+  sectionLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 14, marginBottom: 10 },
   sectionLabelDot: { width: 4, height: 4, borderRadius: 2 },
   sectionLabelText: { fontSize: 9, fontWeight: '700', letterSpacing: 2.5 },
-
-  // Featured
-  featuredCard: {
-    width: '100%',
-    borderRadius: 20,
-    overflow: 'hidden',
-    backgroundColor: '#111',
-    // iOS shadow
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.28,
-    shadowRadius: 16,
-    elevation: 10,
-  },
-  featuredTop: {
-    position: 'absolute', top: 14, left: 14, right: 14,
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-  },
-  categoryPill: {
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    paddingHorizontal: 10, paddingVertical: 5,
-    borderRadius: 20,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,215,0,0.35)',
-  },
-  categoryPillText: {
-    color: '#ffd700', fontSize: 9, fontWeight: '800', letterSpacing: 2,
-  },
-  impactPill: {
-    backgroundColor: 'rgba(255,215,0,0.18)',
-    paddingHorizontal: 9, paddingVertical: 5,
-    borderRadius: 20,
-  },
+  featuredCard: { width: '100%', borderRadius: 20, overflow: 'hidden', backgroundColor: '#111', shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.28, shadowRadius: 16, elevation: 10 },
+  featuredTop: { position: 'absolute', top: 14, left: 14, right: 14, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  categoryPill: { backgroundColor: 'rgba(0,0,0,0.55)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,215,0,0.35)' },
+  categoryPillText: { color: '#ffd700', fontSize: 9, fontWeight: '800', letterSpacing: 2 },
+  impactPill: { backgroundColor: 'rgba(255,215,0,0.18)', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 20 },
   impactPillText: { color: '#ffd700', fontSize: 9, fontWeight: '700', letterSpacing: 1 },
-  featuredBottom: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    padding: 16, paddingBottom: 18,
-  },
-  featuredYear: {
-    color: 'rgba(255,255,255,0.45)',
-    fontSize: 11, fontWeight: '700', letterSpacing: 2, marginBottom: 5,
-  },
-  featuredTitle: {
-    color: '#fff', fontSize: 22, fontWeight: '800',
-    lineHeight: 27, letterSpacing: 0.1,
-  },
-  featuredNarrative: {
-    color: 'rgba(255,255,255,0.62)',
-    fontSize: 12, lineHeight: 17, marginTop: 6,
-    fontWeight: '400',
-  },
-  readMore: {
-    flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12,
-  },
-  readMoreText: {
-    color: '#fff', fontSize: 10, fontWeight: '700', letterSpacing: 1.5,
-  },
-  readMoreLine: {
-    flex: 1, height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-  },
-
-  // Small grid
+  featuredBottom: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 16, paddingBottom: 18 },
+  featuredYear: { color: 'rgba(255,255,255,0.45)', fontSize: 11, fontWeight: '700', letterSpacing: 2, marginBottom: 5 },
+  featuredTitle: { color: '#fff', fontSize: 22, fontWeight: '800', lineHeight: 27, letterSpacing: 0.1 },
+  featuredNarrative: { color: 'rgba(255,255,255,0.62)', fontSize: 12, lineHeight: 17, marginTop: 6, fontWeight: '400' },
+  readMore: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 },
+  readMoreText: { color: '#fff', fontSize: 10, fontWeight: '700', letterSpacing: 1.5 },
+  readMoreLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(255,255,255,0.3)' },
   row: { flexDirection: 'row', gap: GAP, marginBottom: GAP },
-  smallCard: {
-    borderRadius: 16, overflow: 'hidden',
-    backgroundColor: '#111',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.22,
-    shadowRadius: 10, elevation: 6,
-  },
-  smallContent: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    padding: 12, paddingBottom: 14,
-  },
-  smallCategory: {
-    color: '#ffd700', fontSize: 8, fontWeight: '800',
-    letterSpacing: 2, marginBottom: 5, opacity: 0.9,
-  },
-  smallTitle: {
-    color: '#fff', fontSize: 13, fontWeight: '700',
-    lineHeight: 17, letterSpacing: 0.1,
-  },
-  smallYear: {
-    color: 'rgba(255,255,255,0.4)',
-    fontSize: 9, fontWeight: '600',
-    letterSpacing: 1, marginTop: 5,
-  },
+  smallCard: { borderRadius: 16, overflow: 'hidden', backgroundColor: '#111', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.22, shadowRadius: 10, elevation: 6 },
+  smallContent: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 12, paddingBottom: 14 },
+  smallCategory: { color: '#ffd700', fontSize: 8, fontWeight: '800', letterSpacing: 2, marginBottom: 5, opacity: 0.9 },
+  smallTitle: { color: '#fff', fontSize: 13, fontWeight: '700', lineHeight: 17, letterSpacing: 0.1 },
+  smallYear: { color: 'rgba(255,255,255,0.4)', fontSize: 9, fontWeight: '600', letterSpacing: 1, marginTop: 5 },
 });
