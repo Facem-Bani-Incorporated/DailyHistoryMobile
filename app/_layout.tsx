@@ -1,16 +1,21 @@
+// app/_layout.tsx
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
-import { LanguageProvider } from '../context/LanguageContext'; // ← ADĂUGAT
-import { ThemeProvider } from '../context/ThemeContext';
+
+import OnboardingScreen, { checkOnboardingSeen } from '../components/OnBoardingScreen';
+import { LanguageProvider } from '../context/LanguageContext';
+import { ThemeProvider, useTheme } from '../context/ThemeContext';
 import { useAuthStore } from '../store/useAuthStore';
 
-export default function RootLayout() {
+function AppContent() {
   const token = useAuthStore((state) => state.token);
   const segments = useSegments();
   const router = useRouter();
+  const { theme } = useTheme();
   const [isReady, setIsReady] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState<boolean | null>(null);
 
   useEffect(() => {
     GoogleSignin.configure({
@@ -18,52 +23,74 @@ export default function RootLayout() {
       offlineAccess: true,
     });
 
-    if (useAuthStore.persist.hasHydrated()) {
+    // Check both hydration and onboarding status
+    const init = async () => {
+      if (!useAuthStore.persist.hasHydrated()) {
+        await new Promise<void>((resolve) => {
+          const unsub = useAuthStore.persist.onFinishHydration(() => {
+            resolve();
+            unsub();
+          });
+        });
+      }
+
+      const seen = await checkOnboardingSeen();
+      setShowOnboarding(!seen);
       setIsReady(true);
-    } else {
-      const unsub = useAuthStore.persist.onFinishHydration(() => setIsReady(true));
-      return () => unsub();
-    }
+    };
+
+    init();
   }, []);
 
   useEffect(() => {
-    if (!isReady) return;
+    if (!isReady || showOnboarding) return;
 
     const inAuthGroup = segments[0] === '(auth)';
     const isNotificationPrompt = segments[0] === 'notification-prompt';
 
     const timeout = setTimeout(() => {
       if (!token && !inAuthGroup && !isNotificationPrompt) {
-        console.log('[GUARD] Redirecting to welcome...');
         router.replace('/(auth)/welcome');
       } else if (token && inAuthGroup) {
-        console.log('[GUARD] Redirecting to main...');
         router.replace('/(main)');
       }
     }, 0);
 
     return () => clearTimeout(timeout);
-  }, [token, segments, isReady]);
+  }, [token, segments, isReady, showOnboarding]);
 
   if (!isReady) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#0e1117', justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#ffd700" />
+      <View style={{ flex: 1, backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color={theme.gold} />
       </View>
     );
   }
 
+  // Show onboarding before anything else
+  if (showOnboarding) {
+    return (
+      <OnboardingScreen onComplete={() => setShowOnboarding(false)} />
+    );
+  }
+
   return (
-    <LanguageProvider>  {/* ← ADĂUGAT — wrappuiește tot app-ul */}
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="(auth)" />
+      <Stack.Screen name="(main)" />
+      <Stack.Screen
+        name="notification-prompt"
+        options={{ presentation: 'transparentModal', animation: 'fade' }}
+      />
+    </Stack>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <LanguageProvider>
       <ThemeProvider>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="(auth)" />
-          <Stack.Screen name="(main)" />
-          <Stack.Screen
-            name="notification-prompt"
-            options={{ presentation: 'transparentModal', animation: 'fade' }}
-          />
-        </Stack>
+        <AppContent />
       </ThemeProvider>
     </LanguageProvider>
   );

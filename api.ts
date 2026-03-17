@@ -4,7 +4,7 @@ import { useAuthStore } from './store/useAuthStore';
 
 const api = axios.create({
   baseURL: 'https://daily-history-server-dev-development.up.railway.app/api/v1',
-  timeout: 15000,
+  timeout: 10000,
 });
 
 api.interceptors.request.use(async (config) => {
