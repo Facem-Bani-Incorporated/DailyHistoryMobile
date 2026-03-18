@@ -7,40 +7,54 @@ const api = axios.create({
   timeout: 10000,
 });
 
+// ── Request interceptor — attach JWT token ──
 api.interceptors.request.use(async (config) => {
-  // Auth endpoints — fără token
+  // Auth endpoints — no token needed
   if (config.url?.includes('/auth')) {
     return config;
   }
 
-  // Dacă store-ul nu s-a hidratat încă din AsyncStorage, așteptăm
+  // Wait for store hydration from AsyncStorage
   if (!useAuthStore.persist.hasHydrated()) {
-    await new Promise<void>(resolve => {
+    await new Promise<void>((resolve) => {
       const unsub = useAuthStore.persist.onFinishHydration(() => {
         unsub();
         resolve();
       });
-      // Timeout de siguranță — maxim 3 secunde
+      // Safety timeout — max 3 seconds
       setTimeout(resolve, 3000);
     });
   }
 
   const token = useAuthStore.getState().token;
-
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
-    console.log(`[API] 🚀 Trimitere către: ${config.url}`);
+    if (__DEV__) console.log(`[API] Request: ${config.url}`);
   } else {
-    console.warn(`[API] ⚠️ No token for: ${config.url}`);
+    if (__DEV__) console.warn(`[API] No token for: ${config.url}`);
   }
 
   return config;
 });
 
+// ── Response interceptor — handle 401 (expired/invalid token) ──
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    console.error(`[API ERROR] ❌ URL: ${error.config?.url} | Status: ${error.response?.status}`);
+    const status = error.response?.status;
+    const url = error.config?.url;
+
+    if (__DEV__) {
+      console.error(`[API ERROR] ${url} | Status: ${status}`);
+    }
+
+    // If backend returns 401 on a protected route, token is expired/invalid
+    // Auto-logout so user gets redirected to login screen cleanly
+    if (status === 401 && !url?.includes('/auth')) {
+      if (__DEV__) console.log('[API] Token expired — logging out');
+      useAuthStore.getState().logout();
+    }
+
     return Promise.reject(error);
   }
 );
