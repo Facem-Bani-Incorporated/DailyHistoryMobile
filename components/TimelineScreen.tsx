@@ -1,15 +1,15 @@
 // components/TimelineScreen.tsx
 import { Image } from 'expo-image';
 import { Clock } from 'lucide-react-native';
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
-    Dimensions,
-    FlatList,
-    Platform,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Dimensions,
+  FlatList,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -45,14 +45,12 @@ export default function TimelineScreen({ allEvents }: Props) {
   const insets = useSafeAreaInsets();
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
 
-  // Sort events by year (oldest first for timeline)
   const timelineEvents = useMemo(() => {
     return [...allEvents]
       .filter(e => extractYear(e) > 0)
       .sort((a, b) => extractYear(a) - extractYear(b));
   }, [allEvents]);
 
-  // Group into centuries for section headers
   const centuries = useMemo(() => {
     const map = new Map<string, typeof timelineEvents>();
     for (const event of timelineEvents) {
@@ -65,7 +63,6 @@ export default function TimelineScreen({ allEvents }: Props) {
     return Array.from(map.entries()).map(([label, events]) => ({ label, events }));
   }, [timelineEvents]);
 
-  // Flatten for FlatList with section headers
   type ListItem = { type: 'header'; label: string; count: number } | { type: 'event'; event: any; isLast: boolean };
   const listData = useMemo(() => {
     const items: ListItem[] = [];
@@ -97,9 +94,9 @@ export default function TimelineScreen({ allEvents }: Props) {
     const year = extractYear(event);
     const catKey = (event.category ?? '').toLowerCase();
     const catColor = CAT_COLORS[catKey] ?? '#8B7355';
+    // Categoria fara underscore
     const catLabel = (event.category ?? 'history').replace(/_/g, ' ');
     const imageUri = event.gallery?.[0];
-    const impact = event.impactScore ?? 0;
 
     return (
       <TouchableOpacity
@@ -125,16 +122,12 @@ export default function TimelineScreen({ allEvents }: Props) {
                 <Text style={[s.eventCatText, { color: catColor }]}>{catLabel}</Text>
               </View>
             </View>
-            {impact > 0 && (
-              <Text style={[s.eventImpact, { color: theme.subtext }]}>{impact}%</Text>
-            )}
           </View>
 
           <Text style={[s.eventTitle, { color: theme.text }]} numberOfLines={2}>
             {title}
           </Text>
 
-          {/* Tiny image preview */}
           {imageUri && (
             <View style={s.eventImageWrap}>
               <Image source={{ uri: imageUri }} style={s.eventImage} contentFit="cover" transition={200} />
@@ -147,7 +140,6 @@ export default function TimelineScreen({ allEvents }: Props) {
 
   return (
     <View style={[s.root, { paddingTop: insets.top }]}>
-      {/* Header */}
       <View style={s.header}>
         <Clock size={18} color={theme.gold} strokeWidth={2} />
         <Text style={[s.headerTitle, { color: theme.text }]}>
@@ -203,7 +195,6 @@ const makeStyles = (theme: any, isDark: boolean) => StyleSheet.create({
 
   list: { paddingTop: 16 },
 
-  // Section header
   sectionHeader: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     paddingHorizontal: 20, paddingVertical: 12,
@@ -213,14 +204,12 @@ const makeStyles = (theme: any, isDark: boolean) => StyleSheet.create({
   sectionLine: { flex: 1, height: StyleSheet.hairlineWidth },
   sectionCount: { fontSize: 11, fontWeight: '600', opacity: 0.4 },
 
-  // Event row
   eventRow: {
     flexDirection: 'row',
     paddingRight: 16,
     minHeight: 90,
   },
 
-  // Spine
   spine: {
     width: 44,
     alignItems: 'center',
@@ -234,7 +223,6 @@ const makeStyles = (theme: any, isDark: boolean) => StyleSheet.create({
   },
   spineNodeInner: { width: 5, height: 5, borderRadius: 3 },
 
-  // Event card
   eventCard: {
     flex: 1,
     borderRadius: 14,
@@ -247,21 +235,19 @@ const makeStyles = (theme: any, isDark: boolean) => StyleSheet.create({
     elevation: 2,
   },
   eventTop: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    flexDirection: 'row', alignItems: 'center',
     marginBottom: 6,
   },
   eventMeta: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   eventYear: { fontSize: 13, fontWeight: '900', letterSpacing: 0.5 },
   eventCatPill: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
   eventCatText: { fontSize: 9, fontWeight: '700', letterSpacing: 0.5 },
-  eventImpact: { fontSize: 10, fontWeight: '700', opacity: 0.4 },
   eventTitle: { fontSize: 13, fontWeight: '600', lineHeight: 18 },
   eventImageWrap: {
     marginTop: 8, height: 48, borderRadius: 8, overflow: 'hidden',
   },
   eventImage: { width: '100%', height: 48 },
 
-  // Empty
   emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   emptyText: { fontSize: 14, fontWeight: '500', opacity: 0.4 },
 });

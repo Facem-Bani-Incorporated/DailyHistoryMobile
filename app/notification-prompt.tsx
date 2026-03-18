@@ -3,11 +3,12 @@ import * as Device from 'expo-device';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
-import { Bell, ShieldCheck, Zap } from 'lucide-react-native';
-import React, { useEffect, useRef } from 'react';
+import { Bell, Clock, ShieldCheck } from 'lucide-react-native';
+import { useEffect, useRef } from 'react';
 import {
   Animated,
   Dimensions,
+  Easing,
   Platform,
   Pressable,
   StyleSheet,
@@ -18,41 +19,101 @@ import {
 
 const { width, height } = Dimensions.get('window');
 
+// ─── Animated ring component ──────────────────────────────────────────────────
+const PulseRing = ({ size, delay, duration }: { size: number; delay: number; duration: number }) => {
+  const scale = useRef(new Animated.Value(0.85)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const animate = () => {
+      scale.setValue(0.85);
+      opacity.setValue(0.6);
+      Animated.parallel([
+        Animated.timing(scale, {
+          toValue: 1.15,
+          duration,
+          delay,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 0,
+          duration,
+          delay,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start(() => animate());
+    };
+    animate();
+  }, []);
+
+  return (
+    <Animated.View
+      style={{
+        position: 'absolute',
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        borderWidth: 1,
+        borderColor: '#D4A017',
+        opacity,
+        transform: [{ scale }],
+      }}
+    />
+  );
+};
+
 export default function NotificationPrompt() {
   const router = useRouter();
 
-  // Animations
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(40)).current;
-  const iconScaleAnim = useRef(new Animated.Value(0.6)).current;
-  const iconFadeAnim = useRef(new Animated.Value(0)).current;
-  const feature1Anim = useRef(new Animated.Value(0)).current;
-  const feature2Anim = useRef(new Animated.Value(0)).current;
-  const btnAnim = useRef(new Animated.Value(0)).current;
+  // Staggered entrance animations
+  const iconAnim = useRef(new Animated.Value(0)).current;
+  const iconScale = useRef(new Animated.Value(0.5)).current;
+  const titleAnim = useRef(new Animated.Value(0)).current;
+  const titleSlide = useRef(new Animated.Value(20)).current;
+  const subtitleAnim = useRef(new Animated.Value(0)).current;
+  const card1Anim = useRef(new Animated.Value(0)).current;
+  const card1Slide = useRef(new Animated.Value(24)).current;
+  const card2Anim = useRef(new Animated.Value(0)).current;
+  const card2Slide = useRef(new Animated.Value(24)).current;
+  const ctaAnim = useRef(new Animated.Value(0)).current;
+  const ctaSlide = useRef(new Animated.Value(16)).current;
 
   useEffect(() => {
     Animated.sequence([
-      // Icon pops in first
+      // Icon
       Animated.parallel([
-        Animated.spring(iconScaleAnim, { toValue: 1, useNativeDriver: true, tension: 60, friction: 8 }),
-        Animated.timing(iconFadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
+        Animated.spring(iconScale, { toValue: 1, tension: 50, friction: 7, useNativeDriver: true }),
+        Animated.timing(iconAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
       ]),
-      // Title + subtitle slide up
+      // Title
       Animated.parallel([
-        Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
-        Animated.timing(slideAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
+        Animated.timing(titleAnim, { toValue: 1, duration: 450, useNativeDriver: true }),
+        Animated.timing(titleSlide, { toValue: 0, duration: 450, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
       ]),
-      // Feature cards stagger
-      Animated.stagger(120, [
-        Animated.timing(feature1Anim, { toValue: 1, duration: 350, useNativeDriver: true }),
-        Animated.timing(feature2Anim, { toValue: 1, duration: 350, useNativeDriver: true }),
+      // Subtitle
+      Animated.timing(subtitleAnim, { toValue: 1, duration: 350, useNativeDriver: true }),
+      // Cards stagger
+      Animated.stagger(100, [
+        Animated.parallel([
+          Animated.timing(card1Anim, { toValue: 1, duration: 400, useNativeDriver: true }),
+          Animated.timing(card1Slide, { toValue: 0, duration: 400, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        ]),
+        Animated.parallel([
+          Animated.timing(card2Anim, { toValue: 1, duration: 400, useNativeDriver: true }),
+          Animated.timing(card2Slide, { toValue: 0, duration: 400, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        ]),
       ]),
-      // Button fades in
-      Animated.timing(btnAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
+      // CTA
+      Animated.parallel([
+        Animated.timing(ctaAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
+        Animated.timing(ctaSlide, { toValue: 0, duration: 400, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      ]),
     ]).start();
   }, []);
 
-  // ------------------ REQUEST PERMISSIONS ------------------
+  // ── Push permissions ──
   const requestPushPermissions = async () => {
     if (!Device.isDevice) {
       console.log('Must use physical device for Push Notifications');
@@ -77,7 +138,6 @@ export default function NotificationPrompt() {
       });
     }
   };
-  // ----------------------------------------------------------
 
   const handleEnable = async () => {
     try {
@@ -100,83 +160,97 @@ export default function NotificationPrompt() {
 
   return (
     <View style={styles.container}>
-      {/* Background accents */}
-      <View style={styles.bgGlowTop} />
-      <View style={styles.bgGlowBottom} />
 
-      {/* Thin gold top bar */}
-      <View style={styles.topBar} />
-
-      {/* Skip button */}
-      <TouchableOpacity style={styles.skipButton} onPress={handleSkip} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-        <Text style={styles.skipText}>Skip</Text>
-      </TouchableOpacity>
-
+      {/* Content */}
       <View style={styles.content}>
 
-        {/* Icon area */}
-        <Animated.View style={[styles.iconArea, { opacity: iconFadeAnim, transform: [{ scale: iconScaleAnim }] }]}>
-          {/* Rings */}
-          <View style={styles.ring3} />
-          <View style={styles.ring2} />
-          <View style={styles.ring1} />
-          {/* Core */}
-          <LinearGradient colors={['#ffd700', '#c9950c']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.iconCircle}>
-            <Bell color="#0a0c10" size={36} strokeWidth={2.2} />
-          </LinearGradient>
-        </Animated.View>
+        {/* Skip */}
+        <View style={styles.topRow}>
+          <View style={{ flex: 1 }} />
+          <TouchableOpacity
+            onPress={handleSkip}
+            style={styles.skipButton}
+            activeOpacity={0.5}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Text style={styles.skipText}>Skip</Text>
+          </TouchableOpacity>
+        </View>
 
-        {/* Heading */}
-        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-          <Text style={styles.eyebrow}>DAILY HISTORY</Text>
-          <Text style={styles.title}>
-            Stay in the{'\n'}
-            <Text style={styles.titleGold}>loop.</Text>
-          </Text>
-          <Text style={styles.subtitle}>
-            One notification a day. One untold story that changed the world. Never miss it.
-          </Text>
-        </Animated.View>
+        {/* ── Hero section ── */}
+        <View style={styles.heroSection}>
 
-        {/* Feature cards */}
+          {/* Animated icon with pulse rings */}
+          <Animated.View style={[styles.iconArea, { opacity: iconAnim, transform: [{ scale: iconScale }] }]}>
+            <PulseRing size={140} delay={0} duration={2800} />
+            <PulseRing size={140} delay={1400} duration={2800} />
+            <View style={styles.iconRingOuter} />
+            <View style={styles.iconRingInner} />
+            <LinearGradient
+              colors={['#D4A017', '#F5CE50']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.iconCircle}
+            >
+              <Bell color="#0B0D11" size={30} strokeWidth={2.2} />
+            </LinearGradient>
+          </Animated.View>
+
+          {/* Title */}
+          <Animated.View style={{ opacity: titleAnim, transform: [{ translateY: titleSlide }] }}>
+            <Text style={styles.title}>
+              Never miss a{'\n'}
+              <Text style={styles.titleGold}>golden moment.</Text>
+            </Text>
+          </Animated.View>
+
+          {/* Subtitle */}
+          <Animated.View style={{ opacity: subtitleAnim }}>
+            <Text style={styles.subtitle}>
+              One story from history, delivered each morning.{'\n'}That's it — no noise, no clutter.
+            </Text>
+          </Animated.View>
+        </View>
+
+        {/* ── Feature cards ── */}
         <View style={styles.features}>
-          <Animated.View style={[styles.featureCard, { opacity: feature1Anim, transform: [{ translateX: feature1Anim.interpolate({ inputRange: [0, 1], outputRange: [-16, 0] }) }] }]}>
+          <Animated.View style={[styles.featureCard, { opacity: card1Anim, transform: [{ translateY: card1Slide }] }]}>
             <View style={styles.featureIconWrap}>
-              <Zap color="#ffd700" size={17} />
+              <Clock color="#D4A017" size={16} strokeWidth={2} />
             </View>
             <View style={styles.featureTextWrap}>
-              <Text style={styles.featureTitle}>Daily insights</Text>
-              <Text style={styles.featureDesc}>Curated historical moments, every morning.</Text>
+              <Text style={styles.featureTitle}>Every morning at 9 AM</Text>
+              <Text style={styles.featureDesc}>Start your day with a fascinating piece of history</Text>
             </View>
           </Animated.View>
 
-          <Animated.View style={[styles.featureCard, { opacity: feature2Anim, transform: [{ translateX: feature2Anim.interpolate({ inputRange: [0, 1], outputRange: [-16, 0] }) }] }]}>
+          <Animated.View style={[styles.featureCard, { opacity: card2Anim, transform: [{ translateY: card2Slide }] }]}>
             <View style={styles.featureIconWrap}>
-              <ShieldCheck color="#ffd700" size={17} />
+              <ShieldCheck color="#D4A017" size={16} strokeWidth={2} />
             </View>
             <View style={styles.featureTextWrap}>
               <Text style={styles.featureTitle}>No spam, ever</Text>
-              <Text style={styles.featureDesc}>One story per day. Nothing more, nothing less.</Text>
+              <Text style={styles.featureDesc}>One notification per day — we respect your attention</Text>
             </View>
           </Animated.View>
         </View>
 
-        {/* CTA Button */}
-        <Animated.View style={[styles.btnWrapper, { opacity: btnAnim }]}>
-          <Pressable onPress={handleEnable} style={styles.mainButton}>
-            <LinearGradient
-              colors={['#ffd700', '#c9950c']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.gradientButton}
-            >
-              <Bell color="#0a0c10" size={18} strokeWidth={2.5} style={{ marginRight: 10 }} />
-              <Text style={styles.buttonText}>Enable Notifications</Text>
-            </LinearGradient>
+        {/* ── CTA area ── */}
+        <Animated.View style={[styles.ctaArea, { opacity: ctaAnim, transform: [{ translateY: ctaSlide }] }]}>
+          <Pressable
+            onPress={handleEnable}
+            style={({ pressed }) => [styles.mainButton, pressed && { opacity: 0.85 }]}
+          >
+            <Bell color="#0B0D11" size={17} strokeWidth={2.5} style={{ marginRight: 10 }} />
+            <Text style={styles.mainButtonText}>Enable Notifications</Text>
           </Pressable>
 
-          <TouchableOpacity onPress={handleSkip} activeOpacity={0.6} style={styles.maybeLater}>
-            <Text style={styles.maybeLaterText}>I'll check manually</Text>
+          <TouchableOpacity
+            onPress={handleSkip}
+            activeOpacity={0.5}
+            style={styles.laterButton}
+          >
+            <Text style={styles.laterText}>I'll check manually</Text>
           </TouchableOpacity>
         </Animated.View>
 
@@ -188,208 +262,179 @@ export default function NotificationPrompt() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a0c10',
-  },
-
-  // Thin gold accent bar at top
-  topBar: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 2,
-    backgroundColor: '#ffd700',
-    opacity: 0.6,
-  },
-
-  // Background glow orbs
-  bgGlowTop: {
-    position: 'absolute',
-    top: -60,
-    alignSelf: 'center',
-    width: 320,
-    height: 320,
-    borderRadius: 160,
-    backgroundColor: 'rgba(255, 215, 0, 0.06)',
-  },
-  bgGlowBottom: {
-    position: 'absolute',
-    bottom: -80,
-    right: -60,
-    width: 240,
-    height: 240,
-    borderRadius: 120,
-    backgroundColor: 'rgba(255, 215, 0, 0.03)',
-  },
-
-  skipButton: {
-    position: 'absolute',
-    top: 58,
-    right: 28,
-    zIndex: 10,
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-    backgroundColor: '#111318',
-    borderWidth: 1,
-    borderColor: '#1e2028',
-  },
-  skipText: {
-    color: '#3a3d47',
-    fontSize: 13,
-    fontWeight: '600',
-    letterSpacing: 0.3,
+    backgroundColor: '#0B0D11',
   },
 
   content: {
     flex: 1,
-    paddingHorizontal: 28,
-    paddingTop: height * 0.13,
-    paddingBottom: 48,
-    justifyContent: 'space-between',
+    paddingHorizontal: 24,
+    paddingTop: Platform.OS === 'ios' ? 60 : 44,
+    paddingBottom: Platform.OS === 'ios' ? 50 : 36,
   },
 
-  // Icon with pulse rings
+  // Top row
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  skipButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    backgroundColor: '#13151B',
+    borderWidth: 1,
+    borderColor: '#1E2028',
+  },
+  skipText: {
+    color: '#6B6F7B',
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+
+  // Hero
+  heroSection: {
+    alignItems: 'center',
+    marginBottom: 32,
+    flex: 1,
+    justifyContent: 'center',
+  },
+
+  // Icon area
   iconArea: {
-    alignSelf: 'center',
+    width: 160,
+    height: 160,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
-    width: 160,
-    height: 160,
+    marginBottom: 36,
   },
-  ring1: {
+  iconRingOuter: {
     position: 'absolute',
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 215, 0, 0.2)',
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(212, 160, 23, 0.12)',
   },
-  ring2: {
+  iconRingInner: {
     position: 'absolute',
-    width: 130,
-    height: 130,
-    borderRadius: 65,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 215, 0, 0.1)',
-  },
-  ring3: {
-    position: 'absolute',
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 215, 0, 0.05)',
+    width: 85,
+    height: 85,
+    borderRadius: 42.5,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(212, 160, 23, 0.08)',
   },
   iconCircle: {
-    width: 76,
-    height: 76,
-    borderRadius: 24,
+    width: 64,
+    height: 64,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#ffd700',
-    shadowOpacity: 0.5,
+    shadowColor: '#D4A017',
+    shadowOpacity: 0.35,
     shadowRadius: 24,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 16,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 12,
   },
 
-  // Text
-  eyebrow: {
-    color: '#ffd700',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 3,
-    marginBottom: 12,
-    opacity: 0.7,
-  },
+  // Title
   title: {
-    fontSize: 44,
+    fontSize: 34,
     fontWeight: '800',
-    color: '#ffffff',
-    letterSpacing: -1.5,
-    lineHeight: 50,
-    marginBottom: 16,
+    color: '#FFFFFF',
+    letterSpacing: -1,
+    lineHeight: 42,
+    textAlign: 'center',
+    marginBottom: 14,
   },
   titleGold: {
-    color: '#ffd700',
+    color: '#D4A017',
   },
+
+  // Subtitle
   subtitle: {
     fontSize: 15,
-    color: '#3a3d47',
+    color: '#6B6F7B',
     lineHeight: 23,
+    textAlign: 'center',
     letterSpacing: 0.1,
-    maxWidth: width * 0.78,
+    maxWidth: width * 0.8,
   },
 
   // Feature cards
   features: {
-    gap: 10,
+    gap: 8,
+    marginBottom: 28,
   },
   featureCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#111318',
+    backgroundColor: '#13151B',
     borderRadius: 14,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#1e2028',
+    borderColor: '#1E2028',
     gap: 14,
   },
   featureIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 215, 0, 0.08)',
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    backgroundColor: 'rgba(212, 160, 23, 0.07)',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(212, 160, 23, 0.12)',
   },
   featureTextWrap: {
     flex: 1,
   },
   featureTitle: {
-    color: '#fff',
-    fontWeight: '700',
+    color: '#FFFFFF',
+    fontWeight: '600',
     fontSize: 14,
     letterSpacing: 0.1,
-    marginBottom: 2,
+    marginBottom: 3,
   },
   featureDesc: {
-    color: '#3a3d47',
-    fontSize: 12,
+    color: '#555B67',
+    fontSize: 13,
+    lineHeight: 18,
     letterSpacing: 0.1,
   },
 
-  // Buttons
-  btnWrapper: {
+  // CTA
+  ctaArea: {
     gap: 0,
   },
   mainButton: {
+    backgroundColor: '#D4A017',
     borderRadius: 14,
-    overflow: 'hidden',
-    marginBottom: 16,
-  },
-  gradientButton: {
-    height: 56,
+    height: 54,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 14,
+    shadowColor: '#D4A017',
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
   },
-  buttonText: {
-    color: '#0a0c10',
-    fontWeight: '800',
+  mainButtonText: {
+    color: '#0B0D11',
+    fontWeight: '700',
     fontSize: 15,
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
-  maybeLater: {
+  laterButton: {
     alignItems: 'center',
     paddingVertical: 10,
   },
-  maybeLaterText: {
-    color: '#2e3039',
-    fontSize: 13,
-    fontWeight: '600',
-    letterSpacing: 0.2,
+  laterText: {
+    color: '#444854',
+    fontSize: 14,
+    fontWeight: '500',
   },
 });

@@ -1,10 +1,10 @@
 // app/_layout.tsx
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { Stack, useRouter, useSegments } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
-import OnboardingScreen, { checkOnboardingSeen } from '../components/OnBoardingScreen';
+import OnboardingScreen from '../components/OnBoardingScreen';
 import { LanguageProvider } from '../context/LanguageContext';
 import { ThemeProvider, useTheme } from '../context/ThemeContext';
 import { useAuthStore } from '../store/useAuthStore';
@@ -15,7 +15,11 @@ function AppContent() {
   const router = useRouter();
   const { theme } = useTheme();
   const [isReady, setIsReady] = useState(false);
-  const [showOnboarding, setShowOnboarding] = useState<boolean | null>(null);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  // Track previous token value to detect transitions (null → token = login)
+  const prevTokenRef = useRef<string | null | undefined>(undefined); // undefined = uninitialized
+  const onboardingActiveRef = useRef(false); // prevents re-trigger while onboarding is showing
 
   useEffect(() => {
     GoogleSignin.configure({
@@ -23,7 +27,6 @@ function AppContent() {
       offlineAccess: true,
     });
 
-    // Check both hydration and onboarding status
     const init = async () => {
       if (!useAuthStore.persist.hasHydrated()) {
         await new Promise<void>((resolve) => {
@@ -34,14 +37,37 @@ function AppContent() {
         });
       }
 
-      const seen = await checkOnboardingSeen();
-      setShowOnboarding(!seen);
+      // Initialize prevTokenRef with current token AFTER hydration
+      // This prevents showing onboarding on app reopen when already logged in
+      prevTokenRef.current = useAuthStore.getState().token || null;
       setIsReady(true);
     };
 
     init();
   }, []);
 
+  // Detect login transitions: prevToken was null/falsy → token is now truthy
+  // This works for:
+  //   - First login after app open (prevToken = null from hydration)
+  //   - Re-login after logout (prevToken = null after logout cleared it)
+  //   - Does NOT trigger on app reopen (prevToken = existing token from hydration)
+  useEffect(() => {
+    if (!isReady) return;
+    if (prevTokenRef.current === undefined) return; // not yet initialized
+
+    const wasLoggedOut = !prevTokenRef.current;
+    const isNowLoggedIn = !!token;
+
+    if (wasLoggedOut && isNowLoggedIn && !onboardingActiveRef.current) {
+      onboardingActiveRef.current = true;
+      setShowOnboarding(true);
+    }
+
+    // Always update the ref — this is crucial for detecting logout→login
+    prevTokenRef.current = token || null;
+  }, [token, isReady]);
+
+  // Navigation routing
   useEffect(() => {
     if (!isReady || showOnboarding) return;
 
@@ -67,10 +93,16 @@ function AppContent() {
     );
   }
 
-  // Show onboarding before anything else
-  if (showOnboarding) {
+  // Show onboarding after fresh login
+  if (showOnboarding && token) {
     return (
-      <OnboardingScreen onComplete={() => setShowOnboarding(false)} />
+      <OnboardingScreen
+        onComplete={() => {
+          onboardingActiveRef.current = false;
+          setShowOnboarding(false);
+          router.replace('/(main)');
+        }}
+      />
     );
   }
 

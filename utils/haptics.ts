@@ -1,6 +1,5 @@
 // utils/haptics.ts
-// Centralized haptic feedback — import { haptic } from '../utils/haptics'
-// Usage: haptic('light') | haptic('medium') | haptic('success') | haptic('warning')
+import { Platform } from 'react-native';
 
 let Haptics: any = null;
 
@@ -13,7 +12,7 @@ try {
 type HapticStyle = 'light' | 'medium' | 'heavy' | 'success' | 'warning' | 'error' | 'selection';
 
 export function haptic(style: HapticStyle = 'light') {
-  if (!Haptics) return;
+  if (!Haptics || Platform.OS === 'android') return;
 
   try {
     switch (style) {

@@ -2,12 +2,13 @@ import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-si
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Eye, Lock, Mail } from 'lucide-react-native';
-import React, { useEffect, useRef, useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react-native';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Animated,
+  Dimensions,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -23,8 +24,9 @@ import api from '../../api';
 import { useAuthStore } from '../../store/useAuthStore';
 import { authService } from '../services/authService';
 
-// Real Google "G" logo in official brand colors
-function GoogleIcon({ size = 22 }: { size?: number }) {
+const { width } = Dimensions.get('window');
+
+function GoogleIcon({ size = 20 }: { size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 48 48">
       <Path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
@@ -47,19 +49,19 @@ export default function LoginScreen() {
 
   // Animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(30)).current;
+  const slideAnim = useRef(new Animated.Value(24)).current;
   const formFadeAnim = useRef(new Animated.Value(0)).current;
-  const formSlideAnim = useRef(new Animated.Value(20)).current;
+  const formSlideAnim = useRef(new Animated.Value(16)).current;
 
   useEffect(() => {
     Animated.sequence([
       Animated.parallel([
-        Animated.timing(fadeAnim, { toValue: 1, duration: 700, useNativeDriver: true }),
-        Animated.timing(slideAnim, { toValue: 0, duration: 700, useNativeDriver: true }),
+        Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
+        Animated.timing(slideAnim, { toValue: 0, duration: 600, useNativeDriver: true }),
       ]),
       Animated.parallel([
-        Animated.timing(formFadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
-        Animated.timing(formSlideAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
+        Animated.timing(formFadeAnim, { toValue: 1, duration: 450, useNativeDriver: true }),
+        Animated.timing(formSlideAnim, { toValue: 0, duration: 450, useNativeDriver: true }),
       ]),
     ]).start();
 
@@ -105,7 +107,7 @@ export default function LoginScreen() {
       }
       console.log('Trimit ID Token la Railway...');
       await authService.loginWithGoogle(googleIdToken);
-      router.replace('/(main)');
+      // Don't navigate — _layout.tsx will detect the token and show onboarding
     } catch (error: any) {
       console.error('Detalii eroare Railway:', error.response?.data);
       Alert.alert(
@@ -129,7 +131,7 @@ export default function LoginScreen() {
       const finalToken = token || accessToken;
       if (finalToken) {
         setAuth(finalToken, userData);
-        router.replace('/(main)');
+        // Don't navigate — _layout.tsx will detect the token and show onboarding
       }
     } catch (e: any) {
       Alert.alert('Eroare', 'Date de logare incorecte.');
@@ -138,88 +140,52 @@ export default function LoginScreen() {
     }
   };
 
+  const isFormValid = form.email.length > 0 && form.password.length > 0;
+
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
       <StatusBar style="light" />
-
-      {/* Subtle background accent */}
-      <View style={styles.bgAccent} />
-      <View style={styles.bgAccentBottom} />
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
+        {/* Logo & Header */}
         <Animated.View style={[styles.header, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-          <View style={styles.logoRow}>
-            <View style={styles.logoMark}>
+          <View style={styles.logoContainer}>
+            <LinearGradient
+              colors={['#D4A017', '#F5CE50']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.logoMark}
+            >
               <Text style={styles.logoMarkText}>D</Text>
-            </View>
-            <View>
-              <Text style={styles.title}>
-                Daily<Text style={styles.titleGold}>History</Text>
-              </Text>
-              <Text style={styles.tagline}>Every day, a new story from the past.</Text>
-            </View>
+            </LinearGradient>
           </View>
+          <Text style={styles.title}>Welcome back</Text>
+          <Text style={styles.subtitle}>Sign in to DailyHistory</Text>
         </Animated.View>
 
         {/* Form */}
         <Animated.View style={[styles.form, { opacity: formFadeAnim, transform: [{ translateY: formSlideAnim }] }]}>
-          <Text style={styles.formHeading}>Welcome back</Text>
-          <Text style={styles.formSubheading}>Sign in to your account</Text>
 
-          {/* Email Input */}
-          <View style={[styles.inputWrapper, focusedField === 'email' && styles.inputWrapperFocused]}>
-            <Mail color={focusedField === 'email' ? '#ffd700' : '#444'} size={18} style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Email address"
-              placeholderTextColor="#444"
-              value={form.email}
-              onChangeText={(text) => setForm({ ...form, email: text })}
-              autoCapitalize="none"
-              keyboardType="email-address"
-              onFocus={() => setFocusedField('email')}
-              onBlur={() => setFocusedField(null)}
-            />
-          </View>
-
-          {/* Password Input */}
-          <View style={[styles.inputWrapper, focusedField === 'password' && styles.inputWrapperFocused]}>
-            <Lock color={focusedField === 'password' ? '#ffd700' : '#444'} size={18} style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Password"
-              placeholderTextColor="#444"
-              secureTextEntry={!showPassword}
-              value={form.password}
-              onChangeText={(text) => setForm({ ...form, password: text })}
-              onFocus={() => setFocusedField('password')}
-              onBlur={() => setFocusedField(null)}
-            />
-            <TouchableOpacity onPress={() => setShowPassword(!showPassword)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Eye color={showPassword ? '#ffd700' : '#444'} size={18} />
-            </TouchableOpacity>
-          </View>
-
-          {/* Sign In Button */}
-          <Pressable style={styles.loginButton} onPress={handleLogin} disabled={isLoading}>
-            <LinearGradient
-              colors={['#ffd700', '#c9950c']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.gradientButton}
-            >
-              {isLoading ? (
-                <ActivityIndicator color="#0e1117" />
-              ) : (
-                <Text style={styles.loginButtonText}>Sign In</Text>
-              )}
-            </LinearGradient>
-          </Pressable>
+          {/* Google Button — first, prominent */}
+          <TouchableOpacity
+            style={styles.googleButton}
+            onPress={handleGoogleSignIn}
+            disabled={isLoading}
+            activeOpacity={0.7}
+          >
+            {isLoading ? (
+              <ActivityIndicator color="#666" />
+            ) : (
+              <>
+                <GoogleIcon size={20} />
+                <Text style={styles.googleButtonText}>Continue with Google</Text>
+              </>
+            )}
+          </TouchableOpacity>
 
           {/* Divider */}
           <View style={styles.dividerContainer}>
@@ -228,23 +194,88 @@ export default function LoginScreen() {
             <View style={styles.dividerLine} />
           </View>
 
-          {/* Google Button — styled like the real Google Sign-In button */}
-          <TouchableOpacity
-            style={styles.socialButton}
-            onPress={handleGoogleSignIn}
-            disabled={isLoading}
-            activeOpacity={0.85}
+          {/* Email Input */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Email</Text>
+            <View style={[
+              styles.inputWrapper,
+              focusedField === 'email' && styles.inputWrapperFocused,
+            ]}>
+              <TextInput
+                style={styles.input}
+                placeholder="your@email.com"
+                placeholderTextColor="#555"
+                value={form.email}
+                onChangeText={(text) => setForm({ ...form, email: text })}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                onFocus={() => setFocusedField('email')}
+                onBlur={() => setFocusedField(null)}
+              />
+            </View>
+          </View>
+
+          {/* Password Input */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Password</Text>
+            <View style={[
+              styles.inputWrapper,
+              focusedField === 'password' && styles.inputWrapperFocused,
+            ]}>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter your password"
+                placeholderTextColor="#555"
+                secureTextEntry={!showPassword}
+                value={form.password}
+                onChangeText={(text) => setForm({ ...form, password: text })}
+                onFocus={() => setFocusedField('password')}
+                onBlur={() => setFocusedField(null)}
+              />
+              <TouchableOpacity
+                onPress={() => setShowPassword(!showPassword)}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                style={styles.eyeButton}
+              >
+                {showPassword
+                  ? <EyeOff color="#666" size={18} />
+                  : <Eye color="#666" size={18} />
+                }
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Sign In Button */}
+          <Pressable
+            style={({ pressed }) => [
+              styles.signInButton,
+              !isFormValid && styles.signInButtonDisabled,
+              pressed && isFormValid && { opacity: 0.85 },
+            ]}
+            onPress={handleLogin}
+            disabled={isLoading || !isFormValid}
           >
             {isLoading ? (
-              <ActivityIndicator color="#444" />
+              <ActivityIndicator color="#0a0c10" />
             ) : (
-              <>
-                <View style={styles.googleIconWrapper}>
-                  <GoogleIcon size={22} />
-                </View>
-                <Text style={styles.socialButtonText}>Sign in with Google</Text>
-              </>
+              <Text style={[
+                styles.signInButtonText,
+                !isFormValid && styles.signInButtonTextDisabled,
+              ]}>Sign In</Text>
             )}
+          </Pressable>
+        </Animated.View>
+
+        {/* Footer */}
+        <Animated.View style={[styles.footer, { opacity: formFadeAnim }]}>
+          <TouchableOpacity
+            onPress={() => router.push('/(auth)/register')}
+            activeOpacity={0.6}
+          >
+            <Text style={styles.footerText}>
+              Don't have an account?{' '}
+              <Text style={styles.footerLink}>Create one</Text>
+            </Text>
           </TouchableOpacity>
         </Animated.View>
       </ScrollView>
@@ -255,184 +286,170 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a0c10',
+    backgroundColor: '#0B0D11',
   },
-
-  // Background accents — subtle radial glow effects
-  bgAccent: {
-    position: 'absolute',
-    top: -80,
-    left: -80,
-    width: 280,
-    height: 280,
-    borderRadius: 140,
-    backgroundColor: 'rgba(255, 215, 0, 0.045)',
-  },
-  bgAccentBottom: {
-    position: 'absolute',
-    bottom: -100,
-    right: -60,
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    backgroundColor: 'rgba(255, 215, 0, 0.03)',
-  },
-
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: 28,
-    paddingTop: 80,
+    paddingHorizontal: 24,
+    paddingTop: Platform.OS === 'ios' ? 100 : 80,
     paddingBottom: 40,
+    justifyContent: 'center',
   },
 
-  // Header / Logo
+  // Header
   header: {
-    marginBottom: 56,
-  },
-  logoRow: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    marginBottom: 40,
+  },
+  logoContainer: {
+    marginBottom: 28,
   },
   logoMark: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: '#ffd700',
+    width: 56,
+    height: 56,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#D4A017',
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
   },
   logoMarkText: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: '#0a0c10',
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#0B0D11',
     letterSpacing: -1,
   },
   title: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: '#ffffff',
-    letterSpacing: -0.5,
-  },
-  titleGold: {
-    color: '#ffd700',
-  },
-  tagline: {
-    fontSize: 12,
-    color: '#3a3d47',
-    marginTop: 2,
-    letterSpacing: 0.2,
-  },
-
-  // Form section
-  form: {
-    gap: 14,
-  },
-  formHeading: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#fff',
-    letterSpacing: -0.6,
-    marginBottom: 2,
+    color: '#FFFFFF',
+    letterSpacing: -0.5,
+    marginBottom: 8,
   },
-  formSubheading: {
-    fontSize: 14,
-    color: '#3a3d47',
-    marginBottom: 10,
-  },
-
-  // Inputs
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#111318',
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    height: 58,
-    borderWidth: 1,
-    borderColor: '#1e2028',
-  },
-  inputWrapperFocused: {
-    borderColor: 'rgba(255, 215, 0, 0.4)',
-    backgroundColor: '#13151b',
-  },
-  inputIcon: {
-    marginRight: 12,
-  },
-  input: {
-    flex: 1,
-    color: '#fff',
-    fontSize: 15,
+  subtitle: {
+    fontSize: 16,
+    color: '#6B6F7B',
     letterSpacing: 0.1,
   },
 
-  // Primary button
-  loginButton: {
-    marginTop: 8,
-    borderRadius: 14,
-    overflow: 'hidden',
+  // Form
+  form: {
+    gap: 0,
   },
-  gradientButton: {
-    height: 56,
-    justifyContent: 'center',
+
+  // Google button
+  googleButton: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    height: 52,
+    gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  loginButtonText: {
-    color: '#0a0c10',
-    fontWeight: '800',
+  googleButtonText: {
+    color: '#1F1F1F',
+    fontWeight: '600',
     fontSize: 15,
-    letterSpacing: 0.3,
+    letterSpacing: 0.1,
   },
 
   // Divider
   dividerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 6,
+    marginVertical: 24,
   },
   dividerLine: {
     flex: 1,
-    height: 1,
-    backgroundColor: '#1a1c22',
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: '#222530',
   },
   dividerText: {
-    color: '#2e3039',
-    marginHorizontal: 14,
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.5,
+    color: '#444854',
+    marginHorizontal: 16,
+    fontSize: 13,
+    fontWeight: '500',
   },
 
-  // Google button — white background like the real thing
-  socialButton: {
+  // Inputs
+  inputGroup: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    color: '#9CA0AB',
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 8,
+    marginLeft: 2,
+    letterSpacing: 0.2,
+  },
+  inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    height: 56,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    gap: 0,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
+    backgroundColor: '#13151B',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    height: 52,
+    borderWidth: 1.5,
+    borderColor: '#1E2028',
   },
-  googleIconWrapper: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
+  inputWrapperFocused: {
+    borderColor: '#D4A017',
+    backgroundColor: '#141720',
   },
-  socialButtonText: {
-    color: '#3c4043',
-    fontWeight: '600',
+  input: {
+    flex: 1,
+    color: '#FFFFFF',
     fontSize: 15,
     letterSpacing: 0.1,
-    flex: 1,
-    textAlign: 'center',
-    marginRight: 40, // visually center text accounting for icon width
+  },
+  eyeButton: {
+    padding: 4,
+  },
+
+  // Sign In button
+  signInButton: {
+    backgroundColor: '#D4A017',
+    borderRadius: 12,
+    height: 52,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 24,
+  },
+  signInButtonDisabled: {
+    backgroundColor: '#1A1D25',
+  },
+  signInButtonText: {
+    color: '#0B0D11',
+    fontWeight: '700',
+    fontSize: 15,
+    letterSpacing: 0.2,
+  },
+  signInButtonTextDisabled: {
+    color: '#3A3D47',
+  },
+
+  // Footer
+  footer: {
+    alignItems: 'center',
+    marginTop: 32,
+    paddingVertical: 8,
+  },
+  footerText: {
+    color: '#6B6F7B',
+    fontSize: 14,
+  },
+  footerLink: {
+    color: '#D4A017',
+    fontWeight: '600',
   },
 });

@@ -2,8 +2,8 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Sharing from 'expo-sharing';
-import { Share2, Zap } from 'lucide-react-native';
-import React, { memo, useRef, useState } from 'react';
+import { Share2 } from 'lucide-react-native';
+import { memo, useRef, useState } from 'react';
 import {
   Animated,
   Dimensions,
@@ -24,11 +24,20 @@ const { width } = Dimensions.get('window');
 
 const extractYear = (event: any): string => {
   if (!event) return '';
-  const rawDate = event.eventDate ?? event.event_date ?? event.date ?? event.year;
-  if (!rawDate) return '';
-  const dateStr = String(rawDate).trim();
-  if (/^\d{4}$/.test(dateStr)) return dateStr;
-  if (dateStr.includes('-') && dateStr.split('-')[0].length === 4) return dateStr.split('-')[0];
+
+  if (event.year && Number(event.year) > 100) {
+    return String(event.year);
+  }
+
+  const rawDate = event.eventDate ?? event.event_date ?? event.date;
+  if (rawDate) {
+    if (rawDate instanceof Date) return String(rawDate.getFullYear());
+
+    const dateStr = String(rawDate).trim();
+    const match = dateStr.match(/^(\d{3,4})-/);
+    if (match) return match[1];
+  }
+
   return '';
 };
 
@@ -39,7 +48,6 @@ const HistoryCardComponent = ({ event }: { event: any }) => {
   const [shareVisible, setShareVisible] = useState(false);
   const shareCardRef = useRef<View>(null);
 
-  // Press animation
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
 
@@ -48,8 +56,8 @@ const HistoryCardComponent = ({ event }: { event: any }) => {
   const year      = extractYear(event);
   const title     = event.titleTranslations?.[language] ?? event.titleTranslations?.en ?? 'No Title';
   const narrative = event.narrativeTranslations?.[language] ?? event.narrativeTranslations?.en ?? '';
-  const category  = event.category ?? 'HISTORY';
-  const impact    = event.impactScore || 0;
+  // Replace underscores with spaces, then uppercase
+  const category  = (event.category ?? 'HISTORY').replace(/_/g, ' ');
   const imageUri  = event.gallery?.[0];
 
   const onPressIn = () => {
@@ -104,7 +112,7 @@ const HistoryCardComponent = ({ event }: { event: any }) => {
               {/* Top row */}
               <View style={styles.top}>
                 <View style={styles.catBadge}>
-                  <Text style={styles.catText}>{t(category).toUpperCase()}</Text>
+                  <Text style={styles.catText}>{t(category).replace(/_/g, ' ').toUpperCase()}</Text>
                 </View>
                 <TouchableWithoutFeedback onPress={handleShare}>
                   <View style={styles.shareBtn}>
@@ -120,10 +128,6 @@ const HistoryCardComponent = ({ event }: { event: any }) => {
                   <View style={styles.accentLine} />
                 </View>
                 <Text style={styles.title} numberOfLines={2}>{title}</Text>
-                <View style={styles.impactRow}>
-                  <Zap size={14} color="#ffd700" fill="#ffd700" />
-                  <Text style={styles.impactText}>{t('impact')} {impact}%</Text>
-                </View>
                 <Text numberOfLines={3} style={styles.narrative}>{narrative}</Text>
 
                 {/* Read more hint */}
@@ -178,8 +182,6 @@ const styles = StyleSheet.create({
   yearText: { color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: 1 },
   accentLine: { height: 3, width: 40, backgroundColor: '#ffd700', marginLeft: 10, borderRadius: 2 },
   title: { color: '#fff', fontSize: 32, fontWeight: '900', lineHeight: 38, textShadowColor: 'rgba(0,0,0,0.8)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 10 },
-  impactRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 6 },
-  impactText: { color: '#ffd700', fontSize: 12, fontWeight: 'bold', letterSpacing: 1 },
   narrative: { color: 'rgba(255,255,255,0.8)', fontSize: 14, lineHeight: 20, marginTop: 12, fontWeight: '500' },
   readMore: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginTop: 20 },
   readMoreDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,215,0,0.5)' },

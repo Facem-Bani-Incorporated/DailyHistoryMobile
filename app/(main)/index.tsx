@@ -1,7 +1,8 @@
 // app/(tabs)/index.tsx
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Bookmark, CalendarDays, Clock, Compass, Map, Search } from 'lucide-react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Dimensions,
@@ -26,7 +27,8 @@ import SearchScreen from '../../components/SearchScreen';
 import TimelineScreen from '../../components/TimelineScreen';
 import { useLanguage } from '../../context/LanguageContext';
 import { useTheme } from '../../context/ThemeContext';
-import { useSavedStore } from '../../store/useSavedStore';
+import { useAuthStore } from '../../store/useAuthStore';
+import { useSavedStore, useUserSavedEvents } from '../../store/useSavedStore';
 import { haptic } from '../../utils/haptics';
 import { scheduleMidnightNotification } from '../../utils/Notifications';
 import SavedScreen from './saved';
@@ -99,6 +101,7 @@ export default function HomeScreen() {
   const { t, language } = useLanguage();
   const insets = useSafeAreaInsets();
   const { savedEvents } = useSavedStore();
+  const userSavedEvents = useUserSavedEvents(); // reactiv per user, corect după auth change
 
   const [dayOffset, setDayOffset] = useState(0);
   const [events, setEvents] = useState<any[]>([]);
@@ -107,6 +110,19 @@ export default function HomeScreen() {
   const [initialLoad, setInitialLoad] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('today');
+
+  // Badge reset când user-ul se schimbă sau când intri pe saved
+  const user = useAuthStore(s => s.user);
+  const [seenSavedCount, setSeenSavedCount] = useState(userSavedEvents.length);
+
+  useEffect(() => {
+    // La schimbarea user-ului, marcăm tot ce e deja saved ca "văzut"
+    setSeenSavedCount(userSavedEvents.length);
+  }, [user?.id]);
+
+  const unseenSaved = activeTab === 'saved'
+    ? 0
+    : Math.max(0, userSavedEvents.length - seenSavedCount);
 
   const prefetchCache = useRef<Record<string, { data: any[]; empty: boolean }>>({});
   const cardX = useRef(new Animated.Value(0)).current;
@@ -145,7 +161,6 @@ export default function HomeScreen() {
     if (offset < MAX_FUTURE_OFFSET) fetchData(offset + 1).catch(() => {});
   }, [fetchData]);
 
-  // Fetch all 60 days for search/timeline
   const fetchAllEvents = useCallback(async () => {
     const promises = Array.from({ length: 60 }, (_, i) => {
       const d = new Date(); d.setDate(d.getDate() - i);
@@ -165,7 +180,6 @@ export default function HomeScreen() {
   useEffect(() => {
     fetchData(0).then(async ({ data, empty }) => {
       setEvents(data); setIsEmpty(empty); setInitialLoad(false); prefetchNeighbours(0);
-      // Fetch all events in background for search/timeline
       fetchAllEvents();
       try {
         const tomorrow = await fetchData(1);
@@ -247,13 +261,13 @@ export default function HomeScreen() {
   const todayEvent = sortedEvents[0] ?? null;
   const discoverEvents = sortedEvents.slice(1);
   const canGoForward = dayOffset < MAX_FUTURE_OFFSET;
-  const savedCount = savedEvents.length;
-  const showChrome = activeTab === 'today' || activeTab === 'discover';
+  const showChrome = activeTab === 'today' || activeTab === 'discover' || activeTab === 'search';
 
   const switchTab = useCallback((tab: Tab) => {
     haptic('selection');
     setActiveTab(tab);
-  }, []);
+    if (tab === 'saved') setSeenSavedCount(userSavedEvents.length);
+  }, [userSavedEvents.length]);
 
   return (
     <View style={s.root}>
@@ -261,32 +275,47 @@ export default function HomeScreen() {
 
       {showChrome && (
         <View style={[s.chrome, { paddingTop: insets.top }]}>
+          {/* ── Brand row cu Search + Avatar ── */}
           <View style={s.brandRow}>
             <View style={s.brandLeft}>
               <Text style={s.brandLabel}>{t('Daily').toUpperCase()}</Text>
               <Text style={s.brandTitle}>{t('History')}</Text>
             </View>
-            <ProfileAvatar />
+            <View style={s.headerRight}>
+              <TouchableOpacity
+                onPress={() => switchTab('search')}
+                activeOpacity={0.6}
+                style={[s.searchBtn, { backgroundColor: activeTab === 'search' ? theme.gold + '18' : 'transparent' }]}
+              >
+                <Search size={20} color={activeTab === 'search' ? theme.gold : theme.subtext} strokeWidth={1.8} />
+              </TouchableOpacity>
+              <ProfileAvatar />
+            </View>
           </View>
-          <Animated.View style={[s.dateNav, { transform: [{ translateX: dateSlide }] }]}>
-            <TouchableOpacity onPress={goBack} activeOpacity={0.6} hitSlop={{ top: 16, bottom: 16, left: 12, right: 12 }} style={s.navArrow}>
-              <Text style={[s.navArrowIcon, { color: theme.subtext }]}>{'\u2039'}</Text>
-            </TouchableOpacity>
-            <View style={s.dateCenter}>
-              <View style={s.datePrimary}>
-                <View style={[s.dayCircle, { backgroundColor: info.isToday ? theme.gold : 'transparent', borderColor: info.isToday ? theme.gold : theme.border }]}>
-                  <Text style={[s.dayNumber, { color: info.isToday ? '#000' : theme.text }]}>{info.day}</Text>
-                </View>
-                <View style={s.dateTexts}>
-                  <Text style={[s.dateLabel, { color: theme.text }]}>{info.isToday ? t('today') : info.isTomorrow ? t('tomorrow') || 'Tomorrow' : info.fullDay}</Text>
-                  <Text style={[s.dateSubLabel, { color: theme.subtext }]}>{`${info.monthLong} ${info.dayNum}, ${info.yearNum}`}</Text>
+
+          {/* ── Date nav — ascuns pe search ── */}
+          {activeTab !== 'search' && (
+            <Animated.View style={[s.dateNav, { transform: [{ translateX: dateSlide }] }]}>
+              <TouchableOpacity onPress={goBack} activeOpacity={0.6} hitSlop={{ top: 16, bottom: 16, left: 12, right: 12 }} style={s.navArrow}>
+                <Text style={[s.navArrowIcon, { color: theme.subtext }]}>{'\u2039'}</Text>
+              </TouchableOpacity>
+              <View style={s.dateCenter}>
+                <View style={s.datePrimary}>
+                  <View style={[s.dayCircle, { backgroundColor: info.isToday ? theme.gold : 'transparent', borderColor: info.isToday ? theme.gold : theme.border }]}>
+                    <Text style={[s.dayNumber, { color: info.isToday ? '#000' : theme.text }]}>{info.day}</Text>
+                  </View>
+                  <View style={s.dateTexts}>
+                    <Text style={[s.dateLabel, { color: theme.text }]}>{info.isToday ? t('today') : info.isTomorrow ? t('tomorrow') || 'Tomorrow' : info.fullDay}</Text>
+                    <Text style={[s.dateSubLabel, { color: theme.subtext }]}>{`${info.monthLong} ${info.dayNum}, ${info.yearNum}`}</Text>
+                  </View>
                 </View>
               </View>
-            </View>
-            <TouchableOpacity onPress={goForward} activeOpacity={0.6} disabled={!canGoForward} hitSlop={{ top: 16, bottom: 16, left: 12, right: 12 }} style={[s.navArrow, !canGoForward && { opacity: 0.2 }]}>
-              <Text style={[s.navArrowIcon, { color: theme.subtext }]}>{'\u203A'}</Text>
-            </TouchableOpacity>
-          </Animated.View>
+              <TouchableOpacity onPress={goForward} activeOpacity={0.6} disabled={!canGoForward} hitSlop={{ top: 16, bottom: 16, left: 12, right: 12 }} style={[s.navArrow, !canGoForward && { opacity: 0.2 }]}>
+                <Text style={[s.navArrowIcon, { color: theme.subtext }]}>{'\u203A'}</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          )}
+
           <View style={[s.separator, { backgroundColor: theme.border }]} />
         </View>
       )}
@@ -325,38 +354,39 @@ export default function HomeScreen() {
         )}
       </View>
 
-      {/* ═══ TAB BAR — 6 tabs ═══ */}
+      {/* ═══ TAB BAR ═══ */}
       <View style={[s.tabBar, { paddingBottom: insets.bottom + 2 }]}>
-        <TabBtn label={t('today')} icon={'\u25C9'} active={activeTab === 'today'} theme={theme} onPress={() => switchTab('today')} />
-        <TabBtn label={t('discover')} icon={'\u2726'} active={activeTab === 'discover'} theme={theme} onPress={() => switchTab('discover')} />
-        <TabBtn label={t('search') || 'Search'} icon={'\u2315'} active={activeTab === 'search'} theme={theme} onPress={() => switchTab('search')} />
-        <TabBtn label={t('timeline') || 'Timeline'} icon={'\u23F3'} active={activeTab === 'timeline'} theme={theme} onPress={() => switchTab('timeline')} />
-        <TabBtn label={t('map') || 'Map'} icon={'\u2295'} active={activeTab === 'map'} theme={theme} onPress={() => switchTab('map')} />
-        <TabBtn label={t('saved') || 'Saved'} icon={'\u25C8'} active={activeTab === 'saved'} badge={savedCount} theme={theme} onPress={() => switchTab('saved')} />
+        <TabBtn label={t('today')}                  icon={CalendarDays} active={activeTab === 'today'}    theme={theme} onPress={() => switchTab('today')} />
+        <TabBtn label={t('discover')}               icon={Compass}      active={activeTab === 'discover'} theme={theme} onPress={() => switchTab('discover')} />
+        <TabBtn label={t('timeline') || 'Timeline'} icon={Clock}        active={activeTab === 'timeline'} theme={theme} onPress={() => switchTab('timeline')} />
+        <TabBtn label={t('map') || 'Map'}           icon={Map}          active={activeTab === 'map'}      theme={theme} onPress={() => switchTab('map')} />
+        <TabBtn label={t('saved') || 'Saved'}       icon={Bookmark}     active={activeTab === 'saved'}    badge={unseenSaved} theme={theme} onPress={() => switchTab('saved')} />
       </View>
     </View>
   );
 }
 
-const TabBtn = ({ label, icon, active, badge, theme, onPress }: {
-  label: string; icon: string; active: boolean; badge?: number; theme: any; onPress: () => void;
+const TabBtn = ({ label, icon: Icon, active, badge, theme, onPress }: {
+  label: string; icon: any; active: boolean; badge?: number; theme: any; onPress: () => void;
 }) => (
   <TouchableOpacity style={tabS.item} onPress={onPress} activeOpacity={0.6}>
-    <View style={[tabS.iconWrap, active && { backgroundColor: theme.gold + '12' }]}>
-      <Text style={[tabS.icon, { color: active ? theme.gold : theme.subtext }]}>{icon}</Text>
+    <View style={[tabS.iconWrap, active && { backgroundColor: theme.gold + '18' }]}>
+      <Icon size={20} color={active ? theme.gold : theme.subtext} strokeWidth={active ? 2.2 : 1.6} />
       {badge !== undefined && badge > 0 && (
         <View style={[tabS.badge, { backgroundColor: theme.gold }]}>
           <Text style={tabS.badgeTxt}>{badge > 99 ? '99+' : badge}</Text>
         </View>
       )}
     </View>
-    <Text style={[tabS.label, { color: active ? theme.gold : theme.subtext, fontWeight: active ? '700' : '500' }]}>{label}</Text>
+    <Text style={[tabS.label, { color: active ? theme.gold : theme.subtext, fontWeight: active ? '700' : '500' }]}>
+      {label}
+    </Text>
   </TouchableOpacity>
 );
+
 const tabS = StyleSheet.create({
   item: { flex: 1, alignItems: 'center', gap: 2 },
-  iconWrap: { width: 32, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  icon: { fontSize: 14 },
+  iconWrap: { width: 36, height: 28, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   label: { fontSize: 9, letterSpacing: 0.2 },
   badge: { position: 'absolute', top: -3, right: -7, minWidth: 14, height: 14, borderRadius: 7, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 },
   badgeTxt: { fontSize: 8, fontWeight: '800', color: '#000' },
@@ -369,6 +399,8 @@ const makeStyles = (theme: any, isDark: boolean) => StyleSheet.create({
   brandLeft: { gap: 1 },
   brandLabel: { color: theme.gold, fontSize: 9, fontWeight: '700', letterSpacing: 4, opacity: 0.6 },
   brandTitle: { color: theme.text, fontSize: 22, fontWeight: '800', letterSpacing: 0.5, fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif' },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  searchBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   dateNav: { flexDirection: 'row', alignItems: 'center', paddingBottom: 14 },
   navArrow: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   navArrowIcon: { fontSize: 28, fontWeight: '300', lineHeight: 30, marginTop: -1 },

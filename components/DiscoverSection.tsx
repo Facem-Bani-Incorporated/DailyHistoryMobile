@@ -1,7 +1,7 @@
 // components/DiscoverSection.tsx
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   Dimensions,
   ScrollView,
@@ -36,13 +36,15 @@ const extractYear = (event: any): string => {
   return isNaN(y) ? '' : String(y);
 };
 
+const formatCategory = (cat: string): string =>
+  (cat ?? 'HISTORY').replace(/_/g, ' ').toUpperCase();
+
 const FeaturedCard = ({ event, lang, theme, onPress }: { event: any; lang: string; theme: any; onPress: () => void }) => {
   const title = event.titleTranslations?.[lang] ?? event.titleTranslations?.en ?? '';
   const narrative = event.narrativeTranslations?.[lang] ?? event.narrativeTranslations?.en ?? '';
-  const category = (event.category ?? 'HISTORY').toUpperCase();
+  const category = (event.category ?? 'HISTORY').replace(/_/g, ' ').toUpperCase();
   const year = extractYear(event);
   const imageUri = event.gallery?.[0];
-  const impact = event.impactScore ?? 0;
 
   return (
     <TouchableOpacity activeOpacity={0.92} onPress={onPress} style={[styles.featuredCard, { height: FEATURED_H }]}>
@@ -55,11 +57,6 @@ const FeaturedCard = ({ event, lang, theme, onPress }: { event: any; lang: strin
         <View style={styles.categoryPill}>
           <Text style={styles.categoryPillText}>{category}</Text>
         </View>
-        {impact > 0 && (
-          <View style={styles.impactPill}>
-            <Text style={styles.impactPillText}>{impact}%</Text>
-          </View>
-        )}
       </View>
       <View style={styles.featuredBottom}>
         {year !== '' && <Text style={styles.featuredYear}>{year}</Text>}
@@ -76,7 +73,7 @@ const FeaturedCard = ({ event, lang, theme, onPress }: { event: any; lang: strin
 
 const SmallCard = ({ event, lang, theme, onPress }: { event: any; lang: string; theme: any; onPress: () => void }) => {
   const title = event.titleTranslations?.[lang] ?? event.titleTranslations?.en ?? '';
-  const category = (event.category ?? 'HISTORY').toUpperCase();
+  const category = formatCategory(event.category);
   const year = extractYear(event);
   const imageUri = event.gallery?.[0];
 
@@ -161,11 +158,9 @@ const styles = StyleSheet.create({
   sectionLabelDot: { width: 4, height: 4, borderRadius: 2 },
   sectionLabelText: { fontSize: 9, fontWeight: '700', letterSpacing: 2.5 },
   featuredCard: { width: '100%', borderRadius: 20, overflow: 'hidden', backgroundColor: '#111', shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.28, shadowRadius: 16, elevation: 10 },
-  featuredTop: { position: 'absolute', top: 14, left: 14, right: 14, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  featuredTop: { position: 'absolute', top: 14, left: 14, right: 14, flexDirection: 'row', alignItems: 'center' },
   categoryPill: { backgroundColor: 'rgba(0,0,0,0.55)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,215,0,0.35)' },
   categoryPillText: { color: '#ffd700', fontSize: 9, fontWeight: '800', letterSpacing: 2 },
-  impactPill: { backgroundColor: 'rgba(255,215,0,0.18)', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 20 },
-  impactPillText: { color: '#ffd700', fontSize: 9, fontWeight: '700', letterSpacing: 1 },
   featuredBottom: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 16, paddingBottom: 18 },
   featuredYear: { color: 'rgba(255,255,255,0.45)', fontSize: 11, fontWeight: '700', letterSpacing: 2, marginBottom: 5 },
   featuredTitle: { color: '#fff', fontSize: 22, fontWeight: '800', lineHeight: 27, letterSpacing: 0.1 },

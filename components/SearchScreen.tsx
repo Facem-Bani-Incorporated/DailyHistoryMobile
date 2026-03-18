@@ -1,16 +1,16 @@
 // components/SearchScreen.tsx
 import { Image } from 'expo-image';
 import { Search, X } from 'lucide-react-native';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Dimensions,
-    FlatList,
-    Platform,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  Dimensions,
+  FlatList,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -42,7 +42,7 @@ const extractYear = (event: any): string => {
 };
 
 interface Props {
-  allEvents: any[]; // Pass all 60 days of events from parent
+  allEvents: any[];
 }
 
 export default function SearchScreen({ allEvents }: Props) {
@@ -55,23 +55,19 @@ export default function SearchScreen({ allEvents }: Props) {
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
 
-  // Auto-focus search input
   useEffect(() => {
     setTimeout(() => inputRef.current?.focus(), 300);
   }, []);
 
-  // Filter events
   const filteredEvents = useMemo(() => {
     let results = [...allEvents];
 
-    // Category filter
     if (activeCategory) {
       results = results.filter(e =>
         (e.category ?? '').toLowerCase() === activeCategory,
       );
     }
 
-    // Text search
     if (query.trim().length > 0) {
       const q = query.toLowerCase().trim();
       results = results.filter(e => {
@@ -89,7 +85,6 @@ export default function SearchScreen({ allEvents }: Props) {
       });
     }
 
-    // Sort by impact
     return results.sort((a, b) => (b.impactScore ?? 0) - (a.impactScore ?? 0));
   }, [allEvents, query, activeCategory, language]);
 
@@ -105,6 +100,7 @@ export default function SearchScreen({ allEvents }: Props) {
     const year = extractYear(item);
     const catKey = (item.category ?? '').toLowerCase();
     const catColor = CAT_COLORS[catKey] ?? '#8B7355';
+    // Categoria fara underscore
     const catLabel = (item.category ?? 'history').replace(/_/g, ' ');
     const imageUri = item.gallery?.[0];
 
@@ -114,7 +110,6 @@ export default function SearchScreen({ allEvents }: Props) {
         activeOpacity={0.85}
         style={[s.resultCard, { backgroundColor: theme.card }]}
       >
-        {/* Image */}
         <View style={s.resultImage}>
           {imageUri ? (
             <Image source={{ uri: imageUri }} style={StyleSheet.absoluteFill} contentFit="cover" transition={200} />
@@ -125,7 +120,6 @@ export default function SearchScreen({ allEvents }: Props) {
           )}
         </View>
 
-        {/* Content */}
         <View style={s.resultBody}>
           <View style={s.resultMeta}>
             <View style={[s.resultCatDot, { backgroundColor: catColor }]} />
@@ -179,7 +173,8 @@ export default function SearchScreen({ allEvents }: Props) {
           renderItem={({ item }) => {
             const isActive = activeCategory === item;
             const color = CAT_COLORS[item] ?? '#888';
-            const label = t(item) || item.replace(/_/g, ' ');
+            // Chip label fara underscore, cu fallback la t()
+            const label = (t(item) || item).replace(/_/g, ' ');
             return (
               <TouchableOpacity
                 onPress={() => handleCategoryPress(item)}

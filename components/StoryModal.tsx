@@ -154,8 +154,8 @@ export const StoryModal = ({ visible, event, onClose, theme }: StoryModalProps) 
   const year = String(event.eventDate ?? event.event_date ?? event.year ?? '').trim();
   const title = event.titleTranslations?.[language] ?? event.titleTranslations?.en ?? '';
   const narrative = event.narrativeTranslations?.[language] ?? event.narrativeTranslations?.en ?? '';
-  const category = (event.category ?? 'HISTORY').toUpperCase();
-  const impact = event.impactScore ?? 0;
+  // Category fara underscore
+  const category = (event.category ?? 'HISTORY').replace(/_/g, ' ').toUpperCase();
   const sourceUrl = event.source_url ?? event.sourceUrl ?? null;
 
   const headerBg = scrollY.interpolate({
@@ -247,13 +247,11 @@ export const StoryModal = ({ visible, event, onClose, theme }: StoryModalProps) 
 
             {/* Body */}
             <View style={[s.body, { backgroundColor: theme.background }]}>
-              {impact > 0 && (
-                <View style={s.chips}>
-                  <StatChip label="IMPACT" value={`${impact}%`} theme={theme} />
-                  {year !== '' && <StatChip label="YEAR" value={year} theme={theme} />}
-                  <StatChip label="CATEGORY" value={category} theme={theme} />
-                </View>
-              )}
+              {/* Chips: doar YEAR si CATEGORY, fara IMPACT */}
+              <View style={s.chips}>
+                {year !== '' && <StatChip label="YEAR" value={year} theme={theme} />}
+                <StatChip label="CATEGORY" value={category} theme={theme} />
+              </View>
 
               <View style={s.ruleRow}>
                 <View style={[s.rule, { backgroundColor: theme.border }]} />
@@ -334,7 +332,7 @@ const s = StyleSheet.create({
   diamond: { width: 5, height: 5, transform: [{ rotate: '45deg' }], opacity: 0.7 },
 
   paraWrap: { marginBottom: 20 },
-  dropCap: { fontSize: 68, lineHeight: 64, fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif', fontWeight: '900', marginRight: 6, marginTop: -4, opacity: 0.9 },
+  dropCap: { fontSize: 42, lineHeight: 42, fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif', fontWeight: '800', marginRight: 4, marginTop: 2, opacity: 0.85 },
   paraText: { fontSize: 17, lineHeight: 29, fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif', letterSpacing: 0.15, opacity: 0.92 },
 
   wikiBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingVertical: 16, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, marginTop: 8, marginBottom: 20 },
