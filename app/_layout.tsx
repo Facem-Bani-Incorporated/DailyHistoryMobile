@@ -7,6 +7,7 @@ import { ActivityIndicator, View } from 'react-native';
 import OnboardingScreen from '../components/OnBoardingScreen';
 import { LanguageProvider } from '../context/LanguageContext';
 import { ThemeProvider, useTheme } from '../context/ThemeContext';
+import { useGamificationSync } from '../hooks/useGamificationSync';
 import { useAuthStore } from '../store/useAuthStore';
 
 function AppContent() {
@@ -20,6 +21,9 @@ function AppContent() {
   // Track previous token value to detect transitions (null → token = login)
   const prevTokenRef = useRef<string | null | undefined>(undefined); // undefined = uninitialized
   const onboardingActiveRef = useRef(false); // prevents re-trigger while onboarding is showing
+
+  // ── Sync gamification data with current user ──
+  useGamificationSync();
 
   useEffect(() => {
     GoogleSignin.configure({
@@ -47,13 +51,9 @@ function AppContent() {
   }, []);
 
   // Detect login transitions: prevToken was null/falsy → token is now truthy
-  // This works for:
-  //   - First login after app open (prevToken = null from hydration)
-  //   - Re-login after logout (prevToken = null after logout cleared it)
-  //   - Does NOT trigger on app reopen (prevToken = existing token from hydration)
   useEffect(() => {
     if (!isReady) return;
-    if (prevTokenRef.current === undefined) return; // not yet initialized
+    if (prevTokenRef.current === undefined) return;
 
     const wasLoggedOut = !prevTokenRef.current;
     const isNowLoggedIn = !!token;
@@ -63,7 +63,6 @@ function AppContent() {
       setShowOnboarding(true);
     }
 
-    // Always update the ref — this is crucial for detecting logout→login
     prevTokenRef.current = token || null;
   }, [token, isReady]);
 

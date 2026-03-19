@@ -123,33 +123,50 @@ interface SwipeCardProps {
 
 const SwipeCard: React.FC<SwipeCardProps> = ({ children, onDelete, onPress, removeLabel }) => {
   const translateX = useRef(new Animated.Value(0)).current;
+  const isSwipingRef = useRef(false);
 
   const pan = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, g) =>
-        Math.abs(g.dx) > Math.abs(g.dy) * 1.5 && Math.abs(g.dx) > 8,
-      onShouldBlockNativeResponder: () => false,
-      onPanResponderGrant: () => { translateX.stopAnimation(); },
+      onMoveShouldSetPanResponder: (_, g) => {
+        const isHorizontal = Math.abs(g.dx) > Math.abs(g.dy) * 1.2 && Math.abs(g.dx) > 6;
+        if (isHorizontal) {
+          isSwipingRef.current = true;
+        }
+        return isHorizontal;
+      },
+      onMoveShouldSetPanResponderCapture: (_, g) => {
+        // Capture the gesture once we've committed to swiping
+        return Math.abs(g.dx) > Math.abs(g.dy) * 1.2 && Math.abs(g.dx) > 10;
+      },
+      onShouldBlockNativeResponder: () => true,
+      onPanResponderGrant: () => {
+        translateX.stopAnimation();
+      },
       onPanResponderMove: (_, g) => {
         if (g.dx > 10) {
+          // Rubber-band effect for right swipe
           translateX.setValue(Math.pow(g.dx, 0.5) * 2);
         } else {
           translateX.setValue(g.dx);
         }
       },
       onPanResponderRelease: (_, g) => {
-        if (g.dx < -SWIPE_THRESHOLD || g.vx < -0.8) {
+        isSwipingRef.current = false;
+        if (g.dx < -SWIPE_THRESHOLD || g.vx < -0.5) {
+          // Swiped far enough or fast enough — delete
           Animated.timing(translateX, {
             toValue: -W, duration: 250, useNativeDriver: true,
           }).start(() => onDelete());
         } else {
+          // Snap back
           Animated.spring(translateX, {
             toValue: 0, tension: 300, friction: 28, useNativeDriver: true,
           }).start();
         }
       },
       onPanResponderTerminate: () => {
+        isSwipingRef.current = false;
         Animated.spring(translateX, {
           toValue: 0, tension: 300, friction: 28, useNativeDriver: true,
         }).start();

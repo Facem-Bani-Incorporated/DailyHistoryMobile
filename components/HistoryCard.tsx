@@ -17,6 +17,8 @@ import { captureRef } from 'react-native-view-shot';
 
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
+import { useGamificationStore } from '../store/useGamificationStore';
+import { getEventId } from '../store/useSavedStore';
 import { ShareCard } from './Sharecard';
 import { StoryModal } from './StoryModal';
 
@@ -41,12 +43,14 @@ const extractYear = (event: any): string => {
   return '';
 };
 
-const HistoryCardComponent = ({ event }: { event: any }) => {
+const HistoryCardComponent = ({ event, allEvents = [] }: { event: any; allEvents?: any[] }) => {
   const { theme, isDark } = useTheme();
   const { language, t } = useLanguage();
   const [storyVisible, setStoryVisible] = useState(false);
   const [shareVisible, setShareVisible] = useState(false);
   const shareCardRef = useRef<View>(null);
+
+  const markEventRead = useGamificationStore(s => s.markEventRead);
 
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
@@ -56,7 +60,6 @@ const HistoryCardComponent = ({ event }: { event: any }) => {
   const year      = extractYear(event);
   const title     = event.titleTranslations?.[language] ?? event.titleTranslations?.en ?? 'No Title';
   const narrative = event.narrativeTranslations?.[language] ?? event.narrativeTranslations?.en ?? '';
-  // Replace underscores with spaces, then uppercase
   const category  = (event.category ?? 'HISTORY').replace(/_/g, ' ');
   const imageUri  = event.gallery?.[0];
 
@@ -74,7 +77,14 @@ const HistoryCardComponent = ({ event }: { event: any }) => {
     ]).start();
   };
 
-  const onPress = () => setStoryVisible(true);
+  const onPress = () => {
+    setStoryVisible(true);
+
+    // Track event read with category + year for XP, achievements, weekly recap
+    const eventId = getEventId(event);
+    const rawCategory = event.category ?? 'history';
+    markEventRead(eventId, rawCategory, year);
+  };
 
   const handleShare = async () => {
     setShareVisible(true);
@@ -156,6 +166,7 @@ const HistoryCardComponent = ({ event }: { event: any }) => {
         event={event}
         onClose={() => setStoryVisible(false)}
         theme={theme}
+        allEvents={allEvents}
       />
     </>
   );

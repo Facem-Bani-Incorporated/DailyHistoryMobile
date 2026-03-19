@@ -22,6 +22,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Language, useLanguage } from '../context/LanguageContext';
 import { ThemeMode, useTheme } from '../context/ThemeContext';
 import { useAuthStore } from '../store/useAuthStore';
+import {
+  LEVEL_NAMES,
+  useGamificationStore,
+} from '../store/useGamificationStore';
 
 interface Props {
   visible: boolean;
@@ -57,6 +61,15 @@ export default function ProfileModal({ visible, onClose }: Props) {
   const [notificationsOn, setNotificationsOn] = useState(true);
   const [langExpanded, setLangExpanded] = useState(false);
 
+  // Gamification
+  const { getStreakStatus, getTodayProgress, totalEventsRead, getXPInfo, getAchievements } = useGamificationStore();
+  const { streak, longest } = getStreakStatus();
+  const { read: todayRead, total: todayTotal } = getTodayProgress();
+  const xpInfo = getXPInfo();
+  const { unlocked: unlockedAchievements } = getAchievements();
+
+  const levelName = (LEVEL_NAMES[language] ?? LEVEL_NAMES.en)[xpInfo.level.nameKey] ?? '';
+
   if (!user) return null;
 
   const isGoogleUser = user.provider === 'google';
@@ -83,8 +96,8 @@ export default function ProfileModal({ visible, onClose }: Props) {
 
   const handleRateApp = () => {
     const storeUrl = Platform.OS === 'ios'
-      ? 'https://apps.apple.com/app/id000000000' // Replace with real ID
-      : 'https://play.google.com/store/apps/details?id=com.dailyhistory'; // Replace
+      ? 'https://apps.apple.com/app/id000000000'
+      : 'https://play.google.com/store/apps/details?id=com.dailyhistory';
     Linking.openURL(storeUrl).catch(() => {});
   };
 
@@ -146,6 +159,84 @@ export default function ProfileModal({ visible, onClose }: Props) {
             </View>
           </View>
 
+          {/* ── LEVEL & XP CARD ── */}
+          <View style={[s.levelCard, { backgroundColor: isDark ? '#1A1610' : '#FFFCF5', borderColor: isDark ? '#3D2A14' : '#F0D8A8' }]}>
+            {/* Level row */}
+            <View style={s.levelTopRow}>
+              <Text style={s.levelIcon}>{xpInfo.level.icon}</Text>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={[s.levelName, { color: theme.text }]}>{levelName}</Text>
+                <Text style={[s.levelLabel, { color: isDark ? '#E8B84D' : '#C77E08' }]}>
+                  Level {xpInfo.level.level}
+                </Text>
+              </View>
+              <View style={s.xpTotalWrap}>
+                <Text style={[s.xpTotalValue, { color: isDark ? '#E8B84D' : '#C77E08' }]}>
+                  {xpInfo.totalXP.toLocaleString()}
+                </Text>
+                <Text style={[s.xpTotalLabel, { color: theme.subtext }]}>XP</Text>
+              </View>
+            </View>
+
+            {/* XP Progress bar */}
+            <View style={s.xpBarWrap}>
+              <View style={[s.xpBarTrack, { backgroundColor: isDark ? '#1C1612' : '#F0E8DA' }]}>
+                <View style={[s.xpBarFill, {
+                  backgroundColor: isDark ? '#E8B84D' : '#F59E0B',
+                  width: `${Math.round(xpInfo.progress.percent * 100)}%` as any,
+                }]} />
+              </View>
+              <Text style={[s.xpBarLabel, { color: theme.subtext }]}>
+                {xpInfo.progress.current} / {xpInfo.progress.needed} XP
+              </Text>
+            </View>
+
+            {/* Streak multiplier + today XP */}
+            <View style={s.levelBottomRow}>
+              {xpInfo.multiplier > 1 && (
+                <View style={[s.multiBadge, { backgroundColor: '#FF6D00' + '15' }]}>
+                  <Text style={[s.multiText, { color: '#FF6D00' }]}>
+                    ×{xpInfo.multiplier.toFixed(1)} streak bonus
+                  </Text>
+                </View>
+              )}
+              <Text style={[s.todayXP, { color: isDark ? '#E8B84D' : '#C77E08' }]}>
+                +{xpInfo.todayXP} XP today
+              </Text>
+            </View>
+          </View>
+
+          {/* ── YOUR STATS ── */}
+          <Text style={[s.sectionLabel, { color: theme.subtext }]}>YOUR STATS</Text>
+
+          <View style={[s.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <View style={s.statsGrid}>
+              <View style={s.statItem}>
+                <Text style={s.statEmoji}>🔥</Text>
+                <Text style={[s.statValue, { color: theme.text }]}>{streak}</Text>
+                <Text style={[s.statLabel, { color: theme.subtext }]}>Current streak</Text>
+              </View>
+              <View style={[s.statDivider, { backgroundColor: theme.border }]} />
+              <View style={s.statItem}>
+                <Text style={s.statEmoji}>🏆</Text>
+                <Text style={[s.statValue, { color: theme.text }]}>{longest}</Text>
+                <Text style={[s.statLabel, { color: theme.subtext }]}>Best streak</Text>
+              </View>
+              <View style={[s.statDivider, { backgroundColor: theme.border }]} />
+              <View style={s.statItem}>
+                <Text style={s.statEmoji}>📖</Text>
+                <Text style={[s.statValue, { color: theme.text }]}>{totalEventsRead}</Text>
+                <Text style={[s.statLabel, { color: theme.subtext }]}>Stories read</Text>
+              </View>
+              <View style={[s.statDivider, { backgroundColor: theme.border }]} />
+              <View style={s.statItem}>
+                <Text style={s.statEmoji}>🏅</Text>
+                <Text style={[s.statValue, { color: theme.text }]}>{unlockedAchievements.length}</Text>
+                <Text style={[s.statLabel, { color: theme.subtext }]}>Achievements</Text>
+              </View>
+            </View>
+          </View>
+
           {/* ── PREFERENCES ── */}
           <Text style={[s.sectionLabel, { color: theme.subtext }]}>
             {(t('preferences') || 'PREFERENCES').toUpperCase()}
@@ -172,7 +263,6 @@ export default function ProfileModal({ visible, onClose }: Props) {
               />
             </TouchableOpacity>
 
-            {/* Language options (expandable) */}
             {langExpanded && (
               <View style={s.langGrid}>
                 {LANGUAGES.map(lang => {
@@ -281,7 +371,6 @@ export default function ProfileModal({ visible, onClose }: Props) {
           </Text>
 
           <View style={[s.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            {/* Sign-in method */}
             <View style={s.settingRow}>
               <View style={[s.settingIcon, { backgroundColor: '#007AFF' + '18' }]}>
                 <Ionicons name={isGoogleUser ? 'logo-google' : 'mail'} size={18} color="#007AFF" />
@@ -296,7 +385,6 @@ export default function ProfileModal({ visible, onClose }: Props) {
 
             <View style={[s.divider, { backgroundColor: theme.border }]} />
 
-            {/* Rate app */}
             <TouchableOpacity onPress={handleRateApp} activeOpacity={0.7} style={s.settingRow}>
               <View style={[s.settingIcon, { backgroundColor: '#FF2D55' + '18' }]}>
                 <Ionicons name="heart" size={18} color="#FF2D55" />
@@ -314,7 +402,6 @@ export default function ProfileModal({ visible, onClose }: Props) {
 
             <View style={[s.divider, { backgroundColor: theme.border }]} />
 
-            {/* Share app */}
             <TouchableOpacity
               onPress={() => {
                 const msg = 'Check out Daily History — learn history every day! https://dailyhistory.app';
@@ -363,13 +450,9 @@ export default function ProfileModal({ visible, onClose }: Props) {
   );
 }
 
-// ═══════════════════════════════════════
-// STYLES
-// ═══════════════════════════════════════
 const makeStyles = (theme: any, isDark: boolean) => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.background },
 
-  // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -394,7 +477,7 @@ const makeStyles = (theme: any, isDark: boolean) => StyleSheet.create({
     borderRadius: 20,
     borderWidth: StyleSheet.hairlineWidth,
     padding: 20,
-    marginBottom: 28,
+    marginBottom: 16,
   },
   profileRow: {
     flexDirection: 'row',
@@ -452,6 +535,119 @@ const makeStyles = (theme: any, isDark: boolean) => StyleSheet.create({
     fontWeight: '500',
   },
 
+  // Level & XP card
+  levelCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 18,
+    marginBottom: 24,
+    gap: 14,
+  },
+  levelTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  levelIcon: {
+    fontSize: 32,
+  },
+  levelName: {
+    fontSize: 17,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  levelLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  xpTotalWrap: {
+    alignItems: 'flex-end',
+    gap: 1,
+  },
+  xpTotalValue: {
+    fontSize: 20,
+    fontWeight: '900',
+    letterSpacing: -1,
+  },
+  xpTotalLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    opacity: 0.5,
+  },
+  xpBarWrap: {
+    gap: 5,
+  },
+  xpBarTrack: {
+    height: 8,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  xpBarFill: {
+    height: 8,
+    borderRadius: 4,
+  },
+  xpBarLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+    opacity: 0.5,
+  },
+  levelBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  multiBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  multiText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  todayXP: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+
+  // Stats grid
+  statsGrid: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 8,
+  },
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 4,
+  },
+  statEmoji: {
+    fontSize: 20,
+    marginBottom: 2,
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  statLabel: {
+    fontSize: 10,
+    fontWeight: '500',
+    opacity: 0.7,
+    textAlign: 'center',
+  },
+  statDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 36,
+  },
+
   // Sections
   sectionLabel: {
     fontSize: 11,
@@ -467,7 +663,6 @@ const makeStyles = (theme: any, isDark: boolean) => StyleSheet.create({
     marginBottom: 24,
   },
 
-  // Setting row (reusable)
   settingRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -499,7 +694,6 @@ const makeStyles = (theme: any, isDark: boolean) => StyleSheet.create({
     marginLeft: 66,
   },
 
-  // Language grid
   langGrid: {
     paddingHorizontal: 12,
     paddingBottom: 14,
@@ -525,7 +719,6 @@ const makeStyles = (theme: any, isDark: boolean) => StyleSheet.create({
     marginTop: 1,
   },
 
-  // Theme cards
   themeRow: {
     flexDirection: 'row',
     gap: 8,
@@ -558,7 +751,6 @@ const makeStyles = (theme: any, isDark: boolean) => StyleSheet.create({
     textAlign: 'center',
   },
 
-  // Logout
   logoutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -577,7 +769,6 @@ const makeStyles = (theme: any, isDark: boolean) => StyleSheet.create({
     fontWeight: '700',
   },
 
-  // Footer
   footer: {
     alignItems: 'center',
     gap: 4,
