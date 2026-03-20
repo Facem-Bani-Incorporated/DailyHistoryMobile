@@ -4,8 +4,9 @@ import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import * as Application from 'expo-application';
 import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+  Animated,
   Image,
   Modal,
   Platform,
@@ -26,6 +27,8 @@ import {
   LEVEL_NAMES,
   useGamificationStore,
 } from '../store/useGamificationStore';
+import ReadingHeatmap from './ReadingHeatmap';
+import SupportModal from './SupportModal';
 
 interface Props {
   visible: boolean;
@@ -36,11 +39,10 @@ const THEME_OPTIONS: {
   label: string;
   value: ThemeMode;
   icon: keyof typeof Ionicons.glyphMap;
-  desc: string;
 }[] = [
-  { label: 'Light',  value: 'light',  icon: 'sunny',             desc: 'Always light' },
-  { label: 'System', value: 'system', icon: 'phone-portrait',    desc: 'Match device' },
-  { label: 'Dark',   value: 'dark',   icon: 'moon',              desc: 'Always dark' },
+  { label: 'Light',  value: 'light',  icon: 'sunny-outline' },
+  { label: 'System', value: 'system', icon: 'phone-portrait-outline' },
+  { label: 'Dark',   value: 'dark',   icon: 'moon-outline' },
 ];
 
 const LANGUAGES: { code: Language; label: string; native: string; flag: string }[] = [
@@ -51,24 +53,103 @@ const LANGUAGES: { code: Language; label: string; native: string; flag: string }
   { code: 'es', label: 'Spanish',   native: 'Español',   flag: '🇪🇸' },
 ];
 
+const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
+
+/* ═══════════════ SUB-COMPONENTS ═══════════════ */
+
+const SectionTitle = ({ label, theme }: { label: string; theme: any }) => (
+  <View style={_sec.row}>
+    <View style={[_sec.line, { backgroundColor: theme.border }]} />
+    <Text style={[_sec.text, { color: theme.subtext }]}>{label}</Text>
+    <View style={[_sec.line, { backgroundColor: theme.border }]} />
+  </View>
+);
+const _sec = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14, marginTop: 6, paddingHorizontal: 4 },
+  line: { flex: 1, height: StyleSheet.hairlineWidth },
+  text: { fontSize: 10, fontWeight: '700', letterSpacing: 2.5, textTransform: 'uppercase', opacity: 0.4 },
+});
+
+const StatCard = ({ icon, iconColor, iconBg, value, label, theme, isDark }: {
+  icon: keyof typeof Ionicons.glyphMap; iconColor: string; iconBg: string;
+  value: string | number; label: string; theme: any; isDark: boolean;
+}) => (
+  <View style={[_stat.card, { backgroundColor: isDark ? '#141210' : '#FAFAF8', borderColor: theme.border }]}>
+    <View style={[_stat.iconWrap, { backgroundColor: iconBg }]}>
+      <Ionicons name={icon} size={15} color={iconColor} />
+    </View>
+    <Text style={[_stat.value, { color: theme.text }]}>{value}</Text>
+    <Text style={[_stat.label, { color: theme.subtext }]}>{label}</Text>
+  </View>
+);
+const _stat = StyleSheet.create({
+  card: { flex: 1, alignItems: 'center', paddingVertical: 14, paddingHorizontal: 4, borderRadius: 16, borderWidth: 1, gap: 5 },
+  iconWrap: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  value: { fontSize: 19, fontWeight: '800', letterSpacing: -0.5 },
+  label: { fontSize: 8.5, fontWeight: '600', letterSpacing: 0.8, opacity: 0.45, textAlign: 'center', textTransform: 'uppercase' },
+});
+
+const SettingRow = ({ icon, iconColor, iconBg, title, subtitle, theme, onPress, right }: {
+  icon: keyof typeof Ionicons.glyphMap; iconColor: string; iconBg: string;
+  title: string; subtitle?: string; theme: any; onPress?: () => void;
+  right?: React.ReactNode;
+}) => {
+  const inner = (
+    <View style={_sr.row}>
+      <View style={[_sr.icon, { backgroundColor: iconBg }]}>
+        <Ionicons name={icon} size={16} color={iconColor} />
+      </View>
+      <View style={_sr.content}>
+        <Text style={[_sr.title, { color: theme.text }]}>{title}</Text>
+        {subtitle ? <Text style={[_sr.sub, { color: theme.subtext }]}>{subtitle}</Text> : null}
+      </View>
+      {right !== undefined ? right : <Ionicons name="chevron-forward" size={14} color={theme.border} />}
+    </View>
+  );
+  return onPress ? <TouchableOpacity activeOpacity={0.6} onPress={onPress}>{inner}</TouchableOpacity> : inner;
+};
+const _sr = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 13, gap: 13 },
+  icon: { width: 33, height: 33, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  content: { flex: 1, gap: 1 },
+  title: { fontSize: 14.5, fontWeight: '600', letterSpacing: 0.05 },
+  sub: { fontSize: 11.5, fontWeight: '400', opacity: 0.5 },
+});
+
+const Hairline = ({ theme, inset }: { theme: any; inset?: boolean }) => (
+  <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: theme.border, marginLeft: inset ? 62 : 0 }} />
+);
+
+/* ═══════════════ MAIN COMPONENT ═══════════════ */
+
 export default function ProfileModal({ visible, onClose }: Props) {
-  const user = useAuthStore((s) => s.user);
-  const logout = useAuthStore((s) => s.logout);
+  const user = useAuthStore(s => s.user);
+  const logout = useAuthStore(s => s.logout);
   const router = useRouter();
   const { mode, setMode, theme, isDark } = useTheme();
   const { t, language, setLanguage } = useLanguage();
   const insets = useSafeAreaInsets();
   const [notificationsOn, setNotificationsOn] = useState(true);
   const [langExpanded, setLangExpanded] = useState(false);
+  const [supportVisible, setSupportVisible] = useState(false);
 
-  // Gamification
-  const { getStreakStatus, getTodayProgress, totalEventsRead, getXPInfo, getAchievements } = useGamificationStore();
+  const { getStreakStatus, totalEventsRead, getXPInfo, getAchievements } = useGamificationStore();
   const { streak, longest } = getStreakStatus();
-  const { read: todayRead, total: todayTotal } = getTodayProgress();
   const xpInfo = getXPInfo();
   const { unlocked: unlockedAchievements } = getAchievements();
-
   const levelName = (LEVEL_NAMES[language] ?? LEVEL_NAMES.en)[xpInfo.level.nameKey] ?? '';
+
+  const fade = useRef(new Animated.Value(0)).current;
+  const slide = useRef(new Animated.Value(24)).current;
+  useEffect(() => {
+    if (visible) {
+      fade.setValue(0); slide.setValue(24);
+      Animated.parallel([
+        Animated.timing(fade, { toValue: 1, duration: 380, useNativeDriver: true }),
+        Animated.spring(slide, { toValue: 0, tension: 90, friction: 13, useNativeDriver: true }),
+      ]).start();
+    }
+  }, [visible]);
 
   if (!user) return null;
 
@@ -77,6 +158,7 @@ export default function ProfileModal({ visible, onClose }: Props) {
   const displayEmail = user.email || '';
   const appVersion = Application.nativeApplicationVersion ?? '1.0.0';
   const buildNumber = Application.nativeBuildVersion ?? '1';
+  const gold = isDark ? '#E8B84D' : '#C77E08';
 
   const getProfileImage = () => {
     const uri = user.avatar_url || user.avatarUrl || user.picture;
@@ -85,711 +167,238 @@ export default function ProfileModal({ visible, onClose }: Props) {
   };
 
   const handleLogout = async () => {
-    try {
-      if (isGoogleUser) await GoogleSignin.signOut();
-    } catch {} finally {
-      onClose();
-      logout();
-      router.replace('/(auth)/welcome');
+    try { if (isGoogleUser) await GoogleSignin.signOut(); } catch {} finally {
+      onClose(); logout(); router.replace('/(auth)/welcome');
     }
   };
 
   const handleRateApp = () => {
-    const storeUrl = Platform.OS === 'ios'
-      ? 'https://apps.apple.com/app/id000000000'
-      : 'https://play.google.com/store/apps/details?id=com.dailyhistory';
-    Linking.openURL(storeUrl).catch(() => {});
+    Linking.openURL(
+      Platform.OS === 'ios'
+        ? 'https://apps.apple.com/app/id000000000'
+        : 'https://play.google.com/store/apps/details?id=com.dailyhistory'
+    ).catch(() => {});
+  };
+
+  const handleShareApp = () => {
+    const { Share } = require('react-native');
+    Share.share({ message: `${t('share_message')}https://dailyhistory.app` }).catch(() => {});
   };
 
   const currentLang = LANGUAGES.find(l => l.code === language) ?? LANGUAGES[0];
-  const s = makeStyles(theme, isDark);
+  const s = makeStyles(theme, isDark, gold);
 
   return (
-    <Modal visible={visible} animationType="slide" transparent={false} statusBarTranslucent>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} translucent backgroundColor="transparent" />
-      <View style={[s.root, { paddingTop: insets.top }]}>
+    <>
+      <Modal visible={visible} animationType="slide" transparent={false} statusBarTranslucent>
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} translucent backgroundColor="transparent" />
+        <View style={[s.root, { paddingTop: insets.top }]}>
 
-        {/* ── HEADER ── */}
-        <View style={s.header}>
-          <TouchableOpacity onPress={onClose} style={s.headerBtn}
-            hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}>
-            <Ionicons name="chevron-down" size={24} color={theme.text} />
-          </TouchableOpacity>
-          <Text style={[s.headerTitle, { color: theme.text }]}>{t('profile_title')}</Text>
-          <View style={s.headerBtn} />
-        </View>
+          <View style={s.header}>
+            <TouchableOpacity onPress={onClose} style={s.closeBtn} hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}>
+              <Ionicons name="chevron-down" size={22} color={theme.text} />
+            </TouchableOpacity>
+            <Text style={[s.headerTitle, { color: theme.text }]}>{t('profile_title')}</Text>
+            <View style={s.closeBtn} />
+          </View>
 
-        <ScrollView
-          contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 50 }]}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          {/* ── PROFILE CARD ── */}
-          <View style={[s.profileCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <View style={s.profileRow}>
-              <View style={s.avatarWrap}>
-                <Image source={{ uri: getProfileImage() }} style={s.avatar} />
-                {isGoogleUser && (
-                  <View style={[s.providerBadge, { borderColor: theme.card }]}>
-                    <Ionicons name="logo-google" size={11} color="#fff" />
+          <ScrollView
+            contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 60 }]}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            <Animated.View style={{ opacity: fade, transform: [{ translateY: slide }] }}>
+
+              {/* ══ PROFILE HERO ══ */}
+              <View style={[s.heroCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                <View style={s.heroIdentity}>
+                  <View style={s.avatarWrap}>
+                    <Image source={{ uri: getProfileImage() }} style={s.avatar} />
+                    <View style={[s.avatarGlow, { borderColor: `${gold}35` }]} />
+                    {isGoogleUser && (
+                      <View style={[s.providerBadge, { borderColor: theme.card }]}>
+                        <Ionicons name="logo-google" size={10} color="#fff" />
+                      </View>
+                    )}
+                  </View>
+                  <View style={s.heroText}>
+                    <Text style={[s.heroName, { color: theme.text }]} numberOfLines={1}>{displayName}</Text>
+                    {displayEmail !== '' && (
+                      <Text style={[s.heroEmail, { color: theme.subtext }]} numberOfLines={1}>{displayEmail}</Text>
+                    )}
+                  </View>
+                </View>
+
+                <View style={[s.levelBar, { backgroundColor: isDark ? '#1A1610' : '#FFFBF2', borderColor: isDark ? '#2A2015' : '#F0E4D0' }]}>
+                  <Text style={s.levelEmoji}>{xpInfo.level.icon}</Text>
+                  <View style={{ flex: 1 }}>
+                    <View style={s.levelTopRow}>
+                      <Text style={[s.levelName, { color: theme.text }]}>{levelName}</Text>
+                      <Text style={[s.levelNum, { color: gold }]}>Lv.{xpInfo.level.level}</Text>
+                    </View>
+                    <View style={s.xpRow}>
+                      <View style={[s.xpTrack, { backgroundColor: isDark ? '#1C1410' : '#EDE5D8' }]}>
+                        <View style={[s.xpFill, { backgroundColor: gold, width: `${Math.round(xpInfo.progress.percent * 100)}%` as any }]} />
+                      </View>
+                      <Text style={[s.xpNums, { color: theme.subtext }]}>{xpInfo.progress.current}/{xpInfo.progress.needed}</Text>
+                    </View>
+                  </View>
+                  <View style={s.xpTotal}>
+                    <Text style={[s.xpTotalVal, { color: gold }]}>{xpInfo.totalXP.toLocaleString()}</Text>
+                    <Text style={[s.xpTotalUnit, { color: theme.subtext }]}>XP</Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* ══ STATS ══ */}
+              <SectionTitle label={t('your_stats')} theme={theme} />
+              <View style={s.statsGrid}>
+                <StatCard icon="flame-outline" iconColor="#FF6D00" iconBg={'#FF6D0012'} value={streak} label={t('current_streak')} theme={theme} isDark={isDark} />
+                <StatCard icon="trophy-outline" iconColor="#FFB300" iconBg={'#FFB30012'} value={longest} label={t('best_streak')} theme={theme} isDark={isDark} />
+                <StatCard icon="book-outline" iconColor="#5856D6" iconBg={'#5856D612'} value={totalEventsRead} label={t('stories_read')} theme={theme} isDark={isDark} />
+                <StatCard icon="ribbon-outline" iconColor="#34C759" iconBg={'#34C75912'} value={unlockedAchievements.length} label={t('achievements')} theme={theme} isDark={isDark} />
+              </View>
+
+              <View style={s.xpChips}>
+                {xpInfo.multiplier > 1 && (
+                  <View style={[s.chip, { backgroundColor: '#FF6D0010', borderColor: '#FF6D0025' }]}>
+                    <Ionicons name="flash" size={11} color="#FF6D00" />
+                    <Text style={[s.chipText, { color: '#FF6D00' }]}>×{xpInfo.multiplier.toFixed(1)} {t('streak_bonus')}</Text>
                   </View>
                 )}
+                <View style={[s.chip, { backgroundColor: `${gold}10`, borderColor: `${gold}25` }]}>
+                  <Ionicons name="trending-up" size={11} color={gold} />
+                  <Text style={[s.chipText, { color: gold }]}>+{xpInfo.todayXP} {t('xp_today')}</Text>
+                </View>
               </View>
-              <View style={s.profileInfo}>
-                <Text style={[s.displayName, { color: theme.text }]} numberOfLines={1}>
-                  {displayName}
-                </Text>
-                {displayEmail !== '' && (
-                  <Text style={[s.email, { color: theme.subtext }]} numberOfLines={1}>
-                    {displayEmail}
-                  </Text>
+
+              <ReadingHeatmap />
+
+              {/* ══ PREFERENCES ══ */}
+              <SectionTitle label={t('preferences')} theme={theme} />
+              <View style={[s.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                <SettingRow icon="globe-outline" iconColor="#5856D6" iconBg={'#5856D610'} title={t('language')} subtitle={currentLang.native} theme={theme} onPress={() => setLangExpanded(v => !v)} right={<Ionicons name={langExpanded ? 'chevron-up' : 'chevron-down'} size={15} color={theme.subtext} />} />
+                {langExpanded && (
+                  <View style={s.langList}>
+                    {LANGUAGES.map(lang => {
+                      const active = language === lang.code;
+                      return (
+                        <TouchableOpacity key={lang.code} onPress={() => { setLanguage(lang.code); setLangExpanded(false); }} activeOpacity={0.6}
+                          style={[s.langItem, { backgroundColor: active ? `${gold}12` : 'transparent', borderColor: active ? `${gold}35` : theme.border }]}>
+                          <Text style={s.langFlag}>{lang.flag}</Text>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[s.langNative, { color: active ? gold : theme.text }]}>{lang.native}</Text>
+                            <Text style={[s.langEnglish, { color: theme.subtext }]}>{lang.label}</Text>
+                          </View>
+                          {active && <Ionicons name="checkmark-circle" size={17} color={gold} />}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
                 )}
-                <View style={s.metaRow}>
-                  {user.roles?.[0] && (
-                    <View style={[s.roleChip, { backgroundColor: theme.gold + '15' }]}>
-                      <Text style={[s.roleText, { color: theme.gold }]}>
-                        {user.roles[0].replace('ROLE_', '')}
-                      </Text>
-                    </View>
-                  )}
-                  <View style={[s.statusDot, { backgroundColor: '#34C759' }]} />
-                  <Text style={[s.statusLabel, { color: theme.subtext }]}>{t('active')}</Text>
+                <Hairline theme={theme} inset />
+                <SettingRow icon="notifications-outline" iconColor="#FF9500" iconBg={'#FF950010'} title={t('notifications')} subtitle={notificationsOn ? t('on') : t('off')} theme={theme}
+                  right={<Switch value={notificationsOn} onValueChange={setNotificationsOn} trackColor={{ false: theme.border, true: `${gold}55` }} thumbColor={notificationsOn ? gold : isDark ? '#555' : '#ccc'} ios_backgroundColor={theme.border} style={{ transform: [{ scale: 0.82 }] }} />} />
+              </View>
+
+              {/* ══ APPEARANCE ══ */}
+              <SectionTitle label={t('appearance')} theme={theme} />
+              <View style={[s.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                <View style={s.themeRow}>
+                  {THEME_OPTIONS.map(opt => {
+                    const active = mode === opt.value;
+                    return (
+                      <TouchableOpacity key={opt.value} onPress={() => setMode(opt.value)} activeOpacity={0.6}
+                        style={[s.themeBtn, { backgroundColor: active ? `${gold}10` : 'transparent', borderColor: active ? `${gold}40` : theme.border }]}>
+                        <View style={[s.themeCircle, { backgroundColor: active ? gold : isDark ? '#1C1A16' : '#F0ECE4' }]}>
+                          <Ionicons name={opt.icon} size={17} color={active ? '#000' : theme.subtext} />
+                        </View>
+                        <Text style={[s.themeLabel, { color: active ? gold : theme.text, fontWeight: active ? '700' : '500' }]}>{opt.label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
               </View>
-            </View>
-          </View>
 
-          {/* ── LEVEL & XP CARD ── */}
-          <View style={[s.levelCard, { backgroundColor: isDark ? '#1A1610' : '#FFFCF5', borderColor: isDark ? '#3D2A14' : '#F0D8A8' }]}>
-            {/* Level row */}
-            <View style={s.levelTopRow}>
-              <Text style={s.levelIcon}>{xpInfo.level.icon}</Text>
-              <View style={{ flex: 1, gap: 2 }}>
-                <Text style={[s.levelName, { color: theme.text }]}>{levelName}</Text>
-                <Text style={[s.levelLabel, { color: isDark ? '#E8B84D' : '#C77E08' }]}>
-                  Level {xpInfo.level.level}
-                </Text>
+              {/* ══ ACCOUNT ══ */}
+              <SectionTitle label={t('account')} theme={theme} />
+              <View style={[s.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                <SettingRow icon={isGoogleUser ? 'logo-google' : 'mail-outline'} iconColor="#007AFF" iconBg={'#007AFF10'} title={t('sign_in_method')} subtitle={isGoogleUser ? 'Google' : 'Email'} theme={theme} right={<View />} />
+                <Hairline theme={theme} inset />
+                <SettingRow icon="chatbubbles-outline" iconColor="#5856D6" iconBg={'#5856D610'} title={t('contact_support')} subtitle={t('contact_support_desc')} theme={theme} onPress={() => setSupportVisible(true)} />
+                <Hairline theme={theme} inset />
+                <SettingRow icon="heart-outline" iconColor="#FF2D55" iconBg={'#FF2D5510'} title={t('rate_app')} subtitle={t('rate_app_desc')} theme={theme} onPress={handleRateApp} />
+                <Hairline theme={theme} inset />
+                <SettingRow icon="paper-plane-outline" iconColor="#34C759" iconBg={'#34C75910'} title={t('share_app')} subtitle={t('share_app_desc')} theme={theme} onPress={handleShareApp} />
               </View>
-              <View style={s.xpTotalWrap}>
-                <Text style={[s.xpTotalValue, { color: isDark ? '#E8B84D' : '#C77E08' }]}>
-                  {xpInfo.totalXP.toLocaleString()}
-                </Text>
-                <Text style={[s.xpTotalLabel, { color: theme.subtext }]}>XP</Text>
+
+              {/* ══ SIGN OUT ══ */}
+              <TouchableOpacity style={s.logoutBtn} onPress={handleLogout} activeOpacity={0.6}>
+                <Ionicons name="log-out-outline" size={15} color="#FF3B30" />
+                <Text style={s.logoutText}>{t('sign_out')}</Text>
+              </TouchableOpacity>
+
+              <View style={s.footer}>
+                <View style={[s.footerDot, { backgroundColor: gold }]} />
+                <Text style={[s.footerBrand, { color: theme.subtext }]}>Daily History</Text>
+                <Text style={[s.footerVer, { color: theme.subtext }]}>v{appVersion} ({buildNumber})</Text>
               </View>
-            </View>
 
-            {/* XP Progress bar */}
-            <View style={s.xpBarWrap}>
-              <View style={[s.xpBarTrack, { backgroundColor: isDark ? '#1C1612' : '#F0E8DA' }]}>
-                <View style={[s.xpBarFill, {
-                  backgroundColor: isDark ? '#E8B84D' : '#F59E0B',
-                  width: `${Math.round(xpInfo.progress.percent * 100)}%` as any,
-                }]} />
-              </View>
-              <Text style={[s.xpBarLabel, { color: theme.subtext }]}>
-                {xpInfo.progress.current} / {xpInfo.progress.needed} XP
-              </Text>
-            </View>
+            </Animated.View>
+          </ScrollView>
+        </View>
+      </Modal>
 
-            {/* Streak multiplier + today XP */}
-            <View style={s.levelBottomRow}>
-              {xpInfo.multiplier > 1 && (
-                <View style={[s.multiBadge, { backgroundColor: '#FF6D00' + '15' }]}>
-                  <Text style={[s.multiText, { color: '#FF6D00' }]}>
-                    ×{xpInfo.multiplier.toFixed(1)} streak bonus
-                  </Text>
-                </View>
-              )}
-              <Text style={[s.todayXP, { color: isDark ? '#E8B84D' : '#C77E08' }]}>
-                +{xpInfo.todayXP} XP today
-              </Text>
-            </View>
-          </View>
-
-          {/* ── YOUR STATS ── */}
-          <Text style={[s.sectionLabel, { color: theme.subtext }]}>YOUR STATS</Text>
-
-          <View style={[s.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <View style={s.statsGrid}>
-              <View style={s.statItem}>
-                <Text style={s.statEmoji}>🔥</Text>
-                <Text style={[s.statValue, { color: theme.text }]}>{streak}</Text>
-                <Text style={[s.statLabel, { color: theme.subtext }]}>Current streak</Text>
-              </View>
-              <View style={[s.statDivider, { backgroundColor: theme.border }]} />
-              <View style={s.statItem}>
-                <Text style={s.statEmoji}>🏆</Text>
-                <Text style={[s.statValue, { color: theme.text }]}>{longest}</Text>
-                <Text style={[s.statLabel, { color: theme.subtext }]}>Best streak</Text>
-              </View>
-              <View style={[s.statDivider, { backgroundColor: theme.border }]} />
-              <View style={s.statItem}>
-                <Text style={s.statEmoji}>📖</Text>
-                <Text style={[s.statValue, { color: theme.text }]}>{totalEventsRead}</Text>
-                <Text style={[s.statLabel, { color: theme.subtext }]}>Stories read</Text>
-              </View>
-              <View style={[s.statDivider, { backgroundColor: theme.border }]} />
-              <View style={s.statItem}>
-                <Text style={s.statEmoji}>🏅</Text>
-                <Text style={[s.statValue, { color: theme.text }]}>{unlockedAchievements.length}</Text>
-                <Text style={[s.statLabel, { color: theme.subtext }]}>Achievements</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* ── PREFERENCES ── */}
-          <Text style={[s.sectionLabel, { color: theme.subtext }]}>
-            {(t('preferences') || 'PREFERENCES').toUpperCase()}
-          </Text>
-
-          <View style={[s.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            {/* Language selector */}
-            <TouchableOpacity
-              onPress={() => setLangExpanded(v => !v)}
-              activeOpacity={0.7}
-              style={s.settingRow}
-            >
-              <View style={[s.settingIcon, { backgroundColor: '#5856D6' + '18' }]}>
-                <Ionicons name="language" size={18} color="#5856D6" />
-              </View>
-              <View style={s.settingContent}>
-                <Text style={[s.settingTitle, { color: theme.text }]}>{t('language')}</Text>
-                <Text style={[s.settingValue, { color: theme.subtext }]}>{currentLang.native}</Text>
-              </View>
-              <Ionicons
-                name={langExpanded ? 'chevron-up' : 'chevron-down'}
-                size={18}
-                color={theme.subtext}
-              />
-            </TouchableOpacity>
-
-            {langExpanded && (
-              <View style={s.langGrid}>
-                {LANGUAGES.map(lang => {
-                  const active = language === lang.code;
-                  return (
-                    <TouchableOpacity
-                      key={lang.code}
-                      onPress={() => { setLanguage(lang.code); setLangExpanded(false); }}
-                      activeOpacity={0.65}
-                      style={[
-                        s.langOption,
-                        {
-                          backgroundColor: active ? theme.gold : theme.background,
-                          borderColor: active ? theme.gold : theme.border,
-                        },
-                      ]}
-                    >
-                      <Text style={s.langFlag}>{lang.flag}</Text>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[s.langNative, { color: active ? '#000' : theme.text }]}>
-                          {lang.native}
-                        </Text>
-                        <Text style={[s.langEnglish, { color: active ? '#00000088' : theme.subtext }]}>
-                          {lang.label}
-                        </Text>
-                      </View>
-                      {active && (
-                        <Ionicons name="checkmark-circle" size={20} color="#000" />
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            )}
-
-            <View style={[s.divider, { backgroundColor: theme.border }]} />
-
-            {/* Notifications */}
-            <View style={s.settingRow}>
-              <View style={[s.settingIcon, { backgroundColor: '#FF9500' + '18' }]}>
-                <Ionicons name="notifications" size={18} color="#FF9500" />
-              </View>
-              <View style={s.settingContent}>
-                <Text style={[s.settingTitle, { color: theme.text }]}>
-                  {t('notifications') || 'Notifications'}
-                </Text>
-                <Text style={[s.settingValue, { color: theme.subtext }]}>
-                  {notificationsOn ? (t('on') || 'On') : (t('off') || 'Off')}
-                </Text>
-              </View>
-              <Switch
-                value={notificationsOn}
-                onValueChange={setNotificationsOn}
-                trackColor={{ false: theme.border, true: theme.gold + '60' }}
-                thumbColor={notificationsOn ? theme.gold : theme.subtext}
-                ios_backgroundColor={theme.border}
-              />
-            </View>
-          </View>
-
-          {/* ── APPEARANCE ── */}
-          <Text style={[s.sectionLabel, { color: theme.subtext }]}>
-            {t('appearance').toUpperCase()}
-          </Text>
-
-          <View style={[s.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <View style={s.themeRow}>
-              {THEME_OPTIONS.map(opt => {
-                const active = mode === opt.value;
-                return (
-                  <TouchableOpacity
-                    key={opt.value}
-                    onPress={() => setMode(opt.value)}
-                    activeOpacity={0.7}
-                    style={[
-                      s.themeCard,
-                      {
-                        backgroundColor: active ? theme.gold + '15' : theme.background,
-                        borderColor: active ? theme.gold : theme.border,
-                      },
-                    ]}
-                  >
-                    <View style={[s.themeIconWrap, {
-                      backgroundColor: active ? theme.gold : theme.border + '80',
-                    }]}>
-                      <Ionicons
-                        name={opt.icon}
-                        size={20}
-                        color={active ? (isDark ? '#000' : '#000') : theme.subtext}
-                      />
-                    </View>
-                    <Text style={[s.themeLabel, {
-                      color: active ? theme.gold : theme.text,
-                      fontWeight: active ? '700' : '500',
-                    }]}>{opt.label}</Text>
-                    <Text style={[s.themeDesc, { color: theme.subtext }]}>{opt.desc}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-
-          {/* ── ACCOUNT ── */}
-          <Text style={[s.sectionLabel, { color: theme.subtext }]}>
-            {t('account').toUpperCase()}
-          </Text>
-
-          <View style={[s.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <View style={s.settingRow}>
-              <View style={[s.settingIcon, { backgroundColor: '#007AFF' + '18' }]}>
-                <Ionicons name={isGoogleUser ? 'logo-google' : 'mail'} size={18} color="#007AFF" />
-              </View>
-              <View style={s.settingContent}>
-                <Text style={[s.settingTitle, { color: theme.text }]}>{t('sign_in_method')}</Text>
-                <Text style={[s.settingValue, { color: theme.subtext }]}>
-                  {isGoogleUser ? 'Google Account' : 'Email & Password'}
-                </Text>
-              </View>
-            </View>
-
-            <View style={[s.divider, { backgroundColor: theme.border }]} />
-
-            <TouchableOpacity onPress={handleRateApp} activeOpacity={0.7} style={s.settingRow}>
-              <View style={[s.settingIcon, { backgroundColor: '#FF2D55' + '18' }]}>
-                <Ionicons name="heart" size={18} color="#FF2D55" />
-              </View>
-              <View style={s.settingContent}>
-                <Text style={[s.settingTitle, { color: theme.text }]}>
-                  {t('rate_app') || 'Rate Daily History'}
-                </Text>
-                <Text style={[s.settingValue, { color: theme.subtext }]}>
-                  {t('rate_app_desc') || 'Help us grow with a review'}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={theme.subtext} />
-            </TouchableOpacity>
-
-            <View style={[s.divider, { backgroundColor: theme.border }]} />
-
-            <TouchableOpacity
-              onPress={() => {
-                const msg = 'Check out Daily History — learn history every day! https://dailyhistory.app';
-                if (Platform.OS === 'ios' || Platform.OS === 'android') {
-                  const { Share } = require('react-native');
-                  Share.share({ message: msg }).catch(() => {});
-                }
-              }}
-              activeOpacity={0.7}
-              style={s.settingRow}
-            >
-              <View style={[s.settingIcon, { backgroundColor: '#34C759' + '18' }]}>
-                <Ionicons name="share-social" size={18} color="#34C759" />
-              </View>
-              <View style={s.settingContent}>
-                <Text style={[s.settingTitle, { color: theme.text }]}>
-                  {t('share_app') || 'Share with friends'}
-                </Text>
-                <Text style={[s.settingValue, { color: theme.subtext }]}>
-                  {t('share_app_desc') || 'Spread the love of history'}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={theme.subtext} />
-            </TouchableOpacity>
-          </View>
-
-          {/* ── SIGN OUT ── */}
-          <TouchableOpacity style={s.logoutBtn} onPress={handleLogout} activeOpacity={0.7}>
-            <Ionicons name="log-out-outline" size={18} color="#FF3B30" />
-            <Text style={s.logoutText}>{t('sign_out')}</Text>
-          </TouchableOpacity>
-
-          {/* ── FOOTER ── */}
-          <View style={s.footer}>
-            <Text style={[s.footerBrand, { color: theme.subtext }]}>Daily History</Text>
-            <Text style={[s.footerVersion, { color: theme.subtext }]}>
-              v{appVersion} ({buildNumber})
-            </Text>
-            <Text style={[s.footerCopy, { color: theme.subtext }]}>
-              Made with care for history lovers
-            </Text>
-          </View>
-        </ScrollView>
-      </View>
-    </Modal>
+      <SupportModal visible={supportVisible} onClose={() => setSupportVisible(false)} />
+    </>
   );
 }
 
-const makeStyles = (theme: any, isDark: boolean) => StyleSheet.create({
+const makeStyles = (theme: any, isDark: boolean, gold: string) => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.background },
-
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-  },
-  headerBtn: {
-    width: 36, height: 36, borderRadius: 18,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.2,
-  },
-
-  scroll: { paddingHorizontal: 20, paddingTop: 4 },
-
-  // Profile card
-  profileCard: {
-    borderRadius: 20,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 20,
-    marginBottom: 16,
-  },
-  profileRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 10 },
+  closeBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { fontSize: 15, fontWeight: '600', letterSpacing: 0.3 },
+  scroll: { paddingHorizontal: 20, paddingTop: 8 },
+  heroCard: { borderRadius: 22, borderWidth: 1, padding: 18, marginBottom: 20, gap: 14 },
+  heroIdentity: { flexDirection: 'row', alignItems: 'center', gap: 15 },
   avatarWrap: { position: 'relative' },
-  avatar: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    backgroundColor: theme.border,
-  },
-  providerBadge: {
-    position: 'absolute', bottom: -2, right: -2,
-    width: 24, height: 24, borderRadius: 12,
-    backgroundColor: '#4285F4',
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 2.5,
-  },
-  profileInfo: { flex: 1, gap: 3 },
-  displayName: {
-    fontSize: 20,
-    fontWeight: '800',
-    letterSpacing: 0.1,
-  },
-  email: {
-    fontSize: 13,
-    letterSpacing: 0.1,
-    opacity: 0.7,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 6,
-  },
-  roleChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 12,
-  },
-  roleText: {
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 1.5,
-  },
-  statusDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-  },
-  statusLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-
-  // Level & XP card
-  levelCard: {
-    borderRadius: 20,
-    borderWidth: 1,
-    padding: 18,
-    marginBottom: 24,
-    gap: 14,
-  },
-  levelTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  levelIcon: {
-    fontSize: 32,
-  },
-  levelName: {
-    fontSize: 17,
-    fontWeight: '800',
-    letterSpacing: -0.3,
-  },
-  levelLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-  },
-  xpTotalWrap: {
-    alignItems: 'flex-end',
-    gap: 1,
-  },
-  xpTotalValue: {
-    fontSize: 20,
-    fontWeight: '900',
-    letterSpacing: -1,
-  },
-  xpTotalLabel: {
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    opacity: 0.5,
-  },
-  xpBarWrap: {
-    gap: 5,
-  },
-  xpBarTrack: {
-    height: 8,
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  xpBarFill: {
-    height: 8,
-    borderRadius: 4,
-  },
-  xpBarLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    letterSpacing: 0.3,
-    opacity: 0.5,
-  },
-  levelBottomRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  multiBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 10,
-  },
-  multiText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  todayXP: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.2,
-  },
-
-  // Stats grid
-  statsGrid: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 8,
-  },
-  statItem: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 4,
-  },
-  statEmoji: {
-    fontSize: 20,
-    marginBottom: 2,
-  },
-  statValue: {
-    fontSize: 18,
-    fontWeight: '800',
-    letterSpacing: -0.3,
-  },
-  statLabel: {
-    fontSize: 10,
-    fontWeight: '500',
-    opacity: 0.7,
-    textAlign: 'center',
-  },
-  statDivider: {
-    width: StyleSheet.hairlineWidth,
-    height: 36,
-  },
-
-  // Sections
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 1.5,
-    marginBottom: 10,
-    marginLeft: 4,
-  },
-  card: {
-    borderRadius: 18,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
-    marginBottom: 24,
-  },
-
-  settingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 14,
-  },
-  settingIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  settingContent: { flex: 1, gap: 1 },
-  settingTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    letterSpacing: 0.1,
-  },
-  settingValue: {
-    fontSize: 12,
-    fontWeight: '400',
-    opacity: 0.7,
-  },
-
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    marginLeft: 66,
-  },
-
-  langGrid: {
-    paddingHorizontal: 12,
-    paddingBottom: 14,
-    gap: 6,
-  },
-  langOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 14,
-    borderWidth: 1.5,
-  },
-  langFlag: { fontSize: 22 },
-  langNative: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  langEnglish: {
-    fontSize: 11,
-    fontWeight: '400',
-    marginTop: 1,
-  },
-
-  themeRow: {
-    flexDirection: 'row',
-    gap: 8,
-    padding: 12,
-  },
-  themeCard: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 8,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    gap: 8,
-  },
-  themeIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  themeLabel: {
-    fontSize: 13,
-    letterSpacing: 0.2,
-  },
-  themeDesc: {
-    fontSize: 10,
-    fontWeight: '400',
-    opacity: 0.6,
-    textAlign: 'center',
-  },
-
-  logoutBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    borderRadius: 16,
-    backgroundColor: '#FF3B30' + '0C',
-    borderWidth: 1,
-    borderColor: '#FF3B30' + '20',
-    gap: 8,
-    marginBottom: 32,
-  },
-  logoutText: {
-    color: '#FF3B30',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-
-  footer: {
-    alignItems: 'center',
-    gap: 4,
-    paddingBottom: 10,
-  },
-  footerBrand: {
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 2,
-    opacity: 0.3,
-    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
-  },
-  footerVersion: {
-    fontSize: 11,
-    fontWeight: '500',
-    opacity: 0.25,
-  },
-  footerCopy: {
-    fontSize: 11,
-    fontWeight: '400',
-    opacity: 0.2,
-    marginTop: 2,
-  },
+  avatar: { width: 58, height: 58, borderRadius: 29, backgroundColor: theme.border },
+  avatarGlow: { position: 'absolute', top: -3, left: -3, width: 64, height: 64, borderRadius: 32, borderWidth: 2 },
+  providerBadge: { position: 'absolute', bottom: -2, right: -2, width: 21, height: 21, borderRadius: 10.5, backgroundColor: '#4285F4', alignItems: 'center', justifyContent: 'center', borderWidth: 2.5 },
+  heroText: { flex: 1, gap: 2 },
+  heroName: { fontSize: 19, fontWeight: '800', letterSpacing: -0.2, fontFamily: SERIF },
+  heroEmail: { fontSize: 12, fontWeight: '400', opacity: 0.45, letterSpacing: 0.1 },
+  levelBar: { flexDirection: 'row', alignItems: 'center', gap: 11, paddingHorizontal: 13, paddingVertical: 11, borderRadius: 14, borderWidth: 1 },
+  levelEmoji: { fontSize: 24 },
+  levelTopRow: { flexDirection: 'row', alignItems: 'baseline', gap: 7, marginBottom: 5 },
+  levelName: { fontSize: 13.5, fontWeight: '700', letterSpacing: -0.1 },
+  levelNum: { fontSize: 9.5, fontWeight: '800', letterSpacing: 1 },
+  xpRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  xpTrack: { flex: 1, height: 4.5, borderRadius: 3, overflow: 'hidden' },
+  xpFill: { height: 4.5, borderRadius: 3 },
+  xpNums: { fontSize: 8.5, fontWeight: '600', opacity: 0.35, letterSpacing: 0.3, minWidth: 44 },
+  xpTotal: { alignItems: 'flex-end', paddingLeft: 6 },
+  xpTotalVal: { fontSize: 17, fontWeight: '900', letterSpacing: -0.8 },
+  xpTotalUnit: { fontSize: 7.5, fontWeight: '700', letterSpacing: 1.5, opacity: 0.35, textTransform: 'uppercase' },
+  statsGrid: { flexDirection: 'row', gap: 7, marginBottom: 10 },
+  xpChips: { flexDirection: 'row', gap: 7, marginBottom: 22, paddingHorizontal: 2, flexWrap: 'wrap' },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, borderWidth: 1 },
+  chipText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.2 },
+  card: { borderRadius: 18, borderWidth: 1, overflow: 'hidden', marginBottom: 20 },
+  langList: { paddingHorizontal: 12, paddingBottom: 12, gap: 5 },
+  langItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, borderWidth: 1.5 },
+  langFlag: { fontSize: 19 },
+  langNative: { fontSize: 13, fontWeight: '600' },
+  langEnglish: { fontSize: 10.5, fontWeight: '400', opacity: 0.45, marginTop: 1 },
+  themeRow: { flexDirection: 'row', gap: 7, padding: 11 },
+  themeBtn: { flex: 1, alignItems: 'center', paddingVertical: 16, paddingHorizontal: 6, borderRadius: 14, borderWidth: 1.5, gap: 9 },
+  themeCircle: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  themeLabel: { fontSize: 11.5, letterSpacing: 0.3 },
+  logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 14, backgroundColor: '#FF3B3008', borderWidth: 1, borderColor: '#FF3B3018', gap: 7, marginTop: 4, marginBottom: 34 },
+  logoutText: { color: '#FF3B30', fontSize: 13.5, fontWeight: '600', letterSpacing: 0.2 },
+  footer: { alignItems: 'center', gap: 5, paddingBottom: 10 },
+  footerDot: { width: 4, height: 4, borderRadius: 2, opacity: 0.3, marginBottom: 6 },
+  footerBrand: { fontSize: 11, fontWeight: '700', letterSpacing: 3.5, opacity: 0.18, fontFamily: SERIF },
+  footerVer: { fontSize: 9.5, fontWeight: '500', opacity: 0.12 },
 });

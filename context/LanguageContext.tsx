@@ -1,18 +1,18 @@
 // context/LanguageContext.tsx
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, {
-    createContext,
-    useCallback,
-    useContext,
-    useEffect,
-    useState,
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
 } from "react";
 
 export type Language = "en" | "ro" | "fr" | "de" | "es";
 
 interface LanguageContextType {
   language: Language;
-  setLanguage: (lang: Language) => void; // intentionally sync — triggers re-render immediately
+  setLanguage: (lang: Language) => void;
   t: (key: string) => string;
 }
 
@@ -22,16 +22,18 @@ const LanguageContext = createContext<LanguageContextType>({
   t: (key: string) => key,
 });
 
-// ─── TRANSLATIONS ─────────────────────────────────────────────────────────────
-
 const translations: Record<Language, Record<string, string>> = {
   en: {
+    // App chrome
     Daily: "Daily",
     History: "History",
     today: "Today",
+    tomorrow: "Tomorrow",
     history: "History",
     discover: "Discover",
-    profile_title: "Profile",
+    timeline: "Timeline",
+    map: "Map",
+    saved: "Saved",
     retry: "Retry",
     no_content: "Nothing here",
     empty_today_desc: "No historical events found for today. Tap retry to reload.",
@@ -46,15 +48,40 @@ const translations: Record<Language, Record<string, string>> = {
     score: "Impact Score",
     close: "Close",
     read_story: "Read story",
+
+    // Profile
+    profile_title: "Profile",
+    your_stats: "Your Stats",
+    current_streak: "Streak",
+    best_streak: "Best",
+    stories_read: "Read",
+    achievements: "Awards",
+    streak_bonus: "streak bonus",
+    xp_today: "XP today",
+
+    // Preferences
     appearance: "Appearance",
     language: "Language",
-    sign_out: "Sign Out",
-    status: "Status",
-    role: "Role",
-    active: "Active",
     preferences: "Preferences",
+    notifications: "Notifications",
+    on: "On",
+    off: "Off",
+
+    // Account
     account: "Account",
     sign_in_method: "Sign in method",
+    sign_out: "Sign Out",
+    contact_support: "Contact Support",
+    contact_support_desc: "Bug reports, questions, suggestions",
+    rate_app: "Rate Daily History",
+    rate_app_desc: "Help us grow with a review",
+    share_app: "Share with friends",
+    share_app_desc: "Spread the love of history",
+    active: "Active",
+    status: "Status",
+    role: "Role",
+
+    // Auth
     welcome_headline: "Discover History\nEvery Day",
     get_started: "Get Started",
     login: "Log In",
@@ -66,6 +93,8 @@ const translations: Record<Language, Record<string, string>> = {
     notif_desc: "Get a daily notification about what happened today in the past.",
     allow_notif: "Allow Notifications",
     skip: "Maybe later",
+
+    // Categories
     HISTORY: "History", WAR: "War", ART: "Art", SCIENCE: "Science",
     POLITICS: "Politics", EXPLORATION: "Exploration", CULTURE: "Culture",
     RELIGION: "Religion", ECONOMICS: "Economics", SPORTS: "Sports",
@@ -74,14 +103,21 @@ const translations: Record<Language, Record<string, string>> = {
     exploration: "Exploration", culture: "Culture", religion: "Religion",
     economics: "Economics", sports: "Sports", technology: "Technology",
     nature: "Nature",
+
+    // Calendar
+    calendar_hint: "Select a date to explore its history",
   },
+
   ro: {
     Daily: "Daily",
     History: "History",
     today: "Astăzi",
+    tomorrow: "Mâine",
     history: "Istorie",
     discover: "Descoperă",
-    profile_title: "Profil",
+    timeline: "Cronologie",
+    map: "Hartă",
+    saved: "Salvate",
     retry: "Reîncearcă",
     no_content: "Nimic aici",
     empty_today_desc: "Nu am găsit evenimente istorice pentru astăzi. Apasă reîncearcă.",
@@ -96,15 +132,36 @@ const translations: Record<Language, Record<string, string>> = {
     score: "Scor Impact",
     close: "Închide",
     read_story: "Citește povestea",
+
+    profile_title: "Profil",
+    your_stats: "Statisticile Tale",
+    current_streak: "Serie",
+    best_streak: "Record",
+    stories_read: "Citite",
+    achievements: "Premii",
+    streak_bonus: "bonus serie",
+    xp_today: "XP astăzi",
+
     appearance: "Aspect",
     language: "Limbă",
-    sign_out: "Deconectare",
-    status: "Status",
-    role: "Rol",
-    active: "Activ",
     preferences: "Preferințe",
+    notifications: "Notificări",
+    on: "Activat",
+    off: "Dezactivat",
+
     account: "Cont",
     sign_in_method: "Metodă de autentificare",
+    sign_out: "Deconectare",
+    contact_support: "Contactează Suportul",
+    contact_support_desc: "Rapoarte de bug, întrebări, sugestii",
+    rate_app: "Evaluează Daily History",
+    rate_app_desc: "Ajută-ne să creștem cu o recenzie",
+    share_app: "Împărtășește cu prietenii",
+    share_app_desc: "Răspândește dragostea pentru istorie",
+    active: "Activ",
+    status: "Status",
+    role: "Rol",
+
     welcome_headline: "Descoperă Istoria\nÎn Fiecare Zi",
     get_started: "Începe Acum",
     login: "Autentificare",
@@ -116,6 +173,7 @@ const translations: Record<Language, Record<string, string>> = {
     notif_desc: "Primește o notificare zilnică despre ce s-a întâmplat astăzi în trecut.",
     allow_notif: "Permite Notificările",
     skip: "Mai târziu",
+
     HISTORY: "Istorie", WAR: "Război", ART: "Artă", SCIENCE: "Știință",
     POLITICS: "Politică", EXPLORATION: "Explorare", CULTURE: "Cultură",
     RELIGION: "Religie", ECONOMICS: "Economie", SPORTS: "Sport",
@@ -124,14 +182,20 @@ const translations: Record<Language, Record<string, string>> = {
     exploration: "Explorare", culture: "Cultură", religion: "Religie",
     economics: "Economie", sports: "Sport", technology: "Tehnologie",
     nature: "Natură",
+
+    calendar_hint: "Alege o dată pentru a-i explora istoria",
   },
+
   fr: {
     Daily: "Daily",
     History: "History",
     today: "Aujourd'hui",
+    tomorrow: "Demain",
     history: "Histoire",
     discover: "Découvrir",
-    profile_title: "Profil",
+    timeline: "Chronologie",
+    map: "Carte",
+    saved: "Sauvegardés",
     retry: "Réessayer",
     no_content: "Rien ici",
     empty_today_desc: "Aucun événement historique trouvé pour aujourd'hui.",
@@ -146,15 +210,36 @@ const translations: Record<Language, Record<string, string>> = {
     score: "Score d'impact",
     close: "Fermer",
     read_story: "Lire l'histoire",
+
+    profile_title: "Profil",
+    your_stats: "Vos Statistiques",
+    current_streak: "Série",
+    best_streak: "Record",
+    stories_read: "Lues",
+    achievements: "Récompenses",
+    streak_bonus: "bonus de série",
+    xp_today: "XP aujourd'hui",
+
     appearance: "Apparence",
     language: "Langue",
-    sign_out: "Déconnexion",
-    status: "Statut",
-    role: "Rôle",
-    active: "Actif",
     preferences: "Préférences",
+    notifications: "Notifications",
+    on: "Activé",
+    off: "Désactivé",
+
     account: "Compte",
     sign_in_method: "Méthode de connexion",
+    sign_out: "Déconnexion",
+    contact_support: "Contacter le Support",
+    contact_support_desc: "Rapports de bugs, questions, suggestions",
+    rate_app: "Évaluer Daily History",
+    rate_app_desc: "Aidez-nous à grandir avec un avis",
+    share_app: "Partager avec des amis",
+    share_app_desc: "Partagez l'amour de l'histoire",
+    active: "Actif",
+    status: "Statut",
+    role: "Rôle",
+
     welcome_headline: "Découvrez l'Histoire\nChaque Jour",
     get_started: "Commencer",
     login: "Connexion",
@@ -166,6 +251,7 @@ const translations: Record<Language, Record<string, string>> = {
     notif_desc: "Recevez une notification quotidienne sur ce qui s'est passé aujourd'hui.",
     allow_notif: "Autoriser les notifications",
     skip: "Plus tard",
+
     HISTORY: "Histoire", WAR: "Guerre", ART: "Art", SCIENCE: "Science",
     POLITICS: "Politique", EXPLORATION: "Exploration", CULTURE: "Culture",
     RELIGION: "Religion", ECONOMICS: "Économie", SPORTS: "Sport",
@@ -174,14 +260,20 @@ const translations: Record<Language, Record<string, string>> = {
     exploration: "Exploration", culture: "Culture", religion: "Religion",
     economics: "Économie", sports: "Sport", technology: "Technologie",
     nature: "Nature",
+
+    calendar_hint: "Choisissez une date pour explorer son histoire",
   },
+
   de: {
     Daily: "Daily",
     History: "History",
     today: "Heute",
+    tomorrow: "Morgen",
     history: "Geschichte",
     discover: "Entdecken",
-    profile_title: "Profil",
+    timeline: "Zeitleiste",
+    map: "Karte",
+    saved: "Gespeichert",
     retry: "Erneut versuchen",
     no_content: "Nichts hier",
     empty_today_desc: "Keine historischen Ereignisse für heute gefunden.",
@@ -196,15 +288,36 @@ const translations: Record<Language, Record<string, string>> = {
     score: "Einfluss-Wert",
     close: "Schließen",
     read_story: "Geschichte lesen",
+
+    profile_title: "Profil",
+    your_stats: "Deine Statistiken",
+    current_streak: "Serie",
+    best_streak: "Rekord",
+    stories_read: "Gelesen",
+    achievements: "Auszeichnungen",
+    streak_bonus: "Serienbonus",
+    xp_today: "XP heute",
+
     appearance: "Aussehen",
     language: "Sprache",
-    sign_out: "Abmelden",
-    status: "Status",
-    role: "Rolle",
-    active: "Aktiv",
     preferences: "Einstellungen",
+    notifications: "Benachrichtigungen",
+    on: "An",
+    off: "Aus",
+
     account: "Konto",
     sign_in_method: "Anmeldemethode",
+    sign_out: "Abmelden",
+    contact_support: "Support Kontaktieren",
+    contact_support_desc: "Fehlerberichte, Fragen, Vorschläge",
+    rate_app: "Daily History bewerten",
+    rate_app_desc: "Hilf uns mit einer Bewertung zu wachsen",
+    share_app: "Mit Freunden teilen",
+    share_app_desc: "Teile die Liebe zur Geschichte",
+    active: "Aktiv",
+    status: "Status",
+    role: "Rolle",
+
     welcome_headline: "Entdecke die Geschichte\njeden Tag",
     get_started: "Jetzt starten",
     login: "Anmelden",
@@ -216,6 +329,7 @@ const translations: Record<Language, Record<string, string>> = {
     notif_desc: "Tägliche Benachrichtigung über Ereignisse in der Vergangenheit.",
     allow_notif: "Benachrichtigungen erlauben",
     skip: "Vielleicht später",
+
     HISTORY: "Geschichte", WAR: "Krieg", ART: "Kunst", SCIENCE: "Wissenschaft",
     POLITICS: "Politik", EXPLORATION: "Entdeckung", CULTURE: "Kultur",
     RELIGION: "Religion", ECONOMICS: "Wirtschaft", SPORTS: "Sport",
@@ -224,14 +338,20 @@ const translations: Record<Language, Record<string, string>> = {
     exploration: "Entdeckung", culture: "Kultur", religion: "Religion",
     economics: "Wirtschaft", sports: "Sport", technology: "Technologie",
     nature: "Natur",
+
+    calendar_hint: "Wähle ein Datum, um seine Geschichte zu erkunden",
   },
+
   es: {
     Daily: "Daily",
     History: "History",
     today: "Hoy",
+    tomorrow: "Mañana",
     history: "Historia",
     discover: "Descubrir",
-    profile_title: "Perfil",
+    timeline: "Cronología",
+    map: "Mapa",
+    saved: "Guardados",
     retry: "Reintentar",
     no_content: "Nada aquí",
     empty_today_desc: "No se encontraron eventos históricos para hoy.",
@@ -246,15 +366,36 @@ const translations: Record<Language, Record<string, string>> = {
     score: "Puntuación de impacto",
     close: "Cerrar",
     read_story: "Leer historia",
+
+    profile_title: "Perfil",
+    your_stats: "Tus Estadísticas",
+    current_streak: "Racha",
+    best_streak: "Récord",
+    stories_read: "Leídas",
+    achievements: "Premios",
+    streak_bonus: "bonus de racha",
+    xp_today: "XP hoy",
+
     appearance: "Apariencia",
     language: "Idioma",
-    sign_out: "Cerrar Sesión",
-    status: "Estado",
-    role: "Rol",
-    active: "Activo",
     preferences: "Preferencias",
+    notifications: "Notificaciones",
+    on: "Activado",
+    off: "Desactivado",
+
     account: "Cuenta",
     sign_in_method: "Método de inicio de sesión",
+    sign_out: "Cerrar Sesión",
+    contact_support: "Contactar Soporte",
+    contact_support_desc: "Reportes de errores, preguntas, sugerencias",
+    rate_app: "Evaluar Daily History",
+    rate_app_desc: "Ayúdanos a crecer con una reseña",
+    share_app: "Compartir con amigos",
+    share_app_desc: "Difunde el amor por la historia",
+    active: "Activo",
+    status: "Estado",
+    role: "Rol",
+
     welcome_headline: "Descubre la Historia\nCada Día",
     get_started: "Empezar",
     login: "Iniciar Sesión",
@@ -266,6 +407,7 @@ const translations: Record<Language, Record<string, string>> = {
     notif_desc: "Recibe una notificación diaria sobre lo que pasó hoy en el pasado.",
     allow_notif: "Permitir notificaciones",
     skip: "Más tarde",
+
     HISTORY: "Historia", WAR: "Guerra", ART: "Arte", SCIENCE: "Ciencia",
     POLITICS: "Política", EXPLORATION: "Exploración", CULTURE: "Cultura",
     RELIGION: "Religión", ECONOMICS: "Economía", SPORTS: "Deporte",
@@ -274,15 +416,14 @@ const translations: Record<Language, Record<string, string>> = {
     exploration: "Exploración", culture: "Cultura", religion: "Religión",
     economics: "Economía", sports: "Deporte", technology: "Tecnología",
     nature: "Naturaleza",
+
+    calendar_hint: "Elige una fecha para explorar su historia",
   },
 };
-
-// ─── PROVIDER ─────────────────────────────────────────────────────────────────
 
 export const LanguageProvider = ({ children }: { children: React.ReactNode }) => {
   const [language, setLanguageState] = useState<Language>("en");
 
-  // Load persisted language once on mount
   useEffect(() => {
     AsyncStorage.getItem("app_language")
       .then((stored) => {
@@ -293,21 +434,17 @@ export const LanguageProvider = ({ children }: { children: React.ReactNode }) =>
       .catch(() => {});
   }, []);
 
-  /**
-   * SYNC state update → triggers immediate React re-render across the whole tree.
-   * AsyncStorage write happens fire-and-forget in the background.
-   */
   const setLanguage = useCallback((lang: Language) => {
-    setLanguageState(lang);                           // instant re-render
-    AsyncStorage.setItem("app_language", lang).catch(() => {}); // persist silently
+    setLanguageState(lang);
+    AsyncStorage.setItem("app_language", lang).catch(() => {});
   }, []);
 
   /**
    * Lookup order:
-   * 1. exact key  ("today", "WAR", "Daily")
-   * 2. UPPERCASE  ("war" → "WAR")
-   * 3. lowercase  ("WAR" → "war")
-   * 4. original key as fallback
+   * 1. exact key
+   * 2. UPPERCASE
+   * 3. lowercase
+   * 4. fallback: replace underscores with spaces (so "some_key" → "some key")
    */
   const t = useCallback(
     (key: string): string => {
@@ -316,7 +453,7 @@ export const LanguageProvider = ({ children }: { children: React.ReactNode }) =>
         table[key] ??
         table[key.toUpperCase()] ??
         table[key.toLowerCase()] ??
-        key
+        key.replace(/_/g, ' ')
       );
     },
     [language],

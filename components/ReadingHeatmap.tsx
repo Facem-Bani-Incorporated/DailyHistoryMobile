@@ -1,77 +1,143 @@
 // components/ReadingHeatmap.tsx
 // ═══════════════════════════════════════════════════════════════════════════════
-//  READING HEATMAP — GitHub-style contribution calendar
+//  READING HEATMAP — Premium activity calendar
 //  Shows last 16 weeks of reading activity from calendarLog
-//  Color intensity = number of stories read that day
+//  Fresh design with gradient cells, streak indicators, monthly stats
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import {
-    StyleSheet,
-    Text,
-    View,
+  Animated,
+  Platform,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { useGamificationStore } from '../store/useGamificationStore';
 
 const WEEKS = 16;
-const CELL = 13;
+const CELL = 14;
 const GAP = 3;
-const DAYS_LABELS_WIDTH = 22;
+const DAYS_LABELS_WIDTH = 20;
 
+// ── Translations ──
 const T: Record<string, Record<string, string>> = {
-  en: { title: 'Reading Activity', stories: 'stories', less: 'Less', more: 'More', noActivity: 'Start reading to fill your calendar!' },
-  ro: { title: 'Activitate de Citire', stories: 'povești', less: 'Mai puțin', more: 'Mai mult', noActivity: 'Citește pentru a-ți umple calendarul!' },
-  fr: { title: 'Activité de Lecture', stories: 'histoires', less: 'Moins', more: 'Plus', noActivity: 'Lisez pour remplir votre calendrier !' },
-  de: { title: 'Leseaktivität', stories: 'Geschichten', less: 'Weniger', more: 'Mehr', noActivity: 'Lies, um deinen Kalender zu füllen!' },
-  es: { title: 'Actividad de Lectura', stories: 'historias', less: 'Menos', more: 'Más', noActivity: '¡Lee para llenar tu calendario!' },
+  en: { title: 'Your Journey', subtitle: 'Reading activity', stories: 'stories', days: 'active days', avgPerDay: 'avg/day', bestDay: 'best day', less: 'Less', more: 'More', noActivity: 'Your story begins today', thisWeek: 'This week', allTime: 'All time' },
+  ro: { title: 'Călătoria Ta', subtitle: 'Activitate de citire', stories: 'povești', days: 'zile active', avgPerDay: 'medie/zi', bestDay: 'cea mai bună zi', less: 'Mai puțin', more: 'Mai mult', noActivity: 'Povestea ta începe azi', thisWeek: 'Săptămâna asta', allTime: 'Total' },
+  fr: { title: 'Votre Parcours', subtitle: 'Activité de lecture', stories: 'histoires', days: 'jours actifs', avgPerDay: 'moy/jour', bestDay: 'meilleur jour', less: 'Moins', more: 'Plus', noActivity: 'Votre histoire commence aujourd\'hui', thisWeek: 'Cette semaine', allTime: 'Total' },
+  de: { title: 'Deine Reise', subtitle: 'Leseaktivität', stories: 'Geschichten', days: 'aktive Tage', avgPerDay: 'Ø/Tag', bestDay: 'bester Tag', less: 'Weniger', more: 'Mehr', noActivity: 'Deine Geschichte beginnt heute', thisWeek: 'Diese Woche', allTime: 'Gesamt' },
+  es: { title: 'Tu Viaje', subtitle: 'Actividad de lectura', stories: 'historias', days: 'días activos', avgPerDay: 'prom/día', bestDay: 'mejor día', less: 'Menos', more: 'Más', noActivity: 'Tu historia comienza hoy', thisWeek: 'Esta semana', allTime: 'Total' },
 };
 const tx = (lang: string, key: string) => (T[lang] ?? T.en)[key] ?? T.en[key] ?? key;
 
 const DAY_LABELS: Record<string, string[]> = {
-  en: ['', 'Mon', '', 'Wed', '', 'Fri', ''],
-  ro: ['', 'Lun', '', 'Mie', '', 'Vin', ''],
-  fr: ['', 'Lun', '', 'Mer', '', 'Ven', ''],
-  de: ['', 'Mo', '', 'Mi', '', 'Fr', ''],
-  es: ['', 'Lun', '', 'Mié', '', 'Vie', ''],
+  en: ['S', 'M', 'T', 'W', 'T', 'F', 'S'],
+  ro: ['D', 'L', 'M', 'M', 'J', 'V', 'S'],
+  fr: ['D', 'L', 'M', 'M', 'J', 'V', 'S'],
+  de: ['S', 'M', 'D', 'M', 'D', 'F', 'S'],
+  es: ['D', 'L', 'M', 'M', 'J', 'V', 'S'],
 };
 
 interface DayData {
-  date: string;        // ISO
-  count: number;       // stories read
+  date: string;
+  count: number;
   isToday: boolean;
   isFuture: boolean;
 }
+
+// ── Animated cell that fades in on mount ──
+const HeatCell = React.memo(({ color, isToday, isFuture, delay, gold }: {
+  color: string; isToday: boolean; isFuture: boolean; delay: number; gold: string;
+}) => {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const scale = useRef(new Animated.Value(0.6)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: isFuture ? 0 : 1,
+        duration: 400,
+        delay,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scale, {
+        toValue: 1,
+        tension: 120,
+        friction: 8,
+        delay,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  return (
+    <Animated.View
+      style={[
+        hs.cell,
+        {
+          backgroundColor: color,
+          opacity,
+          transform: [{ scale }],
+        },
+        isToday && {
+          borderWidth: 2,
+          borderColor: gold,
+          shadowColor: gold,
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: 0.6,
+          shadowRadius: 6,
+          elevation: 4,
+        },
+      ]}
+    />
+  );
+});
+
+// ── Stat Pill ──
+const StatPill = ({ value, label, icon, theme, isDark }: {
+  value: string | number; label: string; icon: string; theme: any; isDark: boolean;
+}) => (
+  <View style={[hs.statPill, { backgroundColor: isDark ? '#1C1810' : '#FFF9EF', borderColor: isDark ? '#2A2218' : '#F0E6D4' }]}>
+    <Text style={hs.statIcon}>{icon}</Text>
+    <Text style={[hs.statValue, { color: theme.text }]}>{value}</Text>
+    <Text style={[hs.statLabel, { color: theme.subtext }]}>{label}</Text>
+  </View>
+);
 
 export default function ReadingHeatmap() {
   const { theme, isDark } = useTheme();
   const { language } = useLanguage();
   const calendarLog = useGamificationStore(s => s.calendarLog);
 
-  const { grid, monthLabels, totalDays, totalStories, maxCount } = useMemo(() => {
+  const { grid, monthLabels, totalDays, totalStories, maxCount, bestDayCount, thisWeekCount, avgPerDay } = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const todayISO = today.toISOString().split('T')[0];
 
-    // Find the most recent Sunday (end of grid)
     const endDate = new Date(today);
-    endDate.setDate(endDate.getDate() + (6 - endDate.getDay())); // next Saturday
+    endDate.setDate(endDate.getDate() + (6 - endDate.getDay()));
 
-    // Go back WEEKS * 7 days
     const startDate = new Date(endDate);
     startDate.setDate(startDate.getDate() - (WEEKS * 7 - 1));
 
-    // Build grid: weeks × 7 days
     const grid: DayData[][] = [];
     const monthLabelsMap: { weekIdx: number; label: string }[] = [];
     let totalDays = 0;
     let totalStories = 0;
     let maxCount = 0;
+    let bestDayCount = 0;
+    let thisWeekCount = 0;
     let lastMonth = -1;
 
     const localeMap: Record<string, string> = { ro: 'ro-RO', en: 'en-US', fr: 'fr-FR', de: 'de-DE', es: 'es-ES' };
     const loc = localeMap[language] ?? 'en-US';
+
+    // Calculate current week start (Sunday)
+    const weekStart = new Date(today);
+    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+    const weekStartISO = weekStart.toISOString().split('T')[0];
 
     for (let w = 0; w < WEEKS; w++) {
       const week: DayData[] = [];
@@ -88,8 +154,9 @@ export default function ReadingHeatmap() {
         if (count > 0) totalDays++;
         totalStories += count;
         if (count > maxCount) maxCount = count;
+        if (count > bestDayCount) bestDayCount = count;
+        if (iso >= weekStartISO && !isFuture) thisWeekCount += count;
 
-        // Month label detection
         const month = date.getMonth();
         if (month !== lastMonth && d === 0) {
           monthLabelsMap.push({
@@ -104,45 +171,70 @@ export default function ReadingHeatmap() {
       grid.push(week);
     }
 
-    return { grid, monthLabels: monthLabelsMap, totalDays, totalStories, maxCount };
+    const avgPerDay = totalDays > 0 ? (totalStories / totalDays).toFixed(1) : '0';
+
+    return { grid, monthLabels: monthLabelsMap, totalDays, totalStories, maxCount, bestDayCount, thisWeekCount, avgPerDay };
   }, [calendarLog, language]);
 
-  // Color function: 0 = empty, 1-2 = light, 3-4 = medium, 5+ = intense
-  const getColor = (count: number, isFuture: boolean, isToday: boolean): string => {
-    if (isFuture) return isDark ? '#0D0B0900' : '#00000000';
-    if (count === 0) return isDark ? '#1A1612' : '#F0EBE3';
-    if (maxCount <= 1) {
-      return count > 0 ? (isDark ? '#B8860B' : '#F59E0B') : (isDark ? '#1A1612' : '#F0EBE3');
-    }
+  // ── Color palette — warm amber tones ──
+  const getColor = (count: number, isFuture: boolean): string => {
+    if (isFuture) return 'transparent';
+    if (count === 0) return isDark ? '#15120E' : '#F5F0E8';
 
-    const ratio = count / Math.max(maxCount, 5);
-    if (ratio <= 0.2) return isDark ? '#5C3D10' : '#FDE68A';
-    if (ratio <= 0.4) return isDark ? '#8B5E14' : '#FCD34D';
-    if (ratio <= 0.6) return isDark ? '#B8860B' : '#FBBF24';
-    if (ratio <= 0.8) return isDark ? '#D4A017' : '#F59E0B';
-    return isDark ? '#FFB300' : '#D97706';
+    const effectiveMax = Math.max(maxCount, 5);
+    const ratio = count / effectiveMax;
+
+    if (isDark) {
+      if (ratio <= 0.15) return '#2A1F0D';
+      if (ratio <= 0.3) return '#4A3312';
+      if (ratio <= 0.5) return '#7A5518';
+      if (ratio <= 0.7) return '#B8860B';
+      if (ratio <= 0.85) return '#D4A017';
+      return '#FFB300';
+    } else {
+      if (ratio <= 0.15) return '#FEF3C7';
+      if (ratio <= 0.3) return '#FDE68A';
+      if (ratio <= 0.5) return '#FCD34D';
+      if (ratio <= 0.7) return '#FBBF24';
+      if (ratio <= 0.85) return '#F59E0B';
+      return '#D97706';
+    }
   };
 
   const dayLabels = DAY_LABELS[language] ?? DAY_LABELS.en;
   const gold = isDark ? '#E8B84D' : '#C77E08';
+  const hasActivity = totalStories > 0;
 
   return (
     <View style={[hs.container, {
-      backgroundColor: isDark ? '#141210' : '#FFFFFF',
-      borderColor: isDark ? '#251E16' : '#EDE5D8',
+      backgroundColor: isDark ? '#0F0D0A' : '#FFFFFF',
+      borderColor: isDark ? '#1E1A14' : '#EDE5D8',
     }]}>
-      {/* Header */}
+      {/* ── Header ── */}
       <View style={hs.headerRow}>
-        <Text style={[hs.title, { color: theme.text }]}>{tx(language, 'title')}</Text>
-        {totalStories > 0 && (
-          <Text style={[hs.subtitle, { color: theme.subtext }]}>
-            {totalStories} {tx(language, 'stories')} · {totalDays} days
-          </Text>
+        <View style={{ flex: 1 }}>
+          <Text style={[hs.title, { color: theme.text }]}>{tx(language, 'title')}</Text>
+          <Text style={[hs.subtitle, { color: theme.subtext }]}>{tx(language, 'subtitle')}</Text>
+        </View>
+        {hasActivity && (
+          <View style={[hs.headerBadge, { backgroundColor: isDark ? '#1C1810' : '#FFF9EF', borderColor: gold + '30' }]}>
+            <Text style={[hs.headerBadgeNum, { color: gold }]}>{totalStories}</Text>
+            <Text style={[hs.headerBadgeLabel, { color: theme.subtext }]}>{tx(language, 'stories')}</Text>
+          </View>
         )}
       </View>
 
-      {/* Month labels */}
-      <View style={[hs.monthRow, { marginLeft: DAYS_LABELS_WIDTH }]}>
+      {/* ── Stats Row ── */}
+      {hasActivity && (
+        <View style={hs.statsRow}>
+          <StatPill value={totalDays} label={tx(language, 'days')} icon="📅" theme={theme} isDark={isDark} />
+          <StatPill value={avgPerDay} label={tx(language, 'avgPerDay')} icon="⚡" theme={theme} isDark={isDark} />
+          <StatPill value={bestDayCount} label={tx(language, 'bestDay')} icon="🏆" theme={theme} isDark={isDark} />
+        </View>
+      )}
+
+      {/* ── Month labels ── */}
+      <View style={[hs.monthRow, { marginLeft: DAYS_LABELS_WIDTH + 2 }]}>
         {monthLabels.map((m, i) => (
           <Text
             key={`m-${i}`}
@@ -156,32 +248,29 @@ export default function ReadingHeatmap() {
         ))}
       </View>
 
-      {/* Grid */}
+      {/* ── Grid ── */}
       <View style={hs.gridArea}>
-        {/* Day labels */}
+        {/* Day labels column */}
         <View style={[hs.dayLabelsCol, { width: DAYS_LABELS_WIDTH }]}>
           {dayLabels.map((label, i) => (
             <View key={`dl-${i}`} style={{ height: CELL + GAP, justifyContent: 'center' }}>
-              <Text style={[hs.dayLabel, { color: theme.subtext }]}>{label}</Text>
+              <Text style={[hs.dayLabel, { color: theme.subtext }]}>{i % 2 === 1 ? label : ''}</Text>
             </View>
           ))}
         </View>
 
-        {/* Cells */}
+        {/* Cells grid */}
         <View style={hs.gridRow}>
           {grid.map((week, wi) => (
             <View key={`w-${wi}`} style={hs.weekCol}>
               {week.map((day, di) => (
-                <View
+                <HeatCell
                   key={`d-${wi}-${di}`}
-                  style={[
-                    hs.cell,
-                    {
-                      backgroundColor: getColor(day.count, day.isFuture, day.isToday),
-                      opacity: day.isFuture ? 0 : 1,
-                    },
-                    day.isToday && { borderWidth: 1.5, borderColor: gold },
-                  ]}
+                  color={getColor(day.count, day.isFuture)}
+                  isToday={day.isToday}
+                  isFuture={day.isFuture}
+                  delay={wi * 15 + di * 5}
+                  gold={gold}
                 />
               ))}
             </View>
@@ -189,16 +278,15 @@ export default function ReadingHeatmap() {
         </View>
       </View>
 
-      {/* Legend */}
+      {/* ── Legend ── */}
       <View style={hs.legendRow}>
         <Text style={[hs.legendText, { color: theme.subtext }]}>{tx(language, 'less')}</Text>
-        {[0, 1, 2, 3, 4].map(level => (
+        {[0, 0.2, 0.4, 0.6, 0.8, 1].map((level, idx) => (
           <View
-            key={`l-${level}`}
+            key={`l-${idx}`}
             style={[hs.legendCell, {
               backgroundColor: getColor(
-                level === 0 ? 0 : Math.ceil((level / 4) * Math.max(maxCount, 5)),
-                false,
+                Math.ceil(level * Math.max(maxCount, 5)),
                 false,
               ),
             }]}
@@ -207,11 +295,15 @@ export default function ReadingHeatmap() {
         <Text style={[hs.legendText, { color: theme.subtext }]}>{tx(language, 'more')}</Text>
       </View>
 
-      {/* Empty state */}
-      {totalStories === 0 && (
-        <Text style={[hs.emptyText, { color: theme.subtext }]}>
-          {tx(language, 'noActivity')}
-        </Text>
+      {/* ── Empty state ── */}
+      {!hasActivity && (
+        <View style={hs.emptyWrap}>
+          <View style={[hs.emptyLine, { backgroundColor: gold + '15' }]} />
+          <Text style={[hs.emptyText, { color: theme.subtext }]}>
+            {tx(language, 'noActivity')}
+          </Text>
+          <View style={[hs.emptyLine, { backgroundColor: gold + '15' }]} />
+        </View>
       )}
     </View>
   );
@@ -219,27 +311,88 @@ export default function ReadingHeatmap() {
 
 const hs = StyleSheet.create({
   container: {
-    borderRadius: 18,
+    borderRadius: 22,
     borderWidth: 1,
-    padding: 16,
+    padding: 18,
     marginBottom: 24,
+    overflow: 'hidden',
   },
+
+  // Header
   headerRow: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   title: {
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: -0.2,
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
   },
   subtitle: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '500',
-    opacity: 0.5,
+    opacity: 0.4,
+    marginTop: 2,
+    letterSpacing: 0.3,
   },
+  headerBadge: {
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  headerBadgeNum: {
+    fontSize: 20,
+    fontWeight: '900',
+    letterSpacing: -1,
+  },
+  headerBadgeLabel: {
+    fontSize: 8,
+    fontWeight: '600',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    opacity: 0.5,
+    marginTop: 1,
+  },
+
+  // Stats
+  statsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 18,
+  },
+  statPill: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+    gap: 2,
+  },
+  statIcon: {
+    fontSize: 14,
+    marginBottom: 2,
+  },
+  statValue: {
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  statLabel: {
+    fontSize: 8,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    opacity: 0.5,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+  },
+
+  // Month labels
   monthRow: {
     position: 'relative',
     height: 16,
@@ -248,21 +401,24 @@ const hs = StyleSheet.create({
   monthLabel: {
     position: 'absolute',
     fontSize: 9,
-    fontWeight: '600',
-    opacity: 0.5,
-    letterSpacing: 0.3,
+    fontWeight: '700',
+    opacity: 0.4,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
+
+  // Grid
   gridArea: {
     flexDirection: 'row',
   },
   dayLabelsCol: {
-    marginRight: 2,
+    marginRight: 4,
   },
   dayLabel: {
     fontSize: 8,
-    fontWeight: '600',
-    opacity: 0.4,
-    letterSpacing: 0.2,
+    fontWeight: '700',
+    opacity: 0.3,
+    letterSpacing: 0.3,
   },
   gridRow: {
     flexDirection: 'row',
@@ -275,31 +431,49 @@ const hs = StyleSheet.create({
   cell: {
     width: CELL,
     height: CELL,
-    borderRadius: 3,
+    borderRadius: 4,
   },
+
+  // Legend
   legendRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
     gap: 4,
-    marginTop: 10,
+    marginTop: 14,
   },
   legendCell: {
-    width: CELL,
-    height: CELL,
-    borderRadius: 2,
+    width: 12,
+    height: 12,
+    borderRadius: 3,
   },
   legendText: {
     fontSize: 9,
-    fontWeight: '500',
-    opacity: 0.4,
-    letterSpacing: 0.3,
+    fontWeight: '600',
+    opacity: 0.35,
+    letterSpacing: 0.5,
+    marginHorizontal: 2,
+  },
+
+  // Empty
+  emptyWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    marginTop: 14,
+    paddingVertical: 4,
+  },
+  emptyLine: {
+    flex: 1,
+    height: 1,
   },
   emptyText: {
-    textAlign: 'center',
     fontSize: 12,
-    fontWeight: '500',
-    opacity: 0.3,
-    marginTop: 8,
+    fontWeight: '600',
+    opacity: 0.35,
+    letterSpacing: 0.5,
+    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
+    fontStyle: 'italic',
   },
 });
