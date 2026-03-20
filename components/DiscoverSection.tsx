@@ -1,9 +1,10 @@
 // components/DiscoverSection.tsx
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
-  Dimensions,
+  Animated,
+  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -13,9 +14,8 @@ import {
 import { useLanguage } from '../context/LanguageContext';
 import { StoryModal } from './StoryModal';
 
-const { width: W, height: H } = Dimensions.get('window');
-const H_PAD = 0; // parent already has paddingHorizontal
-const GAP = 8;
+const GAP = 10;
+const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
 
 interface DiscoverSectionProps {
   events: any[];
@@ -32,101 +32,211 @@ const extractYear = (event: any): string => {
   return isNaN(y) ? '' : String(y);
 };
 
-// ── Featured Card (top, takes ~45% of space) ──
-const FeaturedCard = ({ event, lang, theme, onPress, height }: { event: any; lang: string; theme: any; onPress: () => void; height: number }) => {
+const eraLabel = (year: number): string => {
+  if (year < 0) return 'Ancient';
+  if (year < 500) return 'Classical';
+  if (year < 1500) return 'Medieval';
+  if (year < 1800) return 'Early Modern';
+  if (year < 1900) return '19th Century';
+  if (year < 2000) return '20th Century';
+  return 'Modern';
+};
+
+// ── Animated Card Wrapper ──
+const AnimatedCard = ({ children, delay, style }: { children: React.ReactNode; delay: number; style?: any }) => {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 1, duration: 400, delay, useNativeDriver: true }),
+      Animated.spring(slideAnim, { toValue: 0, tension: 80, friction: 12, delay, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  return (
+    <Animated.View style={[style, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+      {children}
+    </Animated.View>
+  );
+};
+
+// ── Hero Card (larger, editorial feel) ──
+const HeroCard = ({ event, lang, theme, onPress, height }: {
+  event: any; lang: string; theme: any; onPress: () => void; height: number;
+}) => {
   const title = event.titleTranslations?.[lang] ?? event.titleTranslations?.en ?? '';
   const narrative = event.narrativeTranslations?.[lang] ?? event.narrativeTranslations?.en ?? '';
-  const category = (event.category ?? 'HISTORY').replace(/_/g, ' ').toUpperCase();
+  const category = (event.category ?? 'HISTORY').replace(/_/g, ' ');
   const year = extractYear(event);
+  const yearNum = parseInt(year) || 0;
   const img = event.gallery?.[0];
 
   return (
-    <TouchableOpacity activeOpacity={0.92} onPress={onPress} style={[s.featured, { height }]}>
-      {img ? <Image source={{ uri: img }} style={StyleSheet.absoluteFill} contentFit="cover" transition={500} />
-        : <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.card }]} />}
-      <LinearGradient colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.25)', 'rgba(0,0,0,0.85)']} locations={[0, 0.4, 1]} style={StyleSheet.absoluteFill} />
-      <View style={s.featTop}>
-        <View style={s.pill}><Text style={s.pillT}>{category}</Text></View>
+    <TouchableOpacity activeOpacity={0.88} onPress={onPress} style={[st.heroCard, { height }]}>
+      {img
+        ? <Image source={{ uri: img }} style={StyleSheet.absoluteFill} contentFit="cover" transition={600} />
+        : <View style={[StyleSheet.absoluteFill, { backgroundColor: '#1a1814' }]} />}
+      <LinearGradient
+        colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.15)', 'rgba(0,0,0,0.92)']}
+        locations={[0, 0.35, 1]}
+        style={StyleSheet.absoluteFill}
+      />
+
+      {/* Top: era + category */}
+      <View style={st.heroTop}>
+        <View style={st.eraPill}>
+          <Text style={st.eraPillT}>{eraLabel(yearNum)}</Text>
+        </View>
+        <View style={st.catPill}>
+          <Text style={st.catPillT}>{category}</Text>
+        </View>
       </View>
-      <View style={s.featBot}>
-        {year !== '' && <Text style={s.featYear}>{year}</Text>}
-        <Text style={s.featTitle} numberOfLines={2}>{title}</Text>
-        {narrative !== '' && <Text style={s.featNarr} numberOfLines={1}>{narrative}</Text>}
+
+      {/* Bottom: year + title + teaser */}
+      <View style={st.heroBot}>
+        {year !== '' && (
+          <View style={st.yearRow}>
+            <View style={st.yearLine} />
+            <Text style={st.heroYear}>{year}</Text>
+            <View style={st.yearLine} />
+          </View>
+        )}
+        <Text style={st.heroTitle} numberOfLines={2}>{title}</Text>
+        {narrative !== '' && <Text style={st.heroNarr} numberOfLines={2}>{narrative}</Text>}
+        <View style={st.heroAction}>
+          <Text style={st.heroActionT}>Read the full story</Text>
+          <Text style={st.heroArrow}>→</Text>
+        </View>
       </View>
     </TouchableOpacity>
   );
 };
 
-// ── Small Card (grid items) ──
-const SmallCard = ({ event, lang, theme, onPress, width, height }: { event: any; lang: string; theme: any; onPress: () => void; width: number; height: number }) => {
+// ── Compact Card ──
+const CompactCard = ({ event, lang, theme, onPress, width, height, rank }: {
+  event: any; lang: string; theme: any; onPress: () => void; width: number; height: number; rank: number;
+}) => {
   const title = event.titleTranslations?.[lang] ?? event.titleTranslations?.en ?? '';
-  const category = (event.category ?? 'HISTORY').replace(/_/g, ' ').toUpperCase();
+  const category = (event.category ?? 'HISTORY').replace(/_/g, ' ');
   const year = extractYear(event);
+  const yearNum = parseInt(year) || 0;
   const img = event.gallery?.[0];
 
   return (
-    <TouchableOpacity activeOpacity={0.92} onPress={onPress} style={[s.small, { width, height }]}>
-      {img ? <Image source={{ uri: img }} style={StyleSheet.absoluteFill} contentFit="cover" transition={400} />
-        : <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.card }]} />}
-      <LinearGradient colors={['transparent', 'rgba(0,0,0,0.8)']} locations={[0.25, 1]} style={StyleSheet.absoluteFill} />
-      <View style={s.smallContent}>
-        <Text style={s.smallCat}>{category}</Text>
-        <Text style={s.smallTitle} numberOfLines={2}>{title}</Text>
-        {year !== '' && <Text style={s.smallYear}>{year}</Text>}
+    <TouchableOpacity activeOpacity={0.88} onPress={onPress} style={[st.compact, { width, height }]}>
+      {img
+        ? <Image source={{ uri: img }} style={StyleSheet.absoluteFill} contentFit="cover" transition={400} />
+        : <View style={[StyleSheet.absoluteFill, { backgroundColor: '#1a1814' }]} />}
+      <LinearGradient
+        colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.92)']}
+        locations={[0, 0.35, 1]}
+        style={StyleSheet.absoluteFill}
+      />
+
+      {/* Rank number */}
+      <View style={st.rankBadge}>
+        <Text style={st.rankT}>{rank}</Text>
+      </View>
+
+      <View style={st.compactBot}>
+        <Text style={st.compactCat}>{category}</Text>
+        <Text style={st.compactTitle} numberOfLines={2}>{title}</Text>
+        <View style={st.compactFooter}>
+          {year !== '' && <Text style={st.compactYear}>{year}</Text>}
+          <View style={st.compactDot} />
+          <Text style={st.compactEra}>{eraLabel(yearNum)}</Text>
+        </View>
       </View>
     </TouchableOpacity>
   );
 };
 
-// ── Section Label ──
-const Label = ({ label, theme }: { label: string; theme: any }) => (
-  <View style={s.labelRow}>
-    <View style={[s.labelDot, { backgroundColor: theme.gold }]} />
-    <Text style={[s.labelText, { color: theme.subtext }]}>{label.toUpperCase()}</Text>
+// ── Section Header ──
+const SectionHeader = ({ theme, t, count }: { theme: any; t: (k: string) => string; count: number }) => (
+  <View style={st.sectionHeader}>
+    <View style={st.sectionLeft}>
+      <View style={[st.sectionAccent, { backgroundColor: theme.gold }]} />
+      <Text style={[st.sectionTitle, { color: theme.text }]}>{t('discover')}</Text>
+    </View>
+    <View style={[st.countPill, { backgroundColor: theme.gold + '15', borderColor: theme.gold + '30' }]}>
+      <Text style={[st.countT, { color: theme.gold }]}>{count} {t('stories_read') ? 'stories' : 'stories'}</Text>
+    </View>
   </View>
 );
 
 export const DiscoverSection = ({ events, theme, t }: DiscoverSectionProps) => {
   const { language } = useLanguage();
   const [selected, setSelected] = useState<any>(null);
+  const [containerH, setContainerH] = useState(0);
+  const [containerW, setContainerW] = useState(0);
 
-  if (events.length === 0) {
+  // Skip first event (main in Today tab), take next 4
+  const secondary = events.length > 1 ? events.slice(1, 5) : [];
+
+  if (secondary.length === 0) {
     return (
-      <View style={s.empty}>
+      <View style={st.empty}>
         <Text style={{ fontSize: 28, color: theme.gold, opacity: 0.45 }}>✦</Text>
-        <Text style={{ fontSize: 16, fontWeight: '700', color: theme.text, marginTop: 10, letterSpacing: 0.3 }}>
+        <Text style={{ fontSize: 16, fontWeight: '700', color: theme.text, marginTop: 10, letterSpacing: 0.3, fontFamily: SERIF }}>
           {t('only_one_today')}
         </Text>
       </View>
     );
   }
 
-  const [featured, ...rest] = events;
-  // Calculate sizes to fill the screen without scrolling
-  const availH = H * 0.72; // approximate available height after chrome
-  const featuredH = rest.length > 0 ? availH * 0.48 : availH * 0.85;
-  const gridH = availH - featuredH - 50; // 50 for labels + gaps
-  const cardW = (W - 32 - GAP) / 2; // 32 = parent padding
-  const rows = [];
-  for (let i = 0; i < rest.length; i += 2) rows.push(rest.slice(i, i + 2));
-  const rowH = rows.length > 0 ? Math.min((gridH - (rows.length - 1) * GAP) / rows.length, cardW * 1.15) : 0;
+  const onLayout = (e: any) => {
+    const { width, height } = e.nativeEvent.layout;
+    if (width > 0 && height > 0) { setContainerW(width); setContainerH(height); }
+  };
+
+  const ready = containerW > 0 && containerH > 0;
+
+  // Layout: Hero card on top (~50%), then 3 compact cards in bottom row
+  // If 4 events: 1 hero + 3 compact
+  // If 3 events: 1 hero + 2 compact
+  // If 2 events: 1 hero + 1 compact
+  const [hero, ...rest] = secondary;
+  const HEADER_H = 36;
+  const heroH = ready ? Math.floor((containerH - HEADER_H - GAP) * 0.52) : 220;
+  const compactH = ready ? containerH - HEADER_H - heroH - GAP * 2 : 160;
+  const compactW = ready ? (containerW - GAP * (rest.length - 1)) / Math.max(rest.length, 1) : 120;
 
   return (
-    <View style={{ flex: 1 }}>
-      <Label label={t('featured')} theme={theme} />
-      <FeaturedCard event={featured} lang={language} theme={theme} onPress={() => setSelected(featured)} height={featuredH} />
-
-      {rows.length > 0 && (
+    <View style={{ flex: 1 }} onLayout={onLayout}>
+      {ready && (
         <>
-          <Label label={t('more_today')} theme={theme} />
-          {rows.map((row, ri) => (
-            <View key={ri} style={[s.row, { marginBottom: ri < rows.length - 1 ? GAP : 0 }]}>
-              {row.map((ev, ci) => (
-                <SmallCard key={ci} event={ev} lang={language} theme={theme} onPress={() => setSelected(ev)} width={cardW} height={rowH} />
+          <SectionHeader theme={theme} t={t} count={secondary.length} />
+
+          {/* Hero — second most important event */}
+          <AnimatedCard delay={50} style={{ marginBottom: GAP }}>
+            <HeroCard
+              event={hero}
+              lang={language}
+              theme={theme}
+              onPress={() => setSelected(hero)}
+              height={heroH}
+            />
+          </AnimatedCard>
+
+          {/* Bottom row — remaining events */}
+          {rest.length > 0 && (
+            <View style={st.bottomRow}>
+              {rest.map((ev, i) => (
+                <AnimatedCard key={i} delay={150 + i * 100}>
+                  <CompactCard
+                    event={ev}
+                    lang={language}
+                    theme={theme}
+                    onPress={() => setSelected(ev)}
+                    width={compactW}
+                    height={compactH}
+                    rank={i + 3}
+                  />
+                </AnimatedCard>
               ))}
-              {row.length === 1 && <View style={{ width: cardW }} />}
             </View>
-          ))}
+          )}
         </>
       )}
 
@@ -135,23 +245,46 @@ export const DiscoverSection = ({ events, theme, t }: DiscoverSectionProps) => {
   );
 };
 
-const s = StyleSheet.create({
-  empty: { alignItems: 'center', justifyContent: 'center', paddingTop: 70, paddingHorizontal: 30, gap: 6 },
-  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 12, marginBottom: 8 },
-  labelDot: { width: 4, height: 4, borderRadius: 2 },
-  labelText: { fontSize: 9, fontWeight: '700', letterSpacing: 2.5 },
-  featured: { width: '100%', borderRadius: 20, overflow: 'hidden', backgroundColor: '#111' },
-  featTop: { position: 'absolute', top: 12, left: 12, right: 12, flexDirection: 'row' },
-  pill: { backgroundColor: 'rgba(0,0,0,0.55)', paddingHorizontal: 9, paddingVertical: 4, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,215,0,0.35)' },
-  pillT: { color: '#ffd700', fontSize: 8, fontWeight: '800', letterSpacing: 2 },
-  featBot: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 14, paddingBottom: 16 },
-  featYear: { color: 'rgba(255,255,255,0.4)', fontSize: 10, fontWeight: '700', letterSpacing: 2, marginBottom: 4 },
-  featTitle: { color: '#fff', fontSize: 20, fontWeight: '800', lineHeight: 25, letterSpacing: 0.1 },
-  featNarr: { color: 'rgba(255,255,255,0.55)', fontSize: 11, lineHeight: 15, marginTop: 4 },
-  row: { flexDirection: 'row', gap: GAP },
-  small: { borderRadius: 14, overflow: 'hidden', backgroundColor: '#111' },
-  smallContent: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 10, paddingBottom: 12 },
-  smallCat: { color: '#ffd700', fontSize: 7, fontWeight: '800', letterSpacing: 2, marginBottom: 4, opacity: 0.85 },
-  smallTitle: { color: '#fff', fontSize: 12, fontWeight: '700', lineHeight: 16 },
-  smallYear: { color: 'rgba(255,255,255,0.35)', fontSize: 8, fontWeight: '600', letterSpacing: 1, marginTop: 3 },
+const st = StyleSheet.create({
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 30, gap: 6 },
+
+  // Section header
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: 36, marginBottom: 2 },
+  sectionLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  sectionAccent: { width: 3, height: 16, borderRadius: 1.5 },
+  sectionTitle: { fontSize: 13, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase' },
+  countPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, borderWidth: 1 },
+  countT: { fontSize: 10, fontWeight: '700', letterSpacing: 0.3 },
+
+  // Hero card
+  heroCard: { width: '100%', borderRadius: 20, overflow: 'hidden' },
+  heroTop: { position: 'absolute', top: 12, left: 12, right: 12, flexDirection: 'row', gap: 6 },
+  eraPill: { backgroundColor: 'rgba(255,215,0,0.2)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,215,0,0.4)' },
+  eraPillT: { color: '#ffd700', fontSize: 8, fontWeight: '800', letterSpacing: 1.5 },
+  catPill: { backgroundColor: 'rgba(255,255,255,0.12)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
+  catPillT: { color: 'rgba(255,255,255,0.7)', fontSize: 8, fontWeight: '600', letterSpacing: 1, textTransform: 'uppercase' },
+  heroBot: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 16, paddingBottom: 18 },
+  yearRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  yearLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(255,215,0,0.25)' },
+  heroYear: { color: '#ffd700', fontSize: 11, fontWeight: '800', letterSpacing: 3 },
+  heroTitle: { color: '#fff', fontSize: 22, fontWeight: '800', lineHeight: 27, letterSpacing: -0.3, fontFamily: SERIF },
+  heroNarr: { color: 'rgba(255,255,255,0.55)', fontSize: 12, lineHeight: 17, marginTop: 6, fontWeight: '400' },
+  heroAction: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 },
+  heroActionT: { color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: '600', letterSpacing: 1, textTransform: 'uppercase' },
+  heroArrow: { color: '#ffd700', fontSize: 14, fontWeight: '400' },
+
+  // Bottom row
+  bottomRow: { flexDirection: 'row', gap: GAP, flex: 1 },
+
+  // Compact card
+  compact: { borderRadius: 16, overflow: 'hidden' },
+  rankBadge: { position: 'absolute', top: 10, right: 10, width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(0,0,0,0.5)', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
+  rankT: { color: 'rgba(255,255,255,0.6)', fontSize: 10, fontWeight: '800' },
+  compactBot: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 10, paddingBottom: 12 },
+  compactCat: { color: '#ffd700', fontSize: 7, fontWeight: '800', letterSpacing: 1.5, marginBottom: 4, opacity: 0.8, textTransform: 'uppercase' },
+  compactTitle: { color: '#fff', fontSize: 13, fontWeight: '700', lineHeight: 17, letterSpacing: 0.1 },
+  compactFooter: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6 },
+  compactYear: { color: 'rgba(255,255,255,0.45)', fontSize: 9, fontWeight: '700', letterSpacing: 1 },
+  compactDot: { width: 2.5, height: 2.5, borderRadius: 1.25, backgroundColor: 'rgba(255,255,255,0.25)' },
+  compactEra: { color: 'rgba(255,255,255,0.35)', fontSize: 8, fontWeight: '600', letterSpacing: 0.5 },
 });
