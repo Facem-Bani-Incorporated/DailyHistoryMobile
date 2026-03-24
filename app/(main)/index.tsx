@@ -1,7 +1,7 @@
 // app/(tabs)/index.tsx
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
-import { Award, Bookmark, CalendarDays, Clock, Compass, Map, Search } from 'lucide-react-native';
+import { Award, Search } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, Dimensions, FlatList, Platform, StyleSheet, Text, TouchableOpacity, View, ViewToken } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,6 +15,8 @@ import MapScreen from '../../components/MapScreen';
 import ProfileAvatar from '../../components/ProfileAvatar';
 import SearchScreen from '../../components/SearchScreen';
 import StreakIcon from '../../components/StreakIcon';
+import type { Tab } from '../../components/TabBar';
+import TabBar from '../../components/TabBar';
 import TimelineScreen from '../../components/TimelineScreen';
 import WeeklyRecapModal from '../../components/WeeklyRecapModal';
 import XPBar from '../../components/XPBar';
@@ -31,9 +33,8 @@ import SavedScreen from './saved';
 const { width: W } = Dimensions.get('window');
 const CACHE_TTL = 30 * 60 * 1000;
 const MAX_FWD = 1;
-// We keep 200 days back + today + tomorrow = 202 items in the FlatList
 const PAST_DAYS = 200;
-const TODAY_INDEX = PAST_DAYS; // index 200 = today
+const TODAY_INDEX = PAST_DAYS;
 
 const offDate = (n: number) => { const d = new Date(); d.setDate(d.getDate() + n); return d; };
 const toISO = (d: Date) => d.toISOString().split('T')[0];
@@ -56,9 +57,6 @@ const EmptyDay = ({ isToday, theme, t }: { isToday: boolean; theme: any; t: (k: 
 );
 const ey = StyleSheet.create({ w: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 40 }, r: { width: 64, height: 64, borderRadius: 32, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginBottom: 4 }, i: { fontSize: 24, fontWeight: '300' }, t: { fontSize: 18, fontWeight: '700', letterSpacing: 0.2 }, d: { fontSize: 13, textAlign: 'center', lineHeight: 20, opacity: 0.7 } });
 
-type Tab = 'today' | 'discover' | 'search' | 'timeline' | 'map' | 'saved';
-
-// Build the list of day offsets: [-200, -199, ..., -1, 0, 1]
 const DAY_OFFSETS = Array.from({ length: PAST_DAYS + 1 + MAX_FWD }, (_, i) => i - PAST_DAYS);
 
 export default function HomeScreen() {
@@ -83,9 +81,7 @@ export default function HomeScreen() {
   useEffect(() => { setSeenSaved(userSaved.length); }, [user?.id]);
   const unseenSaved = tab === 'saved' ? 0 : Math.max(0, userSaved.length - seenSaved);
 
-  // ── Cache ──
   const mem = useRef<Record<string, PD>>({});
-  // Force re-render when page data loads
   const [tick, setTick] = useState(0);
 
   const fetchOne = useCallback(async (o: number, force = false): Promise<PD> => {
@@ -112,7 +108,6 @@ export default function HomeScreen() {
     setAllEvents(all.filter((e: any) => { const id = `${e.eventDate}-${e.titleTranslations?.en}`; if (seen.has(id)) return false; seen.add(id); return true; }));
   }, []);
 
-  // ── Init: load today + neighbors, then all ──
   useEffect(() => {
     recordVisit();
     try { genRecap(); } catch { }
@@ -121,23 +116,19 @@ export default function HomeScreen() {
       setLoading(false);
       setTick(t => t + 1);
       fetchAll();
-      // Prefetch a few more days
       for (let i = 2; i <= 7; i++) fetchOne(-i).catch(() => { });
       fetchOne(1).then(d => schedulePersonalizedNotification(d.data, language)).catch(() => schedulePersonalizedNotification([], language));
     });
   }, []);
 
-  // ── FlatList ref ──
   const listRef = useRef<FlatList>(null);
   const dateAnim = useRef(new Animated.Value(0)).current;
 
-  // Track current visible page
   const onViewRef = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
     if (viewableItems.length > 0) {
       const idx = viewableItems[0].index ?? TODAY_INDEX;
       const newOff = idx - PAST_DAYS;
       setOff(newOff);
-      // Prefetch neighbors that aren't cached
       const iso1 = isoFor(newOff - 1);
       const iso2 = isoFor(newOff + 1);
       if (!mem.current[iso1]) fetchOne(newOff - 1).then(() => setTick(t => t + 1)).catch(() => { });
@@ -146,7 +137,6 @@ export default function HomeScreen() {
   });
   const viewConfigRef = useRef({ viewAreaCoveragePercentThreshold: 50 });
 
-  // Arrow navigation
   const goFwd = useCallback(() => {
     if (off >= MAX_FWD) return;
     haptic('light');
@@ -168,13 +158,11 @@ export default function HomeScreen() {
     ]).start();
   }, [off, dateAnim]);
 
-  // Calendar jump
   const jump = useCallback((newOff: number) => {
     if (newOff > MAX_FWD) return;
     haptic('medium');
     const idx = newOff + PAST_DAYS;
     if (idx >= 0 && idx < DAY_OFFSETS.length) {
-      // Pre-fetch target
       fetchOne(newOff).then(() => {
         setTick(t => t + 1);
         listRef.current?.scrollToIndex({ index: idx, animated: false });
@@ -182,7 +170,6 @@ export default function HomeScreen() {
     }
   }, [fetchOne]);
 
-  // ── Render a single page ──
   const renderItem = useCallback(({ item: dayOff }: { item: number }) => {
     const iso = isoFor(dayOff);
     const pg = mem.current[iso] ?? EMPTY;
@@ -210,13 +197,12 @@ export default function HomeScreen() {
     length: W, offset: W * index, index,
   }), []);
 
-  // ── Chrome ──
   const ms = makeStyles(theme, isDark);
   const info = labelFor(off, language);
   const canFwd = off < MAX_FWD;
   const showChrome = tab === 'today' || tab === 'discover' || tab === 'search';
   const badgeCnt = newAch.length;
-  const switchTab = useCallback((t: Tab) => { haptic('selection'); setTab(t); if (t === 'saved') setSeenSaved(userSaved.length); }, [userSaved.length]);
+  const switchTab = useCallback((t: Tab) => { setTab(t); if (t === 'saved') setSeenSaved(userSaved.length); }, [userSaved.length]);
   const swipeOn = tab === 'today' || tab === 'discover';
 
   return (
@@ -282,13 +268,14 @@ export default function HomeScreen() {
             ) : null}
         </View>
 
-        <View style={[ms.tabBar, { paddingBottom: insets.bottom + 2 }]}>
-          <TabBtn label={t('today')} icon={CalendarDays} active={tab === 'today'} theme={theme} onPress={() => switchTab('today')} />
-          <TabBtn label={t('discover')} icon={Compass} active={tab === 'discover'} theme={theme} onPress={() => switchTab('discover')} />
-          <TabBtn label={t('timeline')} icon={Clock} active={tab === 'timeline'} theme={theme} onPress={() => switchTab('timeline')} />
-          <TabBtn label={t('map')} icon={Map} active={tab === 'map'} theme={theme} onPress={() => switchTab('map')} />
-          <TabBtn label={t('saved')} icon={Bookmark} active={tab === 'saved'} badge={unseenSaved} theme={theme} onPress={() => switchTab('saved')} />
-        </View>
+        {/* ── New Animated TabBar ── */}
+        <TabBar
+          active={tab}
+          onSwitch={switchTab}
+          unseenSaved={unseenSaved}
+          t={t}
+        />
+
         <AchievementsModal visible={achVis} onClose={() => setAchVis(false)} />
         <WeeklyRecapModal visible={recapVis} onClose={() => setRecapVis(false)} />
         <CalendarModal visible={calVis} onClose={() => setCalVis(false)} onSelectDate={(d: Date) => jump(d2o(d))} selectedDate={offDate(off)} maxFutureOffset={MAX_FWD} />
@@ -296,14 +283,6 @@ export default function HomeScreen() {
     </AllEventsProvider>
   );
 }
-
-const TabBtn = ({ label, icon: Icon, active, badge, theme, onPress }: { label: string; icon: any; active: boolean; badge?: number; theme: any; onPress: () => void }) => (
-  <TouchableOpacity style={tb.i} onPress={onPress} activeOpacity={0.6}>
-    <View style={[tb.w, active && { backgroundColor: theme.gold + '18' }]}><Icon size={20} color={active ? theme.gold : theme.subtext} strokeWidth={active ? 2.2 : 1.6} />{badge !== undefined && badge > 0 && <View style={[tb.b, { backgroundColor: theme.gold }]}><Text style={tb.bt}>{badge > 99 ? '99+' : badge}</Text></View>}</View>
-    <Text style={[tb.l, { color: active ? theme.gold : theme.subtext, fontWeight: active ? '700' : '500' }]}>{label}</Text>
-  </TouchableOpacity>
-);
-const tb = StyleSheet.create({ i: { flex: 1, alignItems: 'center', gap: 2 }, w: { width: 36, height: 28, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }, l: { fontSize: 9, letterSpacing: 0.2 }, b: { position: 'absolute', top: -3, right: -7, minWidth: 14, height: 14, borderRadius: 7, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 }, bt: { fontSize: 8, fontWeight: '800', color: '#000' } });
 
 const makeStyles = (theme: any, isDark: boolean) => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.background },
@@ -330,5 +309,4 @@ const makeStyles = (theme: any, isDark: boolean) => StyleSheet.create({
   sep: { height: StyleSheet.hairlineWidth },
   loadW: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   loadP: { width: 56, height: 56, borderRadius: 28, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
-  tabBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.card, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.border, paddingTop: 8 },
 });
