@@ -1,5 +1,5 @@
-import api from '../../api';
-import { useAuthStore } from '../../store/useAuthStore';
+import api from '../api';
+import { useAuthStore } from '../store/useAuthStore';
 
 export const authService = {
   async loginWithGoogle(idToken: string) {

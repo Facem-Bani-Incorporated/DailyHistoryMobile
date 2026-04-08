@@ -5,25 +5,25 @@ import { StatusBar } from 'expo-status-bar';
 import { ArrowLeft, Eye, EyeOff } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Animated,
-  Dimensions,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    Animated,
+    Dimensions,
+    KeyboardAvoidingView,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
 import api from '../../api';
+import { authService } from '../../services/authService';
 import { useAuthStore } from '../../store/useAuthStore';
-import { authService } from '../services/authService';
 
 const { width } = Dimensions.get('window');
 

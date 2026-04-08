@@ -18,11 +18,10 @@ function AppContent() {
   const [isReady, setIsReady] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
 
-  // Track previous token value to detect transitions (null → token = login)
-  const prevTokenRef = useRef<string | null | undefined>(undefined); // undefined = uninitialized
-  const onboardingActiveRef = useRef(false); // prevents re-trigger while onboarding is showing
+  const prevTokenRef = useRef<string | null | undefined>(undefined);
+  const onboardingActiveRef = useRef(false);
 
-  // ── Sync gamification data with current user ──
+  // ── Sync gamification data with backend ──
   useGamificationSync();
 
   useEffect(() => {
@@ -41,8 +40,6 @@ function AppContent() {
         });
       }
 
-      // Initialize prevTokenRef with current token AFTER hydration
-      // This prevents showing onboarding on app reopen when already logged in
       prevTokenRef.current = useAuthStore.getState().token || null;
       setIsReady(true);
     };
@@ -50,7 +47,6 @@ function AppContent() {
     init();
   }, []);
 
-  // Detect login transitions: prevToken was null/falsy → token is now truthy
   useEffect(() => {
     if (!isReady) return;
     if (prevTokenRef.current === undefined) return;
@@ -66,7 +62,6 @@ function AppContent() {
     prevTokenRef.current = token || null;
   }, [token, isReady]);
 
-  // Navigation routing
   useEffect(() => {
     if (!isReady || showOnboarding) return;
 
@@ -92,7 +87,6 @@ function AppContent() {
     );
   }
 
-  // Show onboarding after fresh login
   if (showOnboarding && token) {
     return (
       <OnboardingScreen

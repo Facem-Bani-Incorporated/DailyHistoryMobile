@@ -36,12 +36,30 @@ export const useAuthStore = create<AuthState>()(
           user,
           isAuthenticated: true,
         }),
-      logout: () =>
+      logout: () => {
+        // ── Sync gamification to server before clearing ──
+        try {
+          const { pushToServer } = require('../hooks/useGamificationSync');
+          pushToServer().catch(() => {});
+        } catch {
+          // Hook not available — skip silently
+        }
+
+        // ── Clear gamification local state ──
+        try {
+          const { useGamificationStore } = require('./useGamificationStore');
+          useGamificationStore.getState().clearUserData();
+        } catch {
+          // Store not available — skip silently
+        }
+
+        // ── Clear auth ──
         set({
           token: null,
           user: null,
           isAuthenticated: false,
-        }),
+        });
+      },
     }),
     {
       name: 'auth-storage',
