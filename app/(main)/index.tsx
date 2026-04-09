@@ -3,7 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
-import { Award, Search } from 'lucide-react-native';
+import { Award, Search, Trophy } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, Dimensions, Easing, FlatList, Platform, StyleSheet, Text, TouchableOpacity, View, ViewToken } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,6 +14,7 @@ import AdCard from '../../components/AdCard';
 import CalendarModal from '../../components/CalendarModal';
 import { DiscoverSection } from '../../components/DiscoverSection';
 import { HistoryCard } from '../../components/HistoryCard';
+import LeaderboardModal from '../../components/LeaderboardModal';
 import LockedTomorrowCard from '../../components/LockedTomorrowCard';
 import MapScreen from '../../components/MapScreen';
 import ProfileAvatar from '../../components/ProfileAvatar';
@@ -41,15 +42,16 @@ const CACHE_TTL = 30 * 60 * 1000;
 const MAX_FWD = 1;
 const PAST_DAYS = 200;
 const TODAY_INDEX = PAST_DAYS;
-const AD_FREQUENCY = 3;
+const AD_FREQUENCY = 3; 
+const STORY_AD_FREQUENCY = 3; // Reclama clip la fiecare 3 povesti
 
 const offDate = (n: number) => { const d = new Date(); d.setDate(d.getDate() + n); return d; };
 const toISO = (d: Date) => d.toISOString().split('T')[0];
 const isoFor = (n: number) => toISO(offDate(n));
 const todayISO = () => new Date().toISOString().split('T')[0];
 const labelFor = (off: number, lang: string) => {
-  const d = offDate(off);
   const loc = ({ ro: 'ro-RO', en: 'en-US', fr: 'fr-FR', de: 'de-DE', es: 'es-ES' } as Record<string, string>)[lang] || 'en-US';
+  const d = offDate(off);
   return { day: d.getDate().toString().padStart(2, '0'), fullDay: d.toLocaleString(loc, { weekday: 'long' }), monthLong: d.toLocaleString(loc, { month: 'long' }), dayNum: d.getDate(), yearNum: d.getFullYear(), isToday: off === 0, isTomorrow: off === 1 };
 };
 const d2o = (date: Date) => { const t = new Date(); t.setHours(0, 0, 0, 0); const d = new Date(date); d.setHours(0, 0, 0, 0); return Math.round((d.getTime() - t.getTime()) / 86400000); };
@@ -67,7 +69,6 @@ const ey = StyleSheet.create({ w: { flex: 1, alignItems: 'center', justifyConten
 
 const DAY_OFFSETS = Array.from({ length: PAST_DAYS + 1 + MAX_FWD }, (_, i) => i - PAST_DAYS);
 
-/* ── Premium header accent line ── */
 const PremiumAccentLine = () => {
   const shimmer = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -106,6 +107,7 @@ export default function HomeScreen() {
   const handleUnlockDiscover = useCallback(() => { showForUnlock(() => { haptic('success'); setTomorrowDiscoverUnlocked(true); }); }, [showForUnlock]);
 
   const [achVis, setAchVis] = useState(false);
+  const [leadVis, setLeadVis] = useState(false);
   const [recapVis, setRecapVis] = useState(false);
   const [calVis, setCalVis] = useState(false);
   const [off, setOff] = useState(0);
@@ -117,8 +119,18 @@ export default function HomeScreen() {
   useEffect(() => { setSeenSaved(userSaved.length); }, [user?.id]);
   const unseenSaved = tab === 'saved' ? 0 : Math.max(0, userSaved.length - seenSaved);
 
+  // LOGICA RECLAMA VIDEO LA 3 POVESTI
   const prevEventsRead = useRef(totalEventsRead);
-  useEffect(() => { if (totalEventsRead > prevEventsRead.current) maybeShowInterstitial(totalEventsRead); prevEventsRead.current = totalEventsRead; }, [totalEventsRead]);
+  useEffect(() => { 
+    if (totalEventsRead > prevEventsRead.current) {
+      // Daca numarul de povesti citite este multiplu de 3, apelăm funcția
+      if (totalEventsRead % STORY_AD_FREQUENCY === 0) {
+        // Trimitem totalEventsRead (număr) în loc de boolean pentru a respecta tipul de date
+        maybeShowInterstitial(totalEventsRead); 
+      }
+    } 
+    prevEventsRead.current = totalEventsRead; 
+  }, [totalEventsRead]);
 
   const mem = useRef<Record<string, PD>>({});
   const [tick, setTick] = useState(0);
@@ -194,7 +206,6 @@ export default function HomeScreen() {
         <AchievementToast />
         {showChrome && (
           <View style={[ms.chrome, { paddingTop: insets.top }]}>
-            {/* Premium: subtle gradient on header area */}
             {isPremium && (
               <LinearGradient
                 colors={['#0A0815', '#05040A']}
@@ -208,6 +219,7 @@ export default function HomeScreen() {
                 <Text style={[ms.brandTitle, { color: theme.text }]}>{t('History')}</Text>
               </View>
               <View style={ms.headerRight}>
+                <TouchableOpacity onPress={() => { haptic('light'); setLeadVis(true); }} activeOpacity={0.6} style={ms.searchBtn}><Trophy size={20} color={theme.subtext} strokeWidth={1.8} /></TouchableOpacity>
                 <TouchableOpacity onPress={() => switchTab('search')} activeOpacity={0.6} style={[ms.searchBtn, { backgroundColor: tab === 'search' ? goldColor + '18' : 'transparent' }]}><Search size={20} color={tab === 'search' ? goldColor : theme.subtext} strokeWidth={1.8} /></TouchableOpacity>
                 <TouchableOpacity onPress={() => { haptic('light'); setAchVis(true); }} activeOpacity={0.6} style={[ms.achieveBtn, {
                   backgroundColor: badgeCnt > 0 ? goldColor + '18' : 'transparent',
@@ -220,7 +232,6 @@ export default function HomeScreen() {
               </View>
             </View>
 
-            {/* Premium accent line under brand */}
             {isPremium && <PremiumAccentLine />}
 
             {(tab === 'today' || tab === 'discover') && <XPBar />}
@@ -232,7 +243,6 @@ export default function HomeScreen() {
                     <View style={[ms.dayCircle, {
                       backgroundColor: info.isToday ? goldColor : 'transparent',
                       borderColor: info.isToday ? goldColor : isPremium ? '#2A2230' : theme.border,
-                      // Premium: glow shadow on today circle
                       ...(isPremium && info.isToday && {
                         shadowColor: '#D4A843', shadowOffset: { width: 0, height: 0 },
                         shadowOpacity: 0.4, shadowRadius: 8, elevation: 6,
@@ -276,6 +286,7 @@ export default function HomeScreen() {
 
         <TabBar active={tab} onSwitch={switchTab} unseenSaved={unseenSaved} t={t} />
         <AchievementsModal visible={achVis} onClose={() => setAchVis(false)} />
+        <LeaderboardModal visible={leadVis} onClose={() => setLeadVis(false)} />
         <WeeklyRecapModal visible={recapVis} onClose={() => setRecapVis(false)} />
         <CalendarModal visible={calVis} onClose={() => setCalVis(false)} onSelectDate={(d: Date) => jump(d2o(d))} selectedDate={offDate(off)} maxFutureOffset={MAX_FWD} />
       </View>
