@@ -7,6 +7,7 @@ import { ActivityIndicator, View } from 'react-native';
 import OnboardingScreen from '../components/OnBoardingScreen';
 import { LanguageProvider } from '../context/LanguageContext';
 import { ThemeProvider, useTheme } from '../context/ThemeContext';
+import { useAdsInit } from '../hooks/useAdsInit';
 import { useGamificationSync } from '../hooks/useGamificationSync';
 import { useAuthStore } from '../store/useAuthStore';
 
@@ -23,6 +24,9 @@ function AppContent() {
 
   // ── Sync gamification data with backend ──
   useGamificationSync();
+
+  // ── Initialize Google Mobile Ads SDK ──
+  useAdsInit();
 
   useEffect(() => {
     GoogleSignin.configure({

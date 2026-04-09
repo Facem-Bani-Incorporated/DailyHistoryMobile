@@ -1,27 +1,18 @@
 // components/XPBar.tsx
-// ═══════════════════════════════════════════════════════════════════════════════
-//  XP LEVEL BAR — Compact header widget showing level + XP progress
-//  Features: animated fill, level badge, streak multiplier indicator,
-//  tap to expand with today's XP details
-// ═══════════════════════════════════════════════════════════════════════════════
-
+import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-    Animated,
-    Easing,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Animated,
+  Easing,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
-import {
-    LEVEL_NAMES,
-    useGamificationStore,
-} from '../store/useGamificationStore';
+import { LEVEL_NAMES, useGamificationStore } from '../store/useGamificationStore';
 
-// ── i18n ──
 const T: Record<string, Record<string, string>> = {
   en: { xp: 'XP', today: 'Today', level: 'Lvl', multiplier: 'Streak bonus', nextLevel: 'Next level' },
   ro: { xp: 'XP', today: 'Azi', level: 'Niv', multiplier: 'Bonus streak', nextLevel: 'Nivelul următor' },
@@ -32,79 +23,82 @@ const T: Record<string, Record<string, string>> = {
 const tx = (lang: string, key: string) => (T[lang] ?? T.en)[key] ?? T.en[key] ?? key;
 
 export default function XPBar() {
-  const { theme, isDark } = useTheme();
+  const { theme, isDark, isPremium } = useTheme();
   const { language } = useLanguage();
   const getXPInfo = useGamificationStore(s => s.getXPInfo);
   const totalXP = useGamificationStore(s => s.totalXP);
   const todayXP = useGamificationStore(s => s.todayXP);
-  const currentStreak = useGamificationStore(s => s.currentStreak);
 
   const info = getXPInfo();
   const { level, progress, multiplier } = info;
   const levelName = (LEVEL_NAMES[language] ?? LEVEL_NAMES.en)[level.nameKey] ?? '';
-
   const [expanded, setExpanded] = useState(false);
 
-  // Animated progress bar
   const barWidth = useRef(new Animated.Value(0)).current;
   const shimmer = useRef(new Animated.Value(0)).current;
   const expandAnim = useRef(new Animated.Value(0)).current;
+  const borderGlow = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.timing(barWidth, {
-      toValue: progress.percent,
-      duration: 800,
-      easing: Easing.out(Easing.exp),
-      useNativeDriver: false,
-    }).start();
+    Animated.timing(barWidth, { toValue: progress.percent, duration: 800, easing: Easing.out(Easing.exp), useNativeDriver: false }).start();
   }, [progress.percent]);
 
-  // Shimmer on the progress bar
   useEffect(() => {
-    Animated.loop(
-      Animated.timing(shimmer, {
-        toValue: 1,
-        duration: 2000,
-        easing: Easing.inOut(Easing.sin),
-        useNativeDriver: true,
-      }),
-    ).start();
-  }, []);
+    Animated.loop(Animated.timing(shimmer, { toValue: 1, duration: isPremium ? 1500 : 2000, easing: Easing.inOut(Easing.sin), useNativeDriver: true })).start();
+  }, [isPremium]);
+
+  // Premium: pulsing border glow
+  useEffect(() => {
+    if (isPremium) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(borderGlow, { toValue: 1, duration: 2000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+          Animated.timing(borderGlow, { toValue: 0, duration: 2500, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        ]),
+      ).start();
+    }
+  }, [isPremium]);
 
   useEffect(() => {
-    Animated.spring(expandAnim, {
-      toValue: expanded ? 1 : 0,
-      tension: 200,
-      friction: 20,
-      useNativeDriver: false,
-    }).start();
+    Animated.spring(expandAnim, { toValue: expanded ? 1 : 0, tension: 200, friction: 20, useNativeDriver: false }).start();
   }, [expanded]);
 
-  const expandedHeight = expandAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 48],
-  });
+  const expandedHeight = expandAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 48] });
+  const shimmerOpacity = shimmer.interpolate({ inputRange: [0, 0.5, 1], outputRange: isPremium ? [0.2, 0.9, 0.2] : [0.3, 0.7, 0.3] });
+  const glowOp = borderGlow.interpolate({ inputRange: [0, 1], outputRange: [0.15, 0.45] });
 
-  const shimmerOpacity = shimmer.interpolate({
-    inputRange: [0, 0.5, 1],
-    outputRange: [0.3, 0.7, 0.3],
-  });
-
-  const accentColor = isDark ? '#FFB300' : '#F59E0B';
-  const trackColor = isDark ? '#1C1612' : '#F0E8DA';
-  const cardBg = isDark ? '#141210' : '#FFFCF7';
-  const borderColor = isDark ? '#251E16' : '#EDE5D8';
+  const accentColor = isPremium ? '#D4A843' : isDark ? '#FFB300' : '#F59E0B';
+  const trackColor = isPremium ? '#1A1520' : isDark ? '#1C1612' : '#F0E8DA';
+  const cardBg = isPremium ? '#0F0D14' : isDark ? '#141210' : '#FFFCF7';
+  const borderColor = isPremium ? '#2A2230' : isDark ? '#251E16' : '#EDE5D8';
 
   return (
-    <TouchableOpacity
-      activeOpacity={0.85}
-      onPress={() => setExpanded(!expanded)}
+    <TouchableOpacity activeOpacity={0.85} onPress={() => setExpanded(!expanded)}
       style={[s.container, { backgroundColor: cardBg, borderColor }]}
     >
-      {/* Top row: level badge + bar + XP count */}
+      {/* Premium: gradient overlay */}
+      {isPremium && (
+        <LinearGradient
+          colors={['#14101E', '#0F0D14', '#12100A']}
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+          style={[StyleSheet.absoluteFill, { borderRadius: 16 }]}
+        />
+      )}
+
+      {/* Premium: animated gold border glow */}
+      {isPremium && (
+        <Animated.View style={[StyleSheet.absoluteFill, {
+          borderRadius: 16, borderWidth: 1, borderColor: '#D4A843', opacity: glowOp,
+        }]} pointerEvents="none" />
+      )}
+
       <View style={s.topRow}>
         {/* Level badge */}
-        <View style={[s.levelBadge, { backgroundColor: accentColor + '20', borderColor: accentColor + '40' }]}>
+        <View style={[s.levelBadge, {
+          backgroundColor: accentColor + '20',
+          borderColor: accentColor + '40',
+          ...(isPremium && { borderColor: '#D4A84360' }),
+        }]}>
           <Text style={s.levelIcon}>{level.icon}</Text>
           <Text style={[s.levelNum, { color: accentColor }]}>{level.level}</Text>
         </View>
@@ -112,16 +106,14 @@ export default function XPBar() {
         {/* Progress bar */}
         <View style={s.barContainer}>
           <View style={[s.barTrack, { backgroundColor: trackColor }]}>
-            <Animated.View
-              style={[s.barFill, {
-                backgroundColor: accentColor,
-                width: barWidth.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: ['0%', '100%'],
-                }),
-              }]}
-            >
-              <Animated.View style={[s.barShimmer, { opacity: shimmerOpacity }]} />
+            <Animated.View style={[s.barFill, {
+              backgroundColor: accentColor,
+              width: barWidth.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }),
+            }]}>
+              <Animated.View style={[s.barShimmer, {
+                opacity: shimmerOpacity,
+                backgroundColor: isPremium ? '#F5ECD740' : '#FFFFFF40',
+              }]} />
             </Animated.View>
           </View>
           <Text style={[s.barLabel, { color: theme.subtext }]}>
@@ -129,27 +121,27 @@ export default function XPBar() {
           </Text>
         </View>
 
-        {/* Multiplier badge */}
         {multiplier > 1 && (
-          <View style={[s.multiBadge, { backgroundColor: '#FF6D00' + '20' }]}>
-            <Text style={[s.multiText, { color: '#FF6D00' }]}>×{multiplier.toFixed(1)}</Text>
+          <View style={[s.multiBadge, {
+            backgroundColor: isPremium ? '#C17B2A20' : '#FF6D0020',
+          }]}>
+            <Text style={[s.multiText, { color: isPremium ? '#C17B2A' : '#FF6D00' }]}>×{multiplier.toFixed(1)}</Text>
           </View>
         )}
       </View>
 
-      {/* Expanded details */}
       <Animated.View style={[s.expandedRow, { height: expandedHeight, opacity: expandAnim }]}>
         <View style={s.expandedInner}>
           <View style={s.statItem}>
             <Text style={[s.statValue, { color: theme.text }]}>{totalXP.toLocaleString()}</Text>
             <Text style={[s.statLabel, { color: theme.subtext }]}>Total {tx(language, 'xp')}</Text>
           </View>
-          <View style={[s.statDivider, { backgroundColor: borderColor }]} />
+          <View style={[s.statDivider, { backgroundColor: isPremium ? '#2A2230' : borderColor }]} />
           <View style={s.statItem}>
             <Text style={[s.statValue, { color: accentColor }]}>+{todayXP}</Text>
             <Text style={[s.statLabel, { color: theme.subtext }]}>{tx(language, 'today')}</Text>
           </View>
-          <View style={[s.statDivider, { backgroundColor: borderColor }]} />
+          <View style={[s.statDivider, { backgroundColor: isPremium ? '#2A2230' : borderColor }]} />
           <View style={s.statItem}>
             <Text style={[s.statValue, { color: theme.text }]}>{levelName}</Text>
             <Text style={[s.statLabel, { color: theme.subtext }]}>{tx(language, 'level')} {level.level}</Text>
@@ -161,89 +153,22 @@ export default function XPBar() {
 }
 
 const s = StyleSheet.create({
-  container: {
-    borderRadius: 16,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginHorizontal: 16,
-    marginBottom: 8,
-  },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  levelBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
+  container: { borderRadius: 16, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 10, marginHorizontal: 16, marginBottom: 8, overflow: 'hidden' },
+  topRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  levelBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, borderWidth: 1 },
   levelIcon: { fontSize: 14 },
   levelNum: { fontSize: 12, fontWeight: '900', letterSpacing: -0.5 },
-  barContainer: {
-    flex: 1,
-    gap: 3,
-  },
-  barTrack: {
-    height: 6,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  barFill: {
-    height: 6,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  barShimmer: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#FFFFFF40',
-  },
-  barLabel: {
-    fontSize: 9,
-    fontWeight: '600',
-    letterSpacing: 0.3,
-  },
-  multiBadge: {
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 8,
-  },
-  multiText: {
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  expandedRow: {
-    overflow: 'hidden',
-  },
-  expandedInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    paddingTop: 10,
-  },
-  statItem: {
-    alignItems: 'center',
-    gap: 2,
-  },
-  statValue: {
-    fontSize: 14,
-    fontWeight: '800',
-    letterSpacing: -0.5,
-  },
-  statLabel: {
-    fontSize: 9,
-    fontWeight: '600',
-    letterSpacing: 0.3,
-    opacity: 0.5,
-    textTransform: 'uppercase',
-  },
-  statDivider: {
-    width: 1,
-    height: 24,
-  },
+  barContainer: { flex: 1, gap: 3 },
+  barTrack: { height: 6, borderRadius: 3, overflow: 'hidden' },
+  barFill: { height: 6, borderRadius: 3, overflow: 'hidden' },
+  barShimmer: { ...StyleSheet.absoluteFillObject },
+  barLabel: { fontSize: 9, fontWeight: '600', letterSpacing: 0.3 },
+  multiBadge: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8 },
+  multiText: { fontSize: 11, fontWeight: '800' },
+  expandedRow: { overflow: 'hidden' },
+  expandedInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', paddingTop: 10 },
+  statItem: { alignItems: 'center', gap: 2 },
+  statValue: { fontSize: 14, fontWeight: '800', letterSpacing: -0.5 },
+  statLabel: { fontSize: 9, fontWeight: '600', letterSpacing: 0.3, opacity: 0.5, textTransform: 'uppercase' },
+  statDivider: { width: 1, height: 24 },
 });

@@ -2,6 +2,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import * as Application from 'expo-application';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
@@ -39,10 +40,12 @@ const THEME_OPTIONS: {
   label: string;
   value: ThemeMode;
   icon: keyof typeof Ionicons.glyphMap;
+  premium?: boolean;
 }[] = [
-  { label: 'Light',  value: 'light',  icon: 'sunny-outline' },
-  { label: 'System', value: 'system', icon: 'phone-portrait-outline' },
-  { label: 'Dark',   value: 'dark',   icon: 'moon-outline' },
+  { label: 'Light',   value: 'light',   icon: 'sunny-outline' },
+  { label: 'System',  value: 'system',  icon: 'phone-portrait-outline' },
+  { label: 'Dark',    value: 'dark',    icon: 'moon-outline' },
+  { label: 'Royal',   value: 'premium', icon: 'diamond-outline', premium: true },
 ];
 
 const LANGUAGES: { code: Language; label: string; native: string; flag: string }[] = [
@@ -120,13 +123,92 @@ const Hairline = ({ theme, inset }: { theme: any; inset?: boolean }) => (
   <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: theme.border, marginLeft: inset ? 62 : 0 }} />
 );
 
+/* ═══════════════ PREMIUM THEME BUTTON ═══════════════ */
+const PremiumThemeButton = ({ active, gold, isDark, theme, onPress }: {
+  active: boolean; gold: string; isDark: boolean; theme: any; onPress: () => void;
+}) => {
+  const shimmer = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.timing(shimmer, {
+        toValue: 1, duration: 2500,
+        useNativeDriver: true,
+      }),
+    ).start();
+  }, []);
+
+  const shimmerOpacity = shimmer.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [0.3, 0.7, 0.3],
+  });
+
+  return (
+    <TouchableOpacity onPress={onPress} activeOpacity={0.6}
+      style={[_pm.btn, {
+        backgroundColor: active ? '#0A0815' : 'transparent',
+        borderColor: active ? '#D4A84360' : theme.border,
+        borderWidth: active ? 1.5 : 1.5,
+      }]}>
+      {/* Gradient background for premium */}
+      {active && (
+        <LinearGradient
+          colors={['#14101E', '#0A0815', '#12100A']}
+          style={StyleSheet.absoluteFill}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        />
+      )}
+
+      {/* Shimmer overlay */}
+      {active && (
+        <Animated.View style={[StyleSheet.absoluteFill, {
+          backgroundColor: '#D4A843',
+          opacity: shimmerOpacity,
+          borderRadius: 14,
+        }]} />
+      )}
+
+      <View style={[_pm.circle, {
+        backgroundColor: active ? '#D4A843' : isDark ? '#1C1A16' : '#F0ECE4',
+      }]}>
+        <Ionicons name="diamond" size={17} color={active ? '#05040A' : theme.subtext} />
+      </View>
+
+      <Text style={[_pm.label, {
+        color: active ? '#D4A843' : theme.text,
+        fontWeight: active ? '800' : '500',
+      }]}>Royal</Text>
+
+      {!active && (
+        <View style={_pm.badge}>
+          <Text style={_pm.badgeText}>NEW</Text>
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+};
+const _pm = StyleSheet.create({
+  btn: {
+    flex: 1, alignItems: 'center', paddingVertical: 16, paddingHorizontal: 6,
+    borderRadius: 14, gap: 9, overflow: 'hidden', position: 'relative',
+  },
+  circle: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  label: { fontSize: 11.5, letterSpacing: 0.3 },
+  badge: {
+    position: 'absolute', top: 6, right: 6,
+    backgroundColor: '#D4A843', paddingHorizontal: 5, paddingVertical: 1.5, borderRadius: 4,
+  },
+  badgeText: { fontSize: 6.5, fontWeight: '900', color: '#05040A', letterSpacing: 0.8 },
+});
+
 /* ═══════════════ MAIN COMPONENT ═══════════════ */
 
 export default function ProfileModal({ visible, onClose }: Props) {
   const user = useAuthStore(s => s.user);
   const logout = useAuthStore(s => s.logout);
   const router = useRouter();
-  const { mode, setMode, theme, isDark } = useTheme();
+  const { mode, setMode, theme, isDark, isPremium } = useTheme();
   const { t, language, setLanguage } = useLanguage();
   const insets = useSafeAreaInsets();
   const [notificationsOn, setNotificationsOn] = useState(true);
@@ -158,7 +240,7 @@ export default function ProfileModal({ visible, onClose }: Props) {
   const displayEmail = user.email || '';
   const appVersion = Application.nativeApplicationVersion ?? '1.0.0';
   const buildNumber = Application.nativeBuildVersion ?? '1';
-  const gold = isDark ? '#E8B84D' : '#C77E08';
+  const gold = isPremium ? '#D4A843' : isDark ? '#E8B84D' : '#C77E08';
 
   const getProfileImage = () => {
     const uri = user.avatar_url || user.avatarUrl || user.picture;
@@ -186,13 +268,20 @@ export default function ProfileModal({ visible, onClose }: Props) {
   };
 
   const currentLang = LANGUAGES.find(l => l.code === language) ?? LANGUAGES[0];
-  const s = makeStyles(theme, isDark, gold);
+  const s = makeStyles(theme, isDark, gold, isPremium);
 
   return (
     <>
       <Modal visible={visible} animationType="slide" transparent={false} statusBarTranslucent>
         <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} translucent backgroundColor="transparent" />
         <View style={[s.root, { paddingTop: insets.top }]}>
+          {/* Premium gradient background */}
+          {isPremium && (
+            <LinearGradient
+              colors={['#05040A', '#0A0815', '#05040A']}
+              style={StyleSheet.absoluteFill}
+            />
+          )}
 
           <View style={s.header}>
             <TouchableOpacity onPress={onClose} style={s.closeBtn} hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}>
@@ -210,13 +299,16 @@ export default function ProfileModal({ visible, onClose }: Props) {
             <Animated.View style={{ opacity: fade, transform: [{ translateY: slide }] }}>
 
               {/* ══ PROFILE HERO ══ */}
-              <View style={[s.heroCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              <View style={[s.heroCard, {
+                backgroundColor: isPremium ? '#0F0D14' : theme.card,
+                borderColor: isPremium ? '#2A2230' : theme.border,
+              }]}>
                 <View style={s.heroIdentity}>
                   <View style={s.avatarWrap}>
                     <Image source={{ uri: getProfileImage() }} style={s.avatar} />
-                    <View style={[s.avatarGlow, { borderColor: `${gold}35` }]} />
+                    <View style={[s.avatarGlow, { borderColor: isPremium ? '#D4A84340' : `${gold}35` }]} />
                     {isGoogleUser && (
-                      <View style={[s.providerBadge, { borderColor: theme.card }]}>
+                      <View style={[s.providerBadge, { borderColor: isPremium ? '#0F0D14' : theme.card }]}>
                         <Ionicons name="logo-google" size={10} color="#fff" />
                       </View>
                     )}
@@ -229,7 +321,10 @@ export default function ProfileModal({ visible, onClose }: Props) {
                   </View>
                 </View>
 
-                <View style={[s.levelBar, { backgroundColor: isDark ? '#1A1610' : '#FFFBF2', borderColor: isDark ? '#2A2015' : '#F0E4D0' }]}>
+                <View style={[s.levelBar, {
+                  backgroundColor: isPremium ? '#1A1525' : isDark ? '#1A1610' : '#FFFBF2',
+                  borderColor: isPremium ? '#2E2640' : isDark ? '#2A2015' : '#F0E4D0',
+                }]}>
                   <Text style={s.levelEmoji}>{xpInfo.level.icon}</Text>
                   <View style={{ flex: 1 }}>
                     <View style={s.levelTopRow}>
@@ -237,7 +332,7 @@ export default function ProfileModal({ visible, onClose }: Props) {
                       <Text style={[s.levelNum, { color: gold }]}>Lv.{xpInfo.level.level}</Text>
                     </View>
                     <View style={s.xpRow}>
-                      <View style={[s.xpTrack, { backgroundColor: isDark ? '#1C1410' : '#EDE5D8' }]}>
+                      <View style={[s.xpTrack, { backgroundColor: isPremium ? '#1A1520' : isDark ? '#1C1410' : '#EDE5D8' }]}>
                         <View style={[s.xpFill, { backgroundColor: gold, width: `${Math.round(xpInfo.progress.percent * 100)}%` as any }]} />
                       </View>
                       <Text style={[s.xpNums, { color: theme.subtext }]}>{xpInfo.progress.current}/{xpInfo.progress.needed}</Text>
@@ -276,7 +371,7 @@ export default function ProfileModal({ visible, onClose }: Props) {
 
               {/* ══ PREFERENCES ══ */}
               <SectionTitle label={t('preferences')} theme={theme} />
-              <View style={[s.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              <View style={[s.card, { backgroundColor: isPremium ? '#0F0D14' : theme.card, borderColor: isPremium ? '#2A2230' : theme.border }]}>
                 <SettingRow icon="globe-outline" iconColor="#5856D6" iconBg={'#5856D610'} title={t('language')} subtitle={currentLang.native} theme={theme} onPress={() => setLangExpanded(v => !v)} right={<Ionicons name={langExpanded ? 'chevron-up' : 'chevron-down'} size={15} color={theme.subtext} />} />
                 {langExpanded && (
                   <View style={s.langList}>
@@ -301,11 +396,11 @@ export default function ProfileModal({ visible, onClose }: Props) {
                   right={<Switch value={notificationsOn} onValueChange={setNotificationsOn} trackColor={{ false: theme.border, true: `${gold}55` }} thumbColor={notificationsOn ? gold : isDark ? '#555' : '#ccc'} ios_backgroundColor={theme.border} style={{ transform: [{ scale: 0.82 }] }} />} />
               </View>
 
-              {/* ══ APPEARANCE ══ */}
+              {/* ══ APPEARANCE — with Premium option ══ */}
               <SectionTitle label={t('appearance')} theme={theme} />
-              <View style={[s.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              <View style={[s.card, { backgroundColor: isPremium ? '#0F0D14' : theme.card, borderColor: isPremium ? '#2A2230' : theme.border }]}>
                 <View style={s.themeRow}>
-                  {THEME_OPTIONS.map(opt => {
+                  {THEME_OPTIONS.filter(o => !o.premium).map(opt => {
                     const active = mode === opt.value;
                     return (
                       <TouchableOpacity key={opt.value} onPress={() => setMode(opt.value)} activeOpacity={0.6}
@@ -317,12 +412,20 @@ export default function ProfileModal({ visible, onClose }: Props) {
                       </TouchableOpacity>
                     );
                   })}
+                  {/* Premium theme button — special styling */}
+                  <PremiumThemeButton
+                    active={mode === 'premium'}
+                    gold={gold}
+                    isDark={isDark}
+                    theme={theme}
+                    onPress={() => setMode('premium')}
+                  />
                 </View>
               </View>
 
               {/* ══ ACCOUNT ══ */}
               <SectionTitle label={t('account')} theme={theme} />
-              <View style={[s.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              <View style={[s.card, { backgroundColor: isPremium ? '#0F0D14' : theme.card, borderColor: isPremium ? '#2A2230' : theme.border }]}>
                 <SettingRow icon={isGoogleUser ? 'logo-google' : 'mail-outline'} iconColor="#007AFF" iconBg={'#007AFF10'} title={t('sign_in_method')} subtitle={isGoogleUser ? 'Google' : 'Email'} theme={theme} right={<View />} />
                 <Hairline theme={theme} inset />
                 <SettingRow icon="chatbubbles-outline" iconColor="#5856D6" iconBg={'#5856D610'} title={t('contact_support')} subtitle={t('contact_support_desc')} theme={theme} onPress={() => setSupportVisible(true)} />
@@ -354,7 +457,7 @@ export default function ProfileModal({ visible, onClose }: Props) {
   );
 }
 
-const makeStyles = (theme: any, isDark: boolean, gold: string) => StyleSheet.create({
+const makeStyles = (theme: any, isDark: boolean, gold: string, isPremium: boolean) => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.background },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 10 },
   closeBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },

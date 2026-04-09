@@ -12,7 +12,6 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.rexinus.DailyHistoryMobile"
@@ -41,7 +40,13 @@
     },
     "plugins": [
       "expo-router",
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-7999755031829705~7590936786"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
@@ -57,5 +62,8 @@
     "updates": {
       "url": "https://u.expo.dev/40d2f71e-3f11-4574-b212-a7f3cd044377"
     }
+  },
+  "react-native-google-mobile-ads": {
+    "android_app_id": "ca-app-pub-7999755031829705~7590936786"
   }
 }
