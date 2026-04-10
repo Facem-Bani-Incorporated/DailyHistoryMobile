@@ -1,21 +1,17 @@
-// hooks/useRewardedUnlock.ts
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    AdEventType,
-    RewardedAd,
-    RewardedAdEventType,
+  AdEventType,
+  RewardedAd,
+  RewardedAdEventType,
 } from 'react-native-google-mobile-ads';
 import { AD_UNIT_IDS } from '../config/ads';
 
-/**
- * Rewarded ad hook for unlocking content.
- * No XP bonus — just shows ad and calls onUnlocked when complete.
- */
 export function useRewardedUnlock() {
   const [isReady, setIsReady] = useState(false);
   const adRef = useRef<RewardedAd | null>(null);
   const earnedRef = useRef(false);
   const callbackRef = useRef<(() => void) | null>(null);
+  const retryCount = useRef(0);
 
   const loadAd = useCallback(() => {
     setIsReady(false);
@@ -26,6 +22,7 @@ export function useRewardedUnlock() {
     });
 
     ad.addAdEventListener(RewardedAdEventType.LOADED, () => {
+      retryCount.current = 0;
       setIsReady(true);
     });
 
@@ -43,7 +40,9 @@ export function useRewardedUnlock() {
 
     ad.addAdEventListener(AdEventType.ERROR, () => {
       setIsReady(false);
-      setTimeout(loadAd, 30000);
+      retryCount.current += 1;
+      const delay = Math.min(5000 * retryCount.current, 30000);
+      setTimeout(loadAd, delay);
     });
 
     ad.load();
@@ -59,8 +58,12 @@ export function useRewardedUnlock() {
     if (isReady && adRef.current) {
       callbackRef.current = onUnlocked;
       adRef.current.show();
+    } else {
+      // Fallback: dacă reclama nu s-a încărcat, deblochează direct
+      onUnlocked();
+      loadAd();
     }
-  }, [isReady]);
+  }, [isReady, loadAd]);
 
   return { showForUnlock, isUnlockReady: isReady };
 }

@@ -1,8 +1,8 @@
 // hooks/useInterstitialAd.ts
 import { useCallback, useEffect, useRef } from 'react';
 import {
-    AdEventType,
-    InterstitialAd,
+  AdEventType,
+  InterstitialAd,
 } from 'react-native-google-mobile-ads';
 import { AD_UNIT_IDS, ADS_CONFIG } from '../config/ads';
 
@@ -19,6 +19,7 @@ export function useInterstitialAd() {
   const adRef = useRef<InterstitialAd | null>(null);
   const loadedRef = useRef(false);
   const lastShownRef = useRef(0);
+  const pendingRef = useRef(false);  // ← NOU
 
   const loadAd = useCallback(() => {
     loadedRef.current = false;
@@ -29,20 +30,25 @@ export function useInterstitialAd() {
 
     ad.addAdEventListener(AdEventType.LOADED, () => {
       loadedRef.current = true;
-      console.log('[Ads] Interstitial loaded');
+      // Dacă era pending, arată-o acum
+      if (pendingRef.current) {
+        pendingRef.current = false;
+        const now = Date.now();
+        if (now - lastShownRef.current >= ADS_CONFIG.INTERSTITIAL_COOLDOWN) {
+          ad.show();
+          lastShownRef.current = now;
+        }
+      }
     });
 
     ad.addAdEventListener(AdEventType.CLOSED, () => {
-      console.log('[Ads] Interstitial closed');
-      // Preload next one
       loadAd();
     });
 
-    ad.addAdEventListener(AdEventType.ERROR, (error) => {
-      console.warn('[Ads] Interstitial error:', error);
+    ad.addAdEventListener(AdEventType.ERROR, () => {
       loadedRef.current = false;
-      // Retry after 30s
-      setTimeout(loadAd, 30000);
+      pendingRef.current = false;
+      setTimeout(loadAd, 15000);
     });
 
     ad.load();
@@ -51,25 +57,22 @@ export function useInterstitialAd() {
 
   useEffect(() => {
     loadAd();
-
-    return () => {
-      adRef.current = null;
-    };
+    return () => { adRef.current = null; };
   }, [loadAd]);
 
-  const maybeShowInterstitial = useCallback((storiesReadCount: number) => {
-    // Only show every N stories
-    if (storiesReadCount % ADS_CONFIG.INTERSTITIAL_FREQUENCY !== 0) return;
-    if (storiesReadCount === 0) return;
+  const maybeShowInterstitial = useCallback((_count: number) => {
+    if (_count === 0) return;
 
-    // Respect cooldown
     const now = Date.now();
     if (now - lastShownRef.current < ADS_CONFIG.INTERSTITIAL_COOLDOWN) return;
 
-    // Show if loaded
     if (loadedRef.current && adRef.current) {
       adRef.current.show();
       lastShownRef.current = now;
+      pendingRef.current = false;
+    } else {
+      // Reclama nu e gata — marchează pending, se va arăta la LOADED
+      pendingRef.current = true;
     }
   }, []);
 
