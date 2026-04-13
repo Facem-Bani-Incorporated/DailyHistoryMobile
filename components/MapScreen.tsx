@@ -1,24 +1,15 @@
 // components/MapScreen.tsx
 // ═══════════════════════════════════════════════════════════════════════════════
-//  BULLETPROOF MAP v5 — Native Google Maps pinColor markers everywhere
-//
-//  WORLD VIEW  → Native pinColor markers (same as country view).
-//                No custom Views, no bitmap snapshot issues, always visible.
-//                A `renderKey` counter forces full remount of all world-view
-//                markers after returning from country close-up, so they always
-//                reappear correctly.
-//
-//  COUNTRY VIEW → Native pinColor markers. Zero custom views.
-//                 100% reliable on every device ever made.
+// CLEAN HISTORIC MAP - Native markers + elegant preview cards
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import {
+  Book,
+  Calendar,
   ChevronDown,
   ChevronRight,
   Globe2,
-  Layers,
   MapPin,
-  Sparkles,
   X,
 } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -26,7 +17,6 @@ import {
   ActivityIndicator,
   Animated,
   Dimensions,
-  Easing,
   LayoutAnimation,
   PanResponder,
   Platform,
@@ -35,10 +25,11 @@ import {
   Text,
   TouchableOpacity,
   UIManager,
-  View,
+  View
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import api from '../api';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
@@ -49,166 +40,432 @@ import { StoryModal } from './StoryModal';
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental)
   UIManager.setLayoutAnimationEnabledExperimental(true);
 
-const { height: H } = Dimensions.get('window');
+const { width: W, height: H } = Dimensions.get('window');
 const SHEET_CLOSED = 0;
-const SHEET_HALF = H * 0.48;
+const SHEET_HALF = H * 0.5;
 const SHEET_FULL = H * 0.88;
-const SNAP_VEL = 1.0;
 
-const INIT_REGION: Region = { latitude: 28, longitude: 15, latitudeDelta: 120, longitudeDelta: 140 };
-const INIT_CAM = { center: { latitude: 28, longitude: 15 }, pitch: 45, heading: 0, altitude: 18000000, zoom: 1.8 };
+const INIT_REGION: Region = { latitude: 30, longitude: 15, latitudeDelta: 100, longitudeDelta: 120 };
+const INIT_CAM = { center: { latitude: 30, longitude: 15 }, pitch: 0, heading: 0, altitude: 20000000, zoom: 1.5 };
 
-// ─── i18n ────────────────────────────────────────────────────────────────────
+// ─── i18n ──────────────────────────────────────────────────────────────────────
 const T: Record<string, Record<string, string>> = {
-  en: { loading: 'Loading map…', events_across: 'events across', countries: 'countries', no_events: 'No events found', events: 'events', categories: 'categories', back_to_world: 'World view', war_conflict: 'War & Conflict', tech_innovation: 'Technology', science_discovery: 'Science', politics_state: 'Politics', culture_arts: 'Culture & Arts', natural_disaster: 'Natural Disaster', exploration: 'Exploration', religion_phil: 'Religion', tap_to_explore: 'Tap a country to explore' },
-  ro: { loading: 'Se încarcă…', events_across: 'evenimente în', countries: 'țări', no_events: 'Niciun eveniment', events: 'evenimente', categories: 'categorii', back_to_world: 'Vedere globală', war_conflict: 'Război', tech_innovation: 'Tehnologie', science_discovery: 'Știință', politics_state: 'Politică', culture_arts: 'Cultură', natural_disaster: 'Dezastre', exploration: 'Explorare', religion_phil: 'Religie', tap_to_explore: 'Apasă pe o țară' },
-  fr: { loading: 'Chargement…', events_across: 'événements dans', countries: 'pays', no_events: 'Aucun événement', events: 'événements', categories: 'catégories', back_to_world: 'Vue monde', war_conflict: 'Guerre', tech_innovation: 'Technologie', science_discovery: 'Science', politics_state: 'Politique', culture_arts: 'Culture', natural_disaster: 'Catastrophe', exploration: 'Exploration', religion_phil: 'Religion', tap_to_explore: 'Touchez un pays' },
-  de: { loading: 'Wird geladen…', events_across: 'Ereignisse in', countries: 'Ländern', no_events: 'Keine Ereignisse', events: 'Ereignisse', categories: 'Kategorien', back_to_world: 'Weltansicht', war_conflict: 'Krieg', tech_innovation: 'Technik', science_discovery: 'Wissenschaft', politics_state: 'Politik', culture_arts: 'Kultur', natural_disaster: 'Katastrophe', exploration: 'Entdeckung', religion_phil: 'Religion', tap_to_explore: 'Tippe auf ein Land' },
-  es: { loading: 'Cargando…', events_across: 'eventos en', countries: 'países', no_events: 'Sin eventos', events: 'eventos', categories: 'categorías', back_to_world: 'Vista mundial', war_conflict: 'Guerra', tech_innovation: 'Tecnología', science_discovery: 'Ciencia', politics_state: 'Política', culture_arts: 'Cultura', natural_disaster: 'Desastre', exploration: 'Exploración', religion_phil: 'Religión', tap_to_explore: 'Toca un país' },
+  en: {
+    loading: 'Loading...',
+    events_across: 'events across',
+    countries: 'countries',
+    no_events: 'No events found',
+    events: 'events',
+    categories: 'categories',
+    back_to_world: 'World View',
+    war_conflict: 'Wars & Conflicts',
+    tech_innovation: 'Technology',
+    science_discovery: 'Science',
+    politics_state: 'Politics',
+    culture_arts: 'Culture & Arts',
+    natural_disaster: 'Natural Disasters',
+    exploration: 'Exploration',
+    religion_phil: 'Religion',
+    tap_to_explore: 'Tap a country to explore',
+    read_more: 'Read Full Story',
+    close: 'Close',
+  },
+  ro: {
+    loading: 'Se încarcă...',
+    events_across: 'evenimente în',
+    countries: 'țări',
+    no_events: 'Niciun eveniment',
+    events: 'evenimente',
+    categories: 'categorii',
+    back_to_world: 'Vedere globală',
+    war_conflict: 'Războaie',
+    tech_innovation: 'Tehnologie',
+    science_discovery: 'Știință',
+    politics_state: 'Politică',
+    culture_arts: 'Cultură',
+    natural_disaster: 'Dezastre',
+    exploration: 'Explorare',
+    religion_phil: 'Religie',
+    tap_to_explore: 'Apasă pe o țară',
+    read_more: 'Citește Articolul',
+    close: 'Închide',
+  },
 };
 
+// ─── Categories ────────────────────────────────────────────────────────────────
 const CAT: Record<string, { color: string; tKey: string; emoji: string }> = {
-  war_conflict:      { color: '#EF4444', tKey: 'war_conflict',      emoji: '⚔️' },
-  tech_innovation:   { color: '#3B82F6', tKey: 'tech_innovation',   emoji: '⚡' },
-  science_discovery: { color: '#8B5CF6', tKey: 'science_discovery', emoji: '🔬' },
-  politics_state:    { color: '#F59E0B', tKey: 'politics_state',    emoji: '🏛️' },
-  culture_arts:      { color: '#10B981', tKey: 'culture_arts',      emoji: '🎭' },
-  natural_disaster:  { color: '#F97316', tKey: 'natural_disaster',  emoji: '🌋' },
-  exploration:       { color: '#06B6D4', tKey: 'exploration',       emoji: '🧭' },
-  religion_phil:     { color: '#A16207', tKey: 'religion_phil',     emoji: '🕊️' },
+  war_conflict: { color: '#DC2626', tKey: 'war_conflict', emoji: '⚔️' },
+  tech_innovation: { color: '#2563EB', tKey: 'tech_innovation', emoji: '⚡' },
+  science_discovery: { color: '#7C3AED', tKey: 'science_discovery', emoji: '🔬' },
+  politics_state: { color: '#D97706', tKey: 'politics_state', emoji: '🏛️' },
+  culture_arts: { color: '#059669', tKey: 'culture_arts', emoji: '🎭' },
+  natural_disaster: { color: '#EA580C', tKey: 'natural_disaster', emoji: '🌋' },
+  exploration: { color: '#0891B2', tKey: 'exploration', emoji: '🧭' },
+  religion_phil: { color: '#92400E', tKey: 'religion_phil', emoji: '📜' },
 };
-const FALLBACK = '#78716C';
+const FALLBACK = '#6B7280';
 
-const ck = (e: any): string => (e.category ?? '').toString().toLowerCase();
+// ─── Helpers ───────────────────────────────────────────────────────────────────
+const getCat = (e: any): string => (e.category ?? '').toString().toLowerCase();
 const getYear = (e: any): string => {
   const r = String(e.eventDate ?? e.event_date ?? e.year ?? '').trim();
   if (/^\d{4}$/.test(r)) return r;
-  if (r.includes('-') && r.split('-')[0].length === 4) return r.split('-')[0];
+  if (r.includes('-')) return r.split('-')[0];
   return '';
 };
 const extractCountry = (label: string): string => {
   if (!label) return 'Unknown';
-  const p = label.split(',').map(s => s.trim());
-  return p.length >= 2 ? p[p.length - 1] : label;
+  const parts = label.split(',').map(s => s.trim());
+  return parts.length >= 2 ? parts[parts.length - 1] : label;
 };
-const ALIAS: Record<string, string> = { UK: 'United Kingdom', England: 'United Kingdom', USA: 'United States', Hawaii: 'United States' };
+
+const ALIAS: Record<string, string> = { UK: 'United Kingdom', England: 'United Kingdom', USA: 'United States' };
 const norm = (c: string): string => ALIAS[c] ?? c;
 
-interface EWL { event: any; lat: number; lng: number; label: string }
-interface CatGroup { key: string; color: string; emoji: string; label: string; events: EWL[] }
-interface Cluster { country: string; cLat: number; cLng: number; items: EWL[]; cats: CatGroup[]; topColor: string }
+// ─── Types ─────────────────────────────────────────────────────────────────────
+interface EventWithLocation {
+  event: any;
+  lat: number;
+  lng: number;
+  label: string;
+}
+
+interface CatGroup {
+  key: string;
+  color: string;
+  emoji: string;
+  labelKey: string;
+  events: EventWithLocation[];
+}
+
+interface Cluster {
+  country: string;
+  lat: number;
+  lng: number;
+  items: EventWithLocation[];
+  cats: CatGroup[];
+  mainColor: string;
+}
 
 const buildClusters = (events: any[]): Cluster[] => {
-  const wl: EWL[] = [];
+  const withLoc: EventWithLocation[] = [];
+  
   for (const ev of events) {
     const loc = extractLocation(ev);
-    if (loc) wl.push({ event: ev, lat: loc.latitude, lng: loc.longitude, label: loc.label });
+    if (loc) {
+      withLoc.push({ event: ev, lat: loc.latitude, lng: loc.longitude, label: loc.label });
+    }
   }
-  const cm = new Map<string, EWL[]>();
-  for (const i of wl) { const c = norm(extractCountry(i.label)); if (!cm.has(c)) cm.set(c, []); cm.get(c)!.push(i); }
-  const out: Cluster[] = [];
-  for (const [country, items] of cm) {
-    const cLat = items.reduce((s, i) => s + i.lat, 0) / items.length;
-    const cLng = items.reduce((s, i) => s + i.lng, 0) / items.length;
-    const km = new Map<string, EWL[]>();
-    for (const i of items) { const k = ck(i.event); if (!km.has(k)) km.set(k, []); km.get(k)!.push(i); }
-    const cats = Array.from(km.entries())
-      .map(([k, e]) => ({ key: k, color: CAT[k]?.color ?? FALLBACK, emoji: CAT[k]?.emoji ?? '📌', label: CAT[k]?.tKey ?? k, events: e.sort((a, b) => (b.event.impactScore ?? 0) - (a.event.impactScore ?? 0)) }))
+
+  const byCountry = new Map<string, EventWithLocation[]>();
+  for (const item of withLoc) {
+    const country = norm(extractCountry(item.label));
+    if (!byCountry.has(country)) byCountry.set(country, []);
+    byCountry.get(country)!.push(item);
+  }
+
+  const clusters: Cluster[] = [];
+  
+  for (const [country, items] of byCountry) {
+    const lat = items.reduce((s, i) => s + i.lat, 0) / items.length;
+    const lng = items.reduce((s, i) => s + i.lng, 0) / items.length;
+
+    const byCat = new Map<string, EventWithLocation[]>();
+    for (const item of items) {
+      const cat = getCat(item.event);
+      if (!byCat.has(cat)) byCat.set(cat, []);
+      byCat.get(cat)!.push(item);
+    }
+
+    const cats: CatGroup[] = Array.from(byCat.entries())
+      .map(([key, evts]) => ({
+        key,
+        color: CAT[key]?.color ?? FALLBACK,
+        emoji: CAT[key]?.emoji ?? '📌',
+        labelKey: CAT[key]?.tKey ?? key,
+        events: evts.sort((a, b) => (b.event.impactScore ?? 0) - (a.event.impactScore ?? 0)),
+      }))
       .sort((a, b) => b.events.length - a.events.length);
-    out.push({ country, cLat, cLng, items, cats, topColor: cats[0]?.color ?? FALLBACK });
+
+    clusters.push({
+      country,
+      lat,
+      lng,
+      items,
+      cats,
+      mainColor: cats[0]?.color ?? FALLBACK,
+    });
   }
-  return out.sort((a, b) => b.items.length - a.items.length);
+
+  return clusters.sort((a, b) => b.items.length - a.items.length);
 };
 
-// ═════════════════════════════════════════════════════════════════════════════
-//  Sheet sub-components
-// ═════════════════════════════════════════════════════════════════════════════
-const EventRow = React.memo(({ item, language, theme, isDark, color, onPress }: {
-  item: EWL; language: string; theme: any; isDark: boolean; color: string; onPress: () => void;
+// ═══════════════════════════════════════════════════════════════════════════════
+// Preview Card Component
+// ═══════════════════════════════════════════════════════════════════════════════
+const PreviewCard = ({
+  item,
+  language,
+  theme,
+  isDark,
+  tm,
+  onClose,
+  onReadMore,
+}: {
+  item: EventWithLocation;
+  language: string;
+  theme: any;
+  isDark: boolean;
+  tm: (k: string) => string;
+  onClose: () => void;
+  onReadMore: () => void;
+}) => {
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(scaleAnim, { toValue: 1, tension: 300, friction: 20, useNativeDriver: true }),
+      Animated.timing(opacityAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  const close = () => {
+    Animated.parallel([
+      Animated.timing(scaleAnim, { toValue: 0.9, duration: 150, useNativeDriver: true }),
+      Animated.timing(opacityAnim, { toValue: 0, duration: 150, useNativeDriver: true }),
+    ]).start(() => onClose());
+  };
+
+  const catKey = getCat(item.event);
+  const catInfo = CAT[catKey];
+  const color = catInfo?.color ?? FALLBACK;
+  const emoji = catInfo?.emoji ?? '📌';
+  
+  const title = item.event.titleTranslations?.[language] ?? item.event.titleTranslations?.en ?? 'Untitled';
+  const summary = item.event.summaryTranslations?.[language] ?? item.event.summaryTranslations?.en ?? '';
+  const year = getYear(item.event);
+  const location = item.label.split(',')[0]?.trim() ?? item.label;
+
+  const cardBg = isDark ? '#1C1917' : '#FFFFFF';
+  const borderCol = isDark ? '#292524' : '#E5E5E5';
+  const subtextCol = isDark ? '#A8A29E' : '#737373';
+
+  return (
+    <Animated.View style={[styles.previewOverlay, { opacity: opacityAnim }]}>
+      <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={close} />
+      
+      <Animated.View
+        style={[
+          styles.previewCard,
+          {
+            backgroundColor: cardBg,
+            borderColor: borderCol,
+            transform: [{ scale: scaleAnim }],
+          },
+        ]}
+      >
+        {/* Header with category */}
+        <View style={[styles.previewHeader, { borderBottomColor: borderCol }]}>
+          <View style={[styles.previewBadge, { backgroundColor: color + '15' }]}>
+            <Text style={styles.previewEmoji}>{emoji}</Text>
+            <Text style={[styles.previewCatText, { color }]}>
+              {tm(catInfo?.tKey ?? catKey)}
+            </Text>
+          </View>
+          
+          <TouchableOpacity onPress={close} style={[styles.previewClose, { backgroundColor: isDark ? '#292524' : '#F5F5F5' }]}>
+            <X size={18} color={subtextCol} strokeWidth={2} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Content */}
+        <View style={styles.previewBody}>
+          <Text style={[styles.previewTitle, { color: theme.text }]} numberOfLines={3}>
+            {title}
+          </Text>
+          
+          {summary !== '' && (
+            <Text style={[styles.previewSummary, { color: subtextCol }]} numberOfLines={3}>
+              {summary}
+            </Text>
+          )}
+
+          {/* Meta row */}
+          <View style={styles.previewMeta}>
+            {year !== '' && (
+              <View style={[styles.previewMetaItem, { backgroundColor: isDark ? '#292524' : '#F5F5F5' }]}>
+                <Calendar size={12} color={color} strokeWidth={2.5} />
+                <Text style={[styles.previewMetaText, { color: theme.text }]}>{year}</Text>
+              </View>
+            )}
+            <View style={[styles.previewMetaItem, { backgroundColor: isDark ? '#292524' : '#F5F5F5' }]}>
+              <MapPin size={12} color={color} strokeWidth={2.5} />
+              <Text style={[styles.previewMetaText, { color: theme.text }]} numberOfLines={1}>
+                {location}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Action button */}
+        <TouchableOpacity
+          onPress={onReadMore}
+          activeOpacity={0.8}
+          style={[styles.previewButton, { backgroundColor: color }]}
+        >
+          <Book size={16} color="#FFF" strokeWidth={2} />
+          <Text style={styles.previewButtonText}>{tm('read_more')}</Text>
+          <ChevronRight size={16} color="#FFF" strokeWidth={2.5} />
+        </TouchableOpacity>
+      </Animated.View>
+    </Animated.View>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Event Row Component
+// ═══════════════════════════════════════════════════════════════════════════════
+const EventRow = React.memo(({
+  item,
+  language,
+  theme,
+  isDark,
+  color,
+  onPress,
+}: {
+  item: EventWithLocation;
+  language: string;
+  theme: any;
+  isDark: boolean;
+  color: string;
+  onPress: () => void;
 }) => {
   const title = item.event.titleTranslations?.[language] ?? item.event.titleTranslations?.en ?? '';
   const year = getYear(item.event);
   const city = item.label.includes(',') ? item.label.split(',')[0].trim() : '';
+
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.55} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, gap: 14 }}>
-      <View style={{ width: 54, paddingVertical: 6, borderRadius: 10, alignItems: 'center', backgroundColor: color + '14', borderWidth: 1, borderColor: color + '20' }}>
-        <Text style={{ fontSize: 11, fontWeight: '900', letterSpacing: 0.6, color }}>{year || '—'}</Text>
+    <TouchableOpacity onPress={onPress} activeOpacity={0.6} style={styles.eventRow}>
+      <View style={[styles.eventYear, { backgroundColor: color + '12', borderColor: color + '25' }]}>
+        <Text style={[styles.eventYearText, { color }]}>{year || '—'}</Text>
       </View>
-      <View style={{ flex: 1, gap: 3 }}>
-        <Text style={{ fontSize: 14.5, fontWeight: '600', lineHeight: 20, color: theme.text, letterSpacing: -0.1 }} numberOfLines={2}>{title}</Text>
+      
+      <View style={styles.eventContent}>
+        <Text style={[styles.eventTitle, { color: theme.text }]} numberOfLines={2}>{title}</Text>
         {city !== '' && (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            <MapPin size={10} color={theme.subtext} strokeWidth={2} style={{ opacity: 0.4 }} />
-            <Text style={{ fontSize: 11, fontWeight: '500', opacity: 0.45, color: theme.subtext }}>{city}</Text>
+          <View style={styles.eventLoc}>
+            <MapPin size={10} color={theme.subtext} strokeWidth={2} style={{ opacity: 0.5 }} />
+            <Text style={[styles.eventLocText, { color: theme.subtext }]}>{city}</Text>
           </View>
         )}
       </View>
-      <ChevronRight size={14} color={theme.subtext} strokeWidth={2} style={{ opacity: 0.3 }} />
+      
+      <ChevronRight size={16} color={theme.subtext} strokeWidth={2} style={{ opacity: 0.4 }} />
     </TouchableOpacity>
   );
 });
 
-const CatSection = ({ cat, language, tm, theme, isDark, onEvent }: {
-  cat: CatGroup; language: string; tm: (k: string) => string; theme: any; isDark: boolean; onEvent: (e: any) => void;
+// ═══════════════════════════════════════════════════════════════════════════════
+// Category Section Component
+// ═══════════════════════════════════════════════════════════════════════════════
+const CategorySection = ({
+  cat,
+  language,
+  theme,
+  isDark,
+  tm,
+  onEventPress,
+}: {
+  cat: CatGroup;
+  language: string;
+  theme: any;
+  isDark: boolean;
+  tm: (k: string) => string;
+  onEventPress: (item: EventWithLocation) => void;
 }) => {
-  const [open, setOpen] = useState(true);
+  const [expanded, setExpanded] = useState(true);
+
+  const toggle = () => {
+    haptic('light');
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpanded(v => !v);
+  };
+
   return (
     <View>
-      <TouchableOpacity onPress={() => { haptic('light'); LayoutAnimation.configureNext(LayoutAnimation.create(280, 'easeInEaseOut', 'opacity')); setOpen(v => !v); }} activeOpacity={0.6}
-        style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 20, paddingVertical: 13, backgroundColor: isDark ? cat.color + '08' : cat.color + '05' }}>
-        <Text style={{ fontSize: 14 }}>{cat.emoji}</Text>
-        <Text style={{ fontSize: 11, fontWeight: '800', letterSpacing: 1.5, color: cat.color, textTransform: 'uppercase' }}>{tm(cat.label)}</Text>
-        <View style={{ paddingHorizontal: 7, paddingVertical: 2.5, borderRadius: 7, backgroundColor: cat.color + '18', borderWidth: 1, borderColor: cat.color + '25' }}>
-          <Text style={{ fontSize: 10, fontWeight: '900', color: cat.color }}>{cat.events.length}</Text>
+      <TouchableOpacity onPress={toggle} activeOpacity={0.7} style={[styles.catHeader, { backgroundColor: cat.color + '08' }]}>
+        <View style={styles.catLeft}>
+          <Text style={styles.catEmoji}>{cat.emoji}</Text>
+          <Text style={[styles.catLabel, { color: cat.color }]}>{tm(cat.labelKey)}</Text>
+          <View style={[styles.catBadge, { backgroundColor: cat.color + '18' }]}>
+            <Text style={[styles.catCount, { color: cat.color }]}>{cat.events.length}</Text>
+          </View>
         </View>
-        <View style={{ flex: 1 }} />
-        <ChevronDown size={16} color={theme.subtext} strokeWidth={2} style={{ transform: [{ rotate: open ? '0deg' : '-90deg' }], opacity: 0.5 }} />
+        <ChevronDown
+          size={18}
+          color={theme.subtext}
+          strokeWidth={2}
+          style={{ transform: [{ rotate: expanded ? '0deg' : '-90deg' }], opacity: 0.5 }}
+        />
       </TouchableOpacity>
-      {open && cat.events.map((item, i) => (
+      
+      {expanded && cat.events.map((item, i) => (
         <View key={`${getYear(item.event)}-${item.label}-${i}`}>
-          <EventRow item={item} language={language} theme={theme} isDark={isDark} color={cat.color} onPress={() => onEvent(item.event)} />
-          {i < cat.events.length - 1 && <View style={{ height: StyleSheet.hairlineWidth, marginLeft: 88, backgroundColor: isDark ? '#2A2520' : '#F0F0F0' }} />}
+          <EventRow
+            item={item}
+            language={language}
+            theme={theme}
+            isDark={isDark}
+            color={cat.color}
+            onPress={() => onEventPress(item)}
+          />
+          {i < cat.events.length - 1 && (
+            <View style={[styles.divider, { backgroundColor: isDark ? '#292524' : '#F0F0F0' }]} />
+          )}
         </View>
       ))}
     </View>
   );
 };
 
-// ═════════════════════════════════════════════════════════════════════════════
-//  MAIN
-// ═════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════════
+// Main Component
+// ═══════════════════════════════════════════════════════════════════════════════
 export default function MapScreen() {
   const { theme, isDark } = useTheme();
   const { language } = useLanguage();
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
+
   const tm = useCallback((k: string) => (T[language] ?? T.en)[k] ?? T.en[k] ?? k, [language]);
 
   const [allEvents, setAllEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-
   const [activeCountry, setActiveCountry] = useState<string | null>(null);
   const activeCountryRef = useRef<string | null>(null);
-
-  // ─── renderKey: incremented every time we return to world view ────────────
-  // This forces React to fully remount all world-view Markers so they always
-  // reappear after exiting country close-up, regardless of Android caching.
   const [renderKey, setRenderKey] = useState(0);
 
+  // Preview state
+  const [previewItem, setPreviewItem] = useState<EventWithLocation | null>(null);
+
+  // Story modal
   const [storyEvent, setStoryEvent] = useState<any>(null);
   const [storyVisible, setStoryVisible] = useState(false);
   const storyVisibleRef = useRef(false);
-  const storyJustClosed = useRef(false);
+  const justClosedStory = useRef(false);
+
   useEffect(() => { storyVisibleRef.current = storyVisible; }, [storyVisible]);
 
+  // Sheet animation
   const sheetY = useRef(new Animated.Value(SHEET_CLOSED)).current;
-  const dragStart = useRef(0);
   const backdropOp = useRef(new Animated.Value(0)).current;
+  const dragStart = useRef(0);
 
   const snapSheet = useCallback((to: number) => {
     Animated.parallel([
-      Animated.spring(sheetY, { toValue: to, tension: 180, friction: 22, useNativeDriver: false }),
-      Animated.timing(backdropOp, { toValue: to >= SHEET_HALF ? 0.35 : 0, duration: 250, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+      Animated.spring(sheetY, { toValue: to, tension: 200, friction: 25, useNativeDriver: false }),
+      Animated.timing(backdropOp, { toValue: to > 0 ? 0.3 : 0, duration: 200, useNativeDriver: false }),
     ]).start();
   }, [sheetY, backdropOp]);
 
@@ -217,55 +474,52 @@ export default function MapScreen() {
     setTimeout(() => {
       setActiveCountry(null);
       activeCountryRef.current = null;
-      // Bump renderKey so world-view markers fully remount and are visible again
       setRenderKey(k => k + 1);
-    }, 300);
+    }, 250);
   }, [snapSheet]);
-
-  const closeStory = useCallback(() => {
-    setStoryVisible(false);
-    storyJustClosed.current = true;
-    setTimeout(() => { storyJustClosed.current = false; }, 700);
-  }, []);
-
-  const openStory = useCallback((ev: any) => {
-    haptic('light');
-    setStoryEvent(ev);
-    setStoryVisible(true);
-  }, []);
 
   const pan = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => true,
-    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 5,
+    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 8,
     onPanResponderGrant: () => { dragStart.current = (sheetY as any)._value; },
     onPanResponderMove: (_, g) => {
-      const v = Math.max(0, Math.min(SHEET_FULL, dragStart.current - g.dy));
-      sheetY.setValue(v);
-      backdropOp.setValue(v >= SHEET_HALF ? Math.min(0.35, (v - SHEET_HALF) / (SHEET_FULL - SHEET_HALF) * 0.35) : 0);
+      const val = Math.max(0, Math.min(SHEET_FULL, dragStart.current - g.dy));
+      sheetY.setValue(val);
     },
     onPanResponderRelease: (_, g) => {
-      const c = (sheetY as any)._value;
-      if (-g.vy > SNAP_VEL) { snapSheet(SHEET_FULL); return; }
-      if (g.vy > SNAP_VEL) { c < SHEET_HALF * 0.6 ? closeSheet() : snapSheet(SHEET_HALF); return; }
-      const near = [SHEET_CLOSED, SHEET_HALF, SHEET_FULL].reduce((p, t) => Math.abs(t - c) < Math.abs(p - c) ? t : p);
-      near === SHEET_CLOSED ? closeSheet() : snapSheet(near);
+      const cur = (sheetY as any)._value;
+      if (g.vy > 1.2) { closeSheet(); return; }
+      if (-g.vy > 1.2) { snapSheet(SHEET_FULL); return; }
+      
+      const snaps = [SHEET_CLOSED, SHEET_HALF, SHEET_FULL];
+      const nearest = snaps.reduce((p, s) => Math.abs(s - cur) < Math.abs(p - cur) ? s : p);
+      nearest === SHEET_CLOSED ? closeSheet() : snapSheet(nearest);
     },
   })).current;
 
+  // Fetch events
   useEffect(() => {
     (async () => {
       try {
         setLoading(true);
-        const ps = Array.from({ length: 60 }, (_, i) => {
-          const d = new Date(); d.setDate(d.getDate() - i);
-          return api.get('/daily-content/by-date', { params: { date: d.toISOString().split('T')[0] } }).then(r => r.data?.events ?? []).catch(() => []);
+        const promises = Array.from({ length: 60 }, (_, i) => {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          return api.get('/daily-content/by-date', { params: { date: d.toISOString().split('T')[0] } })
+            .then(r => r.data?.events ?? [])
+            .catch(() => []);
         });
-        const all = (await Promise.all(ps)).flat();
+        
+        const all = (await Promise.all(promises)).flat();
         const seen = new Set<string>();
-        const uniq = all.filter((e: any) => { const id = `${e.eventDate}-${e.titleTranslations?.en}`; if (seen.has(id)) return false; seen.add(id); return true; });
-        setAllEvents(uniq);
-      } catch {}
-      finally {
+        const unique = all.filter((e: any) => {
+          const id = `${e.eventDate}-${e.titleTranslations?.en}`;
+          if (seen.has(id)) return false;
+          seen.add(id);
+          return true;
+        });
+        setAllEvents(unique);
+      } finally {
         setLoading(false);
       }
     })();
@@ -273,241 +527,395 @@ export default function MapScreen() {
 
   const clusters = useMemo(() => buildClusters(allEvents), [allEvents]);
   const total = useMemo(() => clusters.reduce((s, c) => s + c.items.length, 0), [clusters]);
-  const active = useMemo(() => clusters.find(c => c.country === activeCountry) ?? null, [clusters, activeCountry]);
+  const activeCluster = useMemo(() => clusters.find(c => c.country === activeCountry) ?? null, [clusters, activeCountry]);
 
-  const zoomIn = useCallback((cl: Cluster) => {
+  const zoomToCluster = useCallback((cluster: Cluster) => {
     haptic('medium');
-    setActiveCountry(cl.country);
-    activeCountryRef.current = cl.country;
-    if (cl.items.length === 1) {
-      mapRef.current?.animateToRegion({ latitude: cl.items[0].lat - 1.5, longitude: cl.items[0].lng, latitudeDelta: 6, longitudeDelta: 6 }, 800);
+    setActiveCountry(cluster.country);
+    activeCountryRef.current = cluster.country;
+
+    if (cluster.items.length === 1) {
+      mapRef.current?.animateToRegion({
+        latitude: cluster.items[0].lat,
+        longitude: cluster.items[0].lng,
+        latitudeDelta: 8,
+        longitudeDelta: 8,
+      }, 700);
     } else {
-      try {
-        mapRef.current?.fitToCoordinates(
-          cl.items.map(i => ({ latitude: i.lat, longitude: i.lng })),
-          { edgePadding: { top: 140, right: 60, bottom: Math.round(H * 0.5) + 60, left: 60 }, animated: true },
-        );
-      } catch {
-        const lats = cl.items.map(i => i.lat), lngs = cl.items.map(i => i.lng);
-        mapRef.current?.animateToRegion({
-          latitude: (Math.min(...lats) + Math.max(...lats)) / 2,
-          longitude: (Math.min(...lngs) + Math.max(...lngs)) / 2,
-          latitudeDelta: Math.max((Math.max(...lats) - Math.min(...lats)) * 2.2, 5),
-          longitudeDelta: Math.max((Math.max(...lngs) - Math.min(...lngs)) * 2.2, 5),
-        }, 800);
-      }
+      const lats = cluster.items.map(i => i.lat);
+      const lngs = cluster.items.map(i => i.lng);
+      const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+      const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
+      
+      mapRef.current?.animateToRegion({
+        latitude: (minLat + maxLat) / 2,
+        longitude: (minLng + maxLng) / 2,
+        latitudeDelta: Math.max((maxLat - minLat) * 1.8, 5),
+        longitudeDelta: Math.max((maxLng - minLng) * 1.8, 5),
+      }, 700);
     }
+    
     snapSheet(SHEET_HALF);
   }, [snapSheet]);
 
   const zoomOut = useCallback(() => {
     haptic('light');
     closeSheet();
-    mapRef.current?.animateCamera(INIT_CAM, { duration: 900 });
+    mapRef.current?.animateCamera(INIT_CAM, { duration: 800 });
   }, [closeSheet]);
 
-  const onMapReady = useCallback(() => { mapRef.current?.animateCamera(INIT_CAM, { duration: 1200 }); }, []);
+  const openPreview = useCallback((item: EventWithLocation) => {
+    haptic('light');
+    setPreviewItem(item);
+  }, []);
+
+  const closePreview = useCallback(() => {
+    setPreviewItem(null);
+  }, []);
+
+  const openStory = useCallback((ev: any) => {
+    haptic('light');
+    setPreviewItem(null);
+    setStoryEvent(ev);
+    setStoryVisible(true);
+  }, []);
+
+  const closeStory = useCallback(() => {
+    setStoryVisible(false);
+    justClosedStory.current = true;
+    setTimeout(() => { justClosedStory.current = false; }, 500);
+  }, []);
 
   const onMapPress = useCallback(() => {
-    if (storyVisibleRef.current) return;
-    if (storyJustClosed.current) return;
+    if (storyVisibleRef.current || justClosedStory.current) return;
+    if (previewItem) { setPreviewItem(null); return; }
     if (activeCountryRef.current) zoomOut();
-  }, [zoomOut]);
+  }, [previewItem, zoomOut]);
 
-  const accent = isDark ? '#E8D5A3' : '#1A73E8';
-  const panelBg = isDark ? '#1E1B16' : '#FFFFFF';
-  const panelBrd = isDark ? '#2E2A22' : '#E0E0E0';
+  const onMapReady = useCallback(() => {
+    mapRef.current?.animateCamera(INIT_CAM, { duration: 1000 });
+  }, []);
+
+  // Colors
+  const accent = isDark ? '#F59E0B' : '#2563EB';
+  const cardBg = isDark ? '#1C1917' : '#FFFFFF';
+  const borderCol = isDark ? '#292524' : '#E5E5E5';
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
+      {/* Map */}
       <MapView
-        ref={mapRef} style={StyleSheet.absoluteFill}
-        provider={PROVIDER_GOOGLE} initialRegion={INIT_REGION}
-        mapType="terrain" showsUserLocation showsCompass={false}
-        showsScale={false} showsBuildings pitchEnabled rotateEnabled
-        onMapReady={onMapReady} onPress={onMapPress}
+        ref={mapRef}
+        style={StyleSheet.absoluteFill}
+        provider={PROVIDER_GOOGLE}
+        initialRegion={INIT_REGION}
+        mapType="terrain"
+        showsUserLocation
+        showsCompass={false}
+        showsScale={false}
+        pitchEnabled
+        rotateEnabled
+        onMapReady={onMapReady}
+        onPress={onMapPress}
       >
-        {/* ══════════════════════════════════════════════════════════════
-            WORLD VIEW — Native Google Maps pinColor markers.
-            
-            renderKey changes every time we return from country close-up,
-            forcing a full remount so markers always reappear correctly.
-            
-            Each cluster shows the dominant category color.
-            title prop shows country name + event count in native callout.
-            ══════════════════════════════════════════════════════════════ */}
-        {!activeCountry && clusters.map(c => (
+        {/* World view - cluster markers */}
+        {!activeCountry && clusters.map(cluster => (
           <Marker
-            key={`c-${renderKey}-${c.country}`}
-            coordinate={{ latitude: c.cLat, longitude: c.cLng }}
-            pinColor={c.topColor}
-            title={c.country}
-            description={`${c.items.length} ${tm('events')} · ${c.cats.length} ${tm('categories')}`}
-            onPress={() => zoomIn(c)}
+            key={`cluster-${renderKey}-${cluster.country}`}
+            coordinate={{ latitude: cluster.lat, longitude: cluster.lng }}
+            pinColor={cluster.mainColor}
+            title={cluster.country}
+            description={`${cluster.items.length} events`}
+            onPress={() => zoomToCluster(cluster)}
             tracksViewChanges={false}
-            zIndex={c.items.length}
           />
         ))}
 
-        {/* ══════════════════════════════════════════════════════════════
-            COUNTRY VIEW — Native pinColor markers. ZERO custom views.
-            
-            pinColor uses the native Google Maps marker tinting.
-            This is the ONLY approach guaranteed to render on every
-            Android device without any bitmap snapshot issues.
-            
-            title + description props give native callout on long-press.
-            onPress directly opens the story.
-            ══════════════════════════════════════════════════════════════ */}
-        {activeCountry != null && active != null && active.items.map((item, idx) => {
-          const catKey = ck(item.event);
+        {/* Country view - individual event markers */}
+        {activeCountry && activeCluster && activeCluster.items.map((item, idx) => {
+          const catKey = getCat(item.event);
           const color = CAT[catKey]?.color ?? FALLBACK;
-          const title = item.event.titleTranslations?.[language] ?? item.event.titleTranslations?.en ?? '';
+          
           return (
             <Marker
-              key={`p-${activeCountry}-${idx}`}
+              key={`event-${activeCountry}-${idx}`}
               coordinate={{ latitude: item.lat, longitude: item.lng }}
               pinColor={color}
-              title={title}
-              description={`${getYear(item.event)} · ${item.label}`}
-              onPress={() => openStory(item.event)}
+              onPress={() => openPreview(item)}
               tracksViewChanges={false}
             />
           );
         })}
       </MapView>
 
-      {/* ═══════════ TOP STATUS ═══════════ */}
-      <View style={[S.topBar, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
-        <View style={[S.pill, { backgroundColor: panelBg + 'EE', borderColor: panelBrd }]}>
+      {/* Top status pill */}
+      <View style={[styles.topBar, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
+        <View style={[styles.topPill, { backgroundColor: cardBg, borderColor: borderCol }]}>
           {loading ? (
             <>
               <ActivityIndicator size="small" color={accent} />
-              <Text style={[S.pillT, { color: accent }]}>{tm('loading')}</Text>
+              <Text style={[styles.topText, { color: accent }]}>{tm('loading')}</Text>
             </>
           ) : activeCountry ? (
             <>
-              <Layers size={13} color={accent} strokeWidth={2.5} />
-              <Text style={[S.pillT, { color: accent }]}>{active?.items.length ?? 0} {tm('events')}</Text>
-              <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: panelBrd, marginHorizontal: 2 }} />
-              <Text style={[S.pillT, { color: theme.text, fontWeight: '800' }]}>{activeCountry}</Text>
+              <View style={[styles.topDot, { backgroundColor: activeCluster?.mainColor ?? accent }]} />
+              <Text style={[styles.topTextBold, { color: theme.text }]}>{activeCountry}</Text>
+              <Text style={[styles.topText, { color: theme.subtext }]}>
+                · {activeCluster?.items.length ?? 0} {tm('events')}
+              </Text>
             </>
           ) : (
             <>
-              <Globe2 size={13} color={accent} strokeWidth={2.5} />
-              <Text style={[S.pillT, { color: accent }]}>{total} {tm('events_across')} {clusters.length} {tm('countries')}</Text>
-              <Sparkles size={11} color={isDark ? '#E8D5A3' : '#FBBC04'} strokeWidth={2.5} />
+              <Globe2 size={16} color={accent} strokeWidth={2} />
+              <Text style={[styles.topTextBold, { color: theme.text }]}>{total}</Text>
+              <Text style={[styles.topText, { color: theme.subtext }]}>
+                {tm('events_across')} {clusters.length} {tm('countries')}
+              </Text>
             </>
           )}
         </View>
       </View>
 
-      {/* ═══════════ BACK ═══════════ */}
+      {/* Back button */}
       {activeCountry && (
-        <TouchableOpacity onPress={zoomOut} activeOpacity={0.7}
-          style={[S.back, { top: insets.top + 56, backgroundColor: panelBg + 'F0', borderColor: panelBrd }]}>
-          <Globe2 size={13} color={accent} strokeWidth={2.5} />
-          <Text style={{ fontSize: 12, fontWeight: '700', color: accent }}>{tm('back_to_world')}</Text>
+        <TouchableOpacity
+          onPress={zoomOut}
+          activeOpacity={0.8}
+          style={[styles.backBtn, { top: insets.top + 60, backgroundColor: cardBg, borderColor: borderCol }]}
+        >
+          <Globe2 size={14} color={accent} strokeWidth={2.5} />
+          <Text style={[styles.backText, { color: accent }]}>{tm('back_to_world')}</Text>
         </TouchableOpacity>
       )}
 
-      {/* ═══════════ EMPTY ═══════════ */}
-      {!loading && total === 0 && (
-        <View style={S.emptyW} pointerEvents="none">
-          <View style={[S.emptyC, { backgroundColor: panelBg + 'DD', borderColor: panelBrd }]}>
-            <Globe2 size={36} color={theme.subtext + '30'} strokeWidth={1.5} />
-            <Text style={{ fontSize: 14, fontWeight: '600', opacity: 0.5, color: theme.subtext }}>{tm('no_events')}</Text>
-          </View>
-        </View>
-      )}
+      {/* Backdrop */}
+      <Animated.View style={[styles.backdrop, { opacity: backdropOp }]} pointerEvents="none" />
 
-      {/* ═══════════ BACKDROP ═══════════ */}
-      <Animated.View style={[S.bd, { opacity: backdropOp }]} pointerEvents="none" />
-
-      {/* ═══════════ SHEET ═══════════ */}
-      <Animated.View style={[S.sheet, { height: sheetY, backgroundColor: isDark ? '#151310' : '#FAFAFA', borderColor: isDark ? '#2E2A22' : '#E0E0E0' }]}>
-        <View style={S.hArea} {...pan.panHandlers}>
-          <View style={[S.hBar, { backgroundColor: isDark ? '#3D372E' : '#CDCDCD' }]} />
-          {active && (
-            <View style={S.sHdr}>
-              <View style={S.sHdrL}>
-                <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: active.topColor }} />
-                <View style={{ flex: 1, gap: 2 }}>
-                  <Text style={{ fontSize: 18, fontWeight: '800', letterSpacing: -0.3, color: theme.text }} numberOfLines={1}>{active.country}</Text>
-                  <Text style={{ fontSize: 12, fontWeight: '600', color: theme.subtext, opacity: 0.55 }}>{active.items.length} {tm('events')} · {active.cats.length} {tm('categories')}</Text>
+      {/* Bottom sheet */}
+      <Animated.View
+        style={[
+          styles.sheet,
+          {
+            height: sheetY,
+            backgroundColor: isDark ? '#0F0E0D' : '#FAFAFA',
+            borderColor: borderCol,
+          },
+        ]}
+      >
+        <View style={styles.sheetHandle} {...pan.panHandlers}>
+          <View style={[styles.sheetBar, { backgroundColor: isDark ? '#404040' : '#D4D4D4' }]} />
+          
+          {activeCluster && (
+            <View style={styles.sheetHeader}>
+              <View style={styles.sheetHeaderLeft}>
+                <View style={[styles.sheetDot, { backgroundColor: activeCluster.mainColor }]} />
+                <View>
+                  <Text style={[styles.sheetTitle, { color: theme.text }]}>{activeCluster.country}</Text>
+                  <Text style={[styles.sheetSub, { color: theme.subtext }]}>
+                    {activeCluster.items.length} {tm('events')} · {activeCluster.cats.length} {tm('categories')}
+                  </Text>
                 </View>
               </View>
-              <TouchableOpacity onPress={zoomOut} hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}>
-                <View style={[S.xBtn, { backgroundColor: isDark ? '#2A2520' : '#F0F0F0', borderColor: isDark ? '#3A3228' : '#E0E0E0' }]}>
-                  <X size={14} color={isDark ? '#C9A84C' : '#888'} strokeWidth={2.5} />
-                </View>
+              <TouchableOpacity onPress={zoomOut} style={[styles.sheetClose, { backgroundColor: isDark ? '#292524' : '#F5F5F5' }]}>
+                <X size={16} color={theme.subtext} strokeWidth={2} />
               </TouchableOpacity>
             </View>
           )}
         </View>
-        {active ? (
-          <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 30 }} showsVerticalScrollIndicator={false} bounces={false}>
-            {active.cats.map((cat, i) => (
+
+        {activeCluster ? (
+          <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 20 }} showsVerticalScrollIndicator={false}>
+            {activeCluster.cats.map((cat, i) => (
               <React.Fragment key={cat.key}>
-                <CatSection cat={cat} language={language} tm={tm} theme={theme} isDark={isDark} onEvent={openStory} />
-                {i < active.cats.length - 1 && <View style={{ height: 1, marginHorizontal: 20, marginVertical: 4, backgroundColor: isDark ? '#2A2520' : '#EEE', borderRadius: 1 }} />}
+                <CategorySection
+                  cat={cat}
+                  language={language}
+                  theme={theme}
+                  isDark={isDark}
+                  tm={tm}
+                  onEventPress={openPreview}
+                />
+                {i < activeCluster.cats.length - 1 && (
+                  <View style={[styles.catDivider, { backgroundColor: isDark ? '#292524' : '#E5E5E5' }]} />
+                )}
               </React.Fragment>
             ))}
           </ScrollView>
         ) : (
-          <View style={{ paddingVertical: 50, alignItems: 'center' }}>
-            <MapPin size={28} color={theme.subtext + '20'} strokeWidth={1.5} />
-            <Text style={{ fontSize: 13, fontWeight: '600', opacity: 0.35, color: theme.subtext, marginTop: 8 }}>{tm('tap_to_explore')}</Text>
+          <View style={styles.sheetEmpty}>
+            <MapPin size={32} color={theme.subtext + '30'} strokeWidth={1.5} />
+            <Text style={[styles.sheetEmptyText, { color: theme.subtext }]}>{tm('tap_to_explore')}</Text>
           </View>
         )}
       </Animated.View>
 
-      {/* ═══════════ LOADING ═══════════ */}
+      {/* Loading overlay */}
       {loading && (
-        <View style={[S.loadOv, { backgroundColor: isDark ? 'rgba(18,16,12,0.92)' : 'rgba(255,255,255,0.92)' }]} pointerEvents="none">
-          <View style={[S.loadC, { backgroundColor: panelBg, borderColor: panelBrd }]}>
-            <Globe2 size={32} color={accent} strokeWidth={1.8} />
-            <ActivityIndicator color={accent} size="large" style={{ marginTop: 14 }} />
-            <Text style={{ fontSize: 13, fontWeight: '700', marginTop: 6, color: accent }}>{tm('loading')}</Text>
+        <View style={[styles.loadingOverlay, { backgroundColor: isDark ? 'rgba(15,14,13,0.9)' : 'rgba(255,255,255,0.9)' }]}>
+          <View style={[styles.loadingCard, { backgroundColor: cardBg, borderColor: borderCol }]}>
+            <Globe2 size={36} color={accent} strokeWidth={1.5} />
+            <ActivityIndicator size="large" color={accent} style={{ marginTop: 16 }} />
+            <Text style={[styles.loadingText, { color: accent }]}>{tm('loading')}</Text>
           </View>
         </View>
       )}
 
-      {/* ═══════════ STORY (always mounted) ═══════════ */}
+      {/* Preview card */}
+      {previewItem && (
+        <PreviewCard
+          item={previewItem}
+          language={language}
+          theme={theme}
+          isDark={isDark}
+          tm={tm}
+          onClose={closePreview}
+          onReadMore={() => openStory(previewItem.event)}
+        />
+      )}
+
+      {/* Story modal */}
       <StoryModal visible={storyVisible} event={storyEvent} onClose={closeStory} theme={theme} />
     </View>
   );
 }
 
-const S = StyleSheet.create({
-  topBar: { position: 'absolute', top: 0, left: 0, right: 0, alignItems: 'center', paddingHorizontal: 20 },
-  pill: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 28, borderWidth: 1,
-    ...(Platform.OS === 'ios' ? { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 12 } : { elevation: 6 }),
+// ═══════════════════════════════════════════════════════════════════════════════
+// Styles
+// ═══════════════════════════════════════════════════════════════════════════════
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+
+  // Top bar
+  topBar: { position: 'absolute', top: 0, left: 0, right: 0, alignItems: 'center', paddingHorizontal: 16 },
+  topPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 24,
+    borderWidth: 1,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8 },
+      android: { elevation: 4 },
+    }),
   },
-  pillT: { fontSize: 12, fontWeight: '700', letterSpacing: 0.2 },
-  back: {
-    position: 'absolute', left: 20, flexDirection: 'row', alignItems: 'center', gap: 7,
-    borderRadius: 22, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 10,
-    ...(Platform.OS === 'ios' ? { shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.1, shadowRadius: 8 } : { elevation: 5 }),
+  topDot: { width: 10, height: 10, borderRadius: 5 },
+  topText: { fontSize: 13, fontWeight: '500' },
+  topTextBold: { fontSize: 14, fontWeight: '700' },
+
+  // Back button
+  backBtn: {
+    position: 'absolute',
+    left: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6 },
+      android: { elevation: 3 },
+    }),
   },
-  emptyW: { position: 'absolute', bottom: 120, left: 0, right: 0, alignItems: 'center' },
-  emptyC: { alignItems: 'center', gap: 10, paddingHorizontal: 30, paddingVertical: 24, borderRadius: 20, borderWidth: 1 },
-  bd: { ...StyleSheet.absoluteFillObject, backgroundColor: '#000' },
+  backText: { fontSize: 13, fontWeight: '600' },
+
+  // Backdrop
+  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: '#000' },
+
+  // Sheet
   sheet: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    borderTopLeftRadius: 28, borderTopRightRadius: 28, borderTopWidth: 1, overflow: 'hidden',
-    ...(Platform.OS === 'ios' ? { shadowColor: '#000', shadowOffset: { width: 0, height: -6 }, shadowOpacity: 0.15, shadowRadius: 16 } : { elevation: 20 }),
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderTopWidth: 1,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.1, shadowRadius: 12 },
+      android: { elevation: 16 },
+    }),
   },
-  hArea: { paddingTop: 12, paddingHorizontal: 20, paddingBottom: 4 },
-  hBar: { width: 40, height: 4.5, borderRadius: 3, alignSelf: 'center', marginBottom: 14 },
-  sHdr: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 10 },
-  sHdrL: { flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1, marginRight: 14 },
-  xBtn: { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
-  loadOv: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
-  loadC: {
-    alignItems: 'center', gap: 4, paddingHorizontal: 40, paddingVertical: 32, borderRadius: 24, borderWidth: 1,
-    ...(Platform.OS === 'ios' ? { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.12, shadowRadius: 20 } : { elevation: 10 }),
+  sheetHandle: { paddingTop: 12, paddingHorizontal: 20, paddingBottom: 8 },
+  sheetBar: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
+  sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  sheetHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  sheetDot: { width: 12, height: 12, borderRadius: 6 },
+  sheetTitle: { fontSize: 18, fontWeight: '700' },
+  sheetSub: { fontSize: 12, fontWeight: '500', marginTop: 2, opacity: 0.6 },
+  sheetClose: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  sheetEmpty: { alignItems: 'center', paddingVertical: 50, gap: 12 },
+  sheetEmptyText: { fontSize: 14, fontWeight: '500', opacity: 0.5 },
+
+  // Category
+  catHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 12 },
+  catLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  catEmoji: { fontSize: 16 },
+  catLabel: { fontSize: 12, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase' },
+  catBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  catCount: { fontSize: 11, fontWeight: '800' },
+  catDivider: { height: 1, marginHorizontal: 20, marginVertical: 8 },
+
+  // Event row
+  eventRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, gap: 12 },
+  eventYear: { width: 52, paddingVertical: 6, borderRadius: 8, alignItems: 'center', borderWidth: 1 },
+  eventYearText: { fontSize: 11, fontWeight: '800' },
+  eventContent: { flex: 1, gap: 4 },
+  eventTitle: { fontSize: 14, fontWeight: '600', lineHeight: 20 },
+  eventLoc: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  eventLocText: { fontSize: 11, fontWeight: '500', opacity: 0.5 },
+  divider: { height: StyleSheet.hairlineWidth, marginLeft: 84 },
+
+  // Loading
+  loadingOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+  loadingCard: {
+    alignItems: 'center',
+    paddingHorizontal: 40,
+    paddingVertical: 32,
+    borderRadius: 20,
+    borderWidth: 1,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12 },
+      android: { elevation: 8 },
+    }),
   },
+  loadingText: { fontSize: 14, fontWeight: '600', marginTop: 8 },
+
+  // Preview
+  previewOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    zIndex: 100,
+  },
+  previewCard: {
+    width: '100%',
+    maxWidth: 360,
+    borderRadius: 20,
+    borderWidth: 1,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 16 },
+      android: { elevation: 12 },
+    }),
+  },
+  previewHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1 },
+  previewBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
+  previewEmoji: { fontSize: 16 },
+  previewCatText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase' },
+  previewClose: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  previewBody: { padding: 16, gap: 12 },
+  previewTitle: { fontSize: 17, fontWeight: '700', lineHeight: 24 },
+  previewSummary: { fontSize: 14, lineHeight: 21, opacity: 0.7 },
+  previewMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
+  previewMetaItem: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
+  previewMetaText: { fontSize: 12, fontWeight: '600' },
+  previewButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginHorizontal: 16, marginBottom: 16, paddingVertical: 14, borderRadius: 12 },
+  previewButtonText: { color: '#FFF', fontSize: 14, fontWeight: '700' },
 });
