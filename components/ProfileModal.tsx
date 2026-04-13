@@ -7,6 +7,7 @@ import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   Image,
   Modal,
@@ -23,6 +24,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Language, useLanguage } from '../context/LanguageContext';
 import { ThemeMode, useTheme } from '../context/ThemeContext';
+import { useNotifications } from '../hooks/usenotifications';
 import { useAuthStore } from '../store/useAuthStore';
 import {
   LEVEL_NAMES,
@@ -150,7 +152,6 @@ const PremiumThemeButton = ({ active, gold, isDark, theme, onPress }: {
         borderColor: active ? '#D4A84360' : theme.border,
         borderWidth: active ? 1.5 : 1.5,
       }]}>
-      {/* Gradient background for premium */}
       {active && (
         <LinearGradient
           colors={['#14101E', '#0A0815', '#12100A']}
@@ -159,8 +160,6 @@ const PremiumThemeButton = ({ active, gold, isDark, theme, onPress }: {
           end={{ x: 1, y: 1 }}
         />
       )}
-
-      {/* Shimmer overlay */}
       {active && (
         <Animated.View style={[StyleSheet.absoluteFill, {
           backgroundColor: '#D4A843',
@@ -168,18 +167,15 @@ const PremiumThemeButton = ({ active, gold, isDark, theme, onPress }: {
           borderRadius: 14,
         }]} />
       )}
-
       <View style={[_pm.circle, {
         backgroundColor: active ? '#D4A843' : isDark ? '#1C1A16' : '#F0ECE4',
       }]}>
         <Ionicons name="diamond" size={17} color={active ? '#05040A' : theme.subtext} />
       </View>
-
       <Text style={[_pm.label, {
         color: active ? '#D4A843' : theme.text,
         fontWeight: active ? '800' : '500',
       }]}>Royal</Text>
-
       {!active && (
         <View style={_pm.badge}>
           <Text style={_pm.badgeText}>NEW</Text>
@@ -211,9 +207,17 @@ export default function ProfileModal({ visible, onClose }: Props) {
   const { mode, setMode, theme, isDark, isPremium } = useTheme();
   const { t, language, setLanguage } = useLanguage();
   const insets = useSafeAreaInsets();
-  const [notificationsOn, setNotificationsOn] = useState(true);
   const [langExpanded, setLangExpanded] = useState(false);
   const [supportVisible, setSupportVisible] = useState(false);
+
+  // ── Notifications hook ──
+  const {
+    enabled: notificationsOn,
+    toggle: toggleNotifications,
+    isDevAccount,
+    sendTestNotification,
+    testLoading,
+  } = useNotifications();
 
   const { getStreakStatus, totalEventsRead, getXPInfo, getAchievements } = useGamificationStore();
   const { streak, longest } = getStreakStatus();
@@ -275,7 +279,6 @@ export default function ProfileModal({ visible, onClose }: Props) {
       <Modal visible={visible} animationType="slide" transparent={false} statusBarTranslucent>
         <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} translucent backgroundColor="transparent" />
         <View style={[s.root, { paddingTop: insets.top }]}>
-          {/* Premium gradient background */}
           {isPremium && (
             <LinearGradient
               colors={['#05040A', '#0A0815', '#05040A']}
@@ -392,11 +395,68 @@ export default function ProfileModal({ visible, onClose }: Props) {
                   </View>
                 )}
                 <Hairline theme={theme} inset />
-                <SettingRow icon="notifications-outline" iconColor="#FF9500" iconBg={'#FF950010'} title={t('notifications')} subtitle={notificationsOn ? t('on') : t('off')} theme={theme}
-                  right={<Switch value={notificationsOn} onValueChange={setNotificationsOn} trackColor={{ false: theme.border, true: `${gold}55` }} thumbColor={notificationsOn ? gold : isDark ? '#555' : '#ccc'} ios_backgroundColor={theme.border} style={{ transform: [{ scale: 0.82 }] }} />} />
+
+                {/* ── Notifications toggle ── */}
+                <SettingRow
+                  icon="notifications-outline"
+                  iconColor="#FF9500"
+                  iconBg={'#FF950010'}
+                  title={t('notifications')}
+                  subtitle={notificationsOn ? t('on') : t('off')}
+                  theme={theme}
+                  right={
+                    <Switch
+                      value={notificationsOn}
+                      onValueChange={toggleNotifications}
+                      trackColor={{ false: theme.border, true: `${gold}55` }}
+                      thumbColor={notificationsOn ? gold : isDark ? '#555' : '#ccc'}
+                      ios_backgroundColor={theme.border}
+                      style={{ transform: [{ scale: 0.82 }] }}
+                    />
+                  }
+                />
+
+                {/* ── Dev-only: Test Notification button ── */}
+                {isDevAccount && (
+                  <>
+                    <Hairline theme={theme} inset />
+                    <SettingRow
+                      icon="bug-outline"
+                      iconColor="#FF2D55"
+                      iconBg={'#FF2D5510'}
+                      title="Test Notification"
+                      subtitle={`Fires in 3s · ${language.toUpperCase()} · real events`}
+                      theme={theme}
+                      onPress={testLoading ? undefined : sendTestNotification}
+                      right={
+                        testLoading ? (
+                          <ActivityIndicator size="small" color="#FF2D55" />
+                        ) : (
+                          <View style={{
+                            backgroundColor: '#FF2D5512',
+                            paddingHorizontal: 8,
+                            paddingVertical: 3,
+                            borderRadius: 6,
+                            borderWidth: 1,
+                            borderColor: '#FF2D5525',
+                          }}>
+                            <Text style={{
+                              color: '#FF2D55',
+                              fontSize: 9,
+                              fontWeight: '800',
+                              letterSpacing: 1,
+                            }}>
+                              DEV
+                            </Text>
+                          </View>
+                        )
+                      }
+                    />
+                  </>
+                )}
               </View>
 
-              {/* ══ APPEARANCE — with Premium option ══ */}
+              {/* ══ APPEARANCE ══ */}
               <SectionTitle label={t('appearance')} theme={theme} />
               <View style={[s.card, { backgroundColor: isPremium ? '#0F0D14' : theme.card, borderColor: isPremium ? '#2A2230' : theme.border }]}>
                 <View style={s.themeRow}>
@@ -412,7 +472,6 @@ export default function ProfileModal({ visible, onClose }: Props) {
                       </TouchableOpacity>
                     );
                   })}
-                  {/* Premium theme button — special styling */}
                   <PremiumThemeButton
                     active={mode === 'premium'}
                     gold={gold}

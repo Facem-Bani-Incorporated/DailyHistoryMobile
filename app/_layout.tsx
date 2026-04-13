@@ -1,5 +1,6 @@
 // app/_layout.tsx
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import * as Notifications from 'expo-notifications';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
@@ -10,6 +11,7 @@ import { ThemeProvider, useTheme } from '../context/ThemeContext';
 import { useAdsInit } from '../hooks/useAdsInit';
 import { useGamificationSync } from '../hooks/useGamificationSync';
 import { useAuthStore } from '../store/useAuthStore';
+import { useNotificationEventStore } from '../store/useNotificationEventStore';
 
 function AppContent() {
   const token = useAuthStore((state) => state.token);
@@ -27,6 +29,23 @@ function AppContent() {
 
   // ── Initialize Google Mobile Ads SDK ──
   useAdsInit();
+
+  // ── Handle notification taps (deep-link to event) ──
+  useEffect(() => {
+    // User tapped notification while app was killed/background
+    Notifications.getLastNotificationResponseAsync().then((response) => {
+      const event = response?.notification?.request?.content?.data?.event;
+      if (event) useNotificationEventStore.getState().setPendingEvent(event);
+    });
+
+    // User taps notification while app is in foreground
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const event = response?.notification?.request?.content?.data?.event;
+      if (event) useNotificationEventStore.getState().setPendingEvent(event);
+    });
+
+    return () => sub.remove();
+  }, []);
 
   useEffect(() => {
     GoogleSignin.configure({

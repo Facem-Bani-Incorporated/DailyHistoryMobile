@@ -1,7 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Device from 'expo-device';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
 import { Bell, Clock, ShieldCheck } from 'lucide-react-native';
 import { useEffect, useRef } from 'react';
@@ -17,7 +15,14 @@ import {
   View,
 } from 'react-native';
 
-const { width, height } = Dimensions.get('window');
+import api from '../api';
+import {
+  requestNotificationPermissions,
+  schedulePersonalizedNotification,
+  setupNotificationChannel,
+} from '../utils/Notifications';
+
+const { width } = Dimensions.get('window');
 
 // ─── Animated ring component ──────────────────────────────────────────────────
 const PulseRing = ({ size, delay, duration }: { size: number; delay: number; duration: number }) => {
@@ -113,36 +118,31 @@ export default function NotificationPrompt() {
     ]).start();
   }, []);
 
-  // ── Push permissions ──
-  const requestPushPermissions = async () => {
-    if (!Device.isDevice) {
-      console.log('Must use physical device for Push Notifications');
-      return;
-    }
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-    if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
-    }
-    if (finalStatus !== 'granted') {
-      console.log('Permission denied');
-      return;
-    }
-    const token = (await Notifications.getExpoPushTokenAsync()).data;
-    console.log('Push token:', token);
-    if (Platform.OS === 'android') {
-      await Notifications.setNotificationChannelAsync('default', {
-        name: 'default',
-        importance: Notifications.AndroidImportance.MAX,
-      });
-    }
-  };
-
   const handleEnable = async () => {
     try {
       await AsyncStorage.setItem('notif_prompt_seen', 'true');
-      await requestPushPermissions();
+      await AsyncStorage.setItem('notifications_enabled', 'true');
+
+      // Setup Android channel & request permission
+      await setupNotificationChannel();
+      const granted = await requestNotificationPermissions();
+
+      if (granted) {
+        // Fetch tomorrow's events and schedule the first notification
+        try {
+          const tomorrow = new Date();
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          const iso = tomorrow.toISOString().split('T')[0];
+          const res = await api.get('/daily-content/by-date', {
+            params: { date: iso, _t: Date.now() },
+          });
+          const events: any[] = res.data?.events ?? [];
+          await schedulePersonalizedNotification(events, 'en');
+        } catch {
+          await schedulePersonalizedNotification([], 'en');
+        }
+      }
+
       router.replace('/(auth)/login');
     } catch (e) {
       console.error('Failed to save notification status', e);

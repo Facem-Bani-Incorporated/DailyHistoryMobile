@@ -32,9 +32,11 @@ import { useInterstitialAd } from '../../hooks/useInterstitialAd';
 import { useRewardedUnlock } from '../../hooks/useRewardedUnlock';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useGamificationStore } from '../../store/useGamificationStore';
+import { useNotificationEventStore } from '../../store/useNotificationEventStore';
 import { useUserSavedEvents } from '../../store/useSavedStore';
 import { haptic } from '../../utils/haptics';
 import { schedulePersonalizedNotification } from '../../utils/Notifications';
+import { StoryModal } from '../../components/StoryModal';
 import SavedScreen from './saved';
 
 const { width: W } = Dimensions.get('window');
@@ -119,6 +121,18 @@ export default function HomeScreen() {
   useEffect(() => { setSeenSaved(userSaved.length); }, [user?.id]);
   const unseenSaved = tab === 'saved' ? 0 : Math.max(0, userSaved.length - seenSaved);
 
+  // ── Notification deep-link: open StoryModal for tapped event ──
+  const pendingEvent = useNotificationEventStore(s => s.pendingEvent);
+  const clearPendingEvent = useNotificationEventStore(s => s.clearPendingEvent);
+  const [notifEvent, setNotifEvent] = useState<any>(null);
+
+  useEffect(() => {
+    if (pendingEvent) {
+      setNotifEvent(pendingEvent);
+      clearPendingEvent();
+    }
+  }, [pendingEvent]);
+
   // LOGICA RECLAMA VIDEO LA 3 POVESTI
   const prevEventsRead = useRef(totalEventsRead);
   useEffect(() => { 
@@ -151,7 +165,7 @@ export default function HomeScreen() {
   useEffect(() => {
     recordVisit(); try { genRecap(); } catch { }
     setTimeout(() => { if (getRecap()) setRecapVis(true); }, 2000);
-    Promise.all([fetchOne(0), fetchOne(-1), fetchOne(1)]).then(() => { setLoading(false); setTick(t => t + 1); fetchAll(); for (let i = 2; i <= 7; i++) fetchOne(-i).catch(() => { }); fetchOne(1).then(d => schedulePersonalizedNotification(d.data, language)).catch(() => schedulePersonalizedNotification([], language)); });
+    Promise.all([fetchOne(0), fetchOne(-1), fetchOne(1)]).then(async () => { setLoading(false); setTick(t => t + 1); fetchAll(); for (let i = 2; i <= 7; i++) fetchOne(-i).catch(() => { }); const notifPref = await AsyncStorage.getItem('notifications_enabled'); if (notifPref !== 'false') { fetchOne(1).then(d => schedulePersonalizedNotification(d.data, language)).catch(() => schedulePersonalizedNotification([], language)); } });
   }, []);
 
   const listRef = useRef<FlatList>(null);
@@ -289,6 +303,7 @@ export default function HomeScreen() {
         <LeaderboardModal visible={leadVis} onClose={() => setLeadVis(false)} />
         <WeeklyRecapModal visible={recapVis} onClose={() => setRecapVis(false)} />
         <CalendarModal visible={calVis} onClose={() => setCalVis(false)} onSelectDate={(d: Date) => jump(d2o(d))} selectedDate={offDate(off)} maxFutureOffset={MAX_FWD} />
+        <StoryModal visible={!!notifEvent} event={notifEvent} onClose={() => setNotifEvent(null)} theme={theme} allEvents={allEvents} />
       </View>
     </AllEventsProvider>
   );
