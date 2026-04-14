@@ -27,20 +27,22 @@ import { haptic } from '../utils/haptics';
 import { StoryModal } from './StoryModal';
 
 const { width: W, height: H } = Dimensions.get('window');
-const CARD_H = 180;
-const CARD_GAP = 12;
-const ITEM_SIZE = CARD_H + CARD_GAP;
-const SPINE_X = 32;
 const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
 
-// Constante pentru padding-ul listei – esențiale pentru calculele de centrare
-const PADDING_TOP = H * 0.35;
-const PADDING_BOTTOM = H * 0.4;
+// ── Compact sizes — fits ~6-7 items on screen ───────────────────────────────
+const ITEM_H = 72;
+const ITEM_GAP = 6;
+const ITEM_TOTAL = ITEM_H + ITEM_GAP;
+const ERA_H = 50;
+const ERA_TOTAL = ERA_H + ITEM_GAP;
 
-// Parametrii efectului circular
-const MAX_SHIFT = 70;
-const MAX_SCALE = 1.25;
-const EFFECT_RADIUS = H * 0.45;
+// ── Arc geometry ────────────────────────────────────────────────────────────
+// Imagine a huge circle to the LEFT of the spine. Items sit on its rim.
+// The item at viewport-center is at the 3-o'clock position (rightmost).
+// Items above/below curve away toward 12/6-o'clock (leftward + smaller).
+const ARC_SHIFT = W * 0.18;          // max horizontal push at center
+const FOCUS_ZONE = H * 0.44;         // half-height of the effect window
+const CENTER_Y = 56;                 // header height offset
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 const CAT_COLORS: Record<string, string> = {
@@ -48,143 +50,134 @@ const CAT_COLORS: Record<string, string> = {
   politics_state: '#F59E0B', culture_arts: '#10B981', natural_disaster: '#F97316',
   exploration: '#06B6D4', religion_phil: '#8B6F47',
 };
-const CAT_LABELS: Record<string, string> = {
-  war_conflict: 'War', tech_innovation: 'Tech', science_discovery: 'Science',
-  politics_state: 'Politics', culture_arts: 'Culture', natural_disaster: 'Disaster',
-  exploration: 'Exploration', religion_phil: 'Religion',
+const CAT_TAG: Record<string, string> = {
+  war_conflict: 'WAR', tech_innovation: 'TECH', science_discovery: 'SCI',
+  politics_state: 'POL', culture_arts: 'ART', natural_disaster: 'NAT',
+  exploration: 'EXP', religion_phil: 'REL',
 };
-
-const extractYear = (e: any): number => {
-  const r = String(e?.eventDate ?? e?.event_date ?? e?.year ?? '').trim();
+const extractYear = (ev: any): number => {
+  const r = String(ev?.eventDate ?? ev?.event_date ?? ev?.year ?? '').trim();
   if (/^\d{4}$/.test(r)) return parseInt(r);
   if (r.includes('-') && r.split('-')[0].length === 4) return parseInt(r.split('-')[0]);
   return 0;
 };
-
-const getCatColor = (cat?: string) => CAT_COLORS[(cat ?? '').toLowerCase()] ?? '#8B7355';
-const getCatLabel = (cat?: string) => CAT_LABELS[(cat ?? '').toLowerCase()] ?? 'History';
-
-const getCenturyLabel = (year: number): string => {
-  if (year <= 0) return 'Ancient';
-  const c = Math.ceil(year / 100);
-  const s = c === 1 ? 'st' : c === 2 ? 'nd' : c === 3 ? 'rd' : 'th';
-  return `${c}${s} Century`;
+const catColor = (c?: string) => CAT_COLORS[(c ?? '').toLowerCase()] ?? '#8B7355';
+const catTag = (c?: string) => CAT_TAG[(c ?? '').toLowerCase()] ?? 'HIS';
+const centuryLabel = (y: number) => {
+  if (y <= 0) return 'Ancient';
+  const n = Math.ceil(y / 100);
+  const s = n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th';
+  return `${n}${s} Century`;
 };
 
 // ── Types ───────────────────────────────────────────────────────────────────
-type TimelineItem =
-  | { type: 'era'; century: number; label: string; count: number }
-  | { type: 'event'; event: any; index: number };
-
+type TItem =
+  | { k: 'era'; century: number; label: string; count: number; y: number; h: number }
+  | { k: 'ev';  event: any;      y: number; h: number };
 interface Props { allEvents: any[] }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// ANIMATED EVENT CARD – mișcare circulară corectată cu PADDING_TOP
+// EVENT CARD — compact, arc-animated
 // ══════════════════════════════════════════════════════════════════════════════
-const EventCard = React.memo(({
-  event, itemIndex, scrollY, theme, isDark, language, gold, onPress,
+const EvCard = React.memo(({
+  event, yOff, scrollY, theme, isDark, language, gold, onPress,
 }: {
-  event: any; itemIndex: number; scrollY: SharedValue<number>;
+  event: any; yOff: number; scrollY: SharedValue<number>;
   theme: any; isDark: boolean; language: string; gold: string;
   onPress: () => void;
 }) => {
   const year = extractYear(event);
   const title = event.titleTranslations?.[language] ?? event.titleTranslations?.en ?? '';
-  const narrative = event.narrativeTranslations?.[language] ?? event.narrativeTranslations?.en ?? '';
-  const imageUri = event.gallery?.[0];
-  const catColor = getCatColor(event.category);
-  const catLabel = getCatLabel(event.category);
-  const preview = narrative.length > 100 ? narrative.slice(0, 100).replace(/\s+\S*$/, '') + '...' : narrative;
+  const img = event.gallery?.[0];
+  const cc = catColor(event.category);
+  const ct = catTag(event.category);
+  const mid = yOff + ITEM_H / 2;
 
-  // Poziția absolută a centrului cardului în conținutul FlatList (include PADDING_TOP)
-  const cardCenter = PADDING_TOP + itemIndex * ITEM_SIZE + CARD_H / 2;
-
-  const animStyle = useAnimatedStyle(() => {
-    const viewportCenter = scrollY.value + H / 2;
-    const distance = Math.abs(cardCenter - viewportCenter);
-    const t = Math.min(distance / EFFECT_RADIUS, 1);
-
+  // ── Arc animation ──
+  const cardStyle = useAnimatedStyle(() => {
+    const vc = scrollY.value + H / 2 - CENTER_Y;
+    const d = mid - vc;                           // signed distance
+    const ad = Math.abs(d);
+    const t = Math.min(ad / FOCUS_ZONE, 1);       // 0 at center → 1 at edge
     const angle = t * (Math.PI / 2);
-    const shift = MAX_SHIFT * Math.cos(angle);
-    const scale = 1 + (MAX_SCALE - 1) * Math.cos(angle);
-    const opacity = interpolate(t, [0, 0.5, 1], [1, 0.9, 0.6], Extrapolation.CLAMP);
+
+    // Circular translateX: cos(0)=1 → cos(π/2)=0
+    const tx = ARC_SHIFT * Math.cos(angle);
+
+    // Scale: big at center, small at edges
+    const sc = interpolate(t, [0, 0.35, 1], [1.15, 0.98, 0.78], Extrapolation.CLAMP);
+
+    // Opacity
+    const op = interpolate(t, [0, 0.4, 1], [1, 0.7, 0.3], Extrapolation.CLAMP);
+
+    // Subtle rotation following the arc tangent
+    const rot = interpolate(d, [-FOCUS_ZONE, 0, FOCUS_ZONE], [2, 0, -2], Extrapolation.CLAMP);
 
     return {
-      transform: [
-        { translateX: shift },
-        { scale },
-      ],
-      opacity,
+      transform: [{ translateX: tx }, { scale: sc }, { rotate: `${rot}deg` }],
+      opacity: op,
     };
   });
 
+  // Spine node
   const nodeStyle = useAnimatedStyle(() => {
-    const viewportCenter = scrollY.value + H / 2;
-    const distance = Math.abs(cardCenter - viewportCenter);
-    const t = Math.min(distance / (EFFECT_RADIUS * 0.7), 1);
-    const glowScale = interpolate(t, [0, 1], [1.6, 0.7], Extrapolation.CLAMP);
-    const glowOpacity = interpolate(t, [0, 1], [1, 0.2], Extrapolation.CLAMP);
+    const vc = scrollY.value + H / 2 - CENTER_Y;
+    const t = Math.min(Math.abs(mid - vc) / (FOCUS_ZONE * 0.5), 1);
     return {
-      transform: [{ scale: glowScale }],
-      opacity: glowOpacity,
+      transform: [{ scale: interpolate(t, [0, 1], [1.9, 0.6], Extrapolation.CLAMP) }],
+      opacity: interpolate(t, [0, 1], [1, 0.2], Extrapolation.CLAMP),
     };
+  });
+
+  // Connector stretches with the arc shift
+  const connStyle = useAnimatedStyle(() => {
+    const vc = scrollY.value + H / 2 - CENTER_Y;
+    const t = Math.min(Math.abs(mid - vc) / FOCUS_ZONE, 1);
+    const w = interpolate(t, [0, 1], [20, 5], Extrapolation.CLAMP);
+    const o = interpolate(t, [0, 1], [0.45, 0.06], Extrapolation.CLAMP);
+    return { width: w, opacity: o };
   });
 
   return (
-    <View style={[ev.wrapper, { height: CARD_H, marginBottom: CARD_GAP }]}>
-      <View style={ev.spineCol}>
-        <View style={[ev.spineLine, { backgroundColor: theme.border }]} />
-        <Animated.View style={[ev.node, { backgroundColor: catColor, shadowColor: catColor }, nodeStyle]} />
-        <View style={[ev.spineLine, { backgroundColor: theme.border }]} />
+    <View style={[cs.row, { height: ITEM_H, marginBottom: ITEM_GAP }]}>
+      {/* Spine */}
+      <View style={cs.spine}>
+        <View style={[cs.line, { backgroundColor: theme.border }]} />
+        <Animated.View style={[cs.node, { backgroundColor: cc, shadowColor: cc }, nodeStyle]} />
+        <View style={[cs.line, { backgroundColor: theme.border }]} />
       </View>
 
-      <Animated.View style={[ev.cardOuter, animStyle]}>
-        <TouchableOpacity onPress={onPress} activeOpacity={0.85} style={{ flex: 1 }}>
-          <View style={[ev.card, {
-            backgroundColor: isDark ? '#111116' : '#FAFAF9',
-            borderColor: isDark ? '#1E1E26' : '#E8E6E1',
+      {/* Connector bridge */}
+      <Animated.View style={[cs.conn, { backgroundColor: cc }, connStyle]} />
+
+      {/* Card body */}
+      <Animated.View style={[cs.wrap, cardStyle]}>
+        <TouchableOpacity onPress={onPress} activeOpacity={0.82} style={{ flex: 1 }}>
+          <View style={[cs.card, {
+            backgroundColor: isDark ? '#0F0F14' : '#FAFAF8',
+            borderColor: isDark ? '#1C1C24' : '#ECEAE5',
           }]}>
-            {imageUri ? (
-              <View style={ev.imageWrap}>
-                <Image source={{ uri: imageUri }} style={ev.image} contentFit="cover" transition={400} />
-                <LinearGradient
-                  colors={['transparent', 'rgba(0,0,0,0.7)']}
-                  style={ev.imageOverlay}
-                />
-                <View style={[ev.yearBadgeImage, { backgroundColor: catColor }]}>
-                  <Text style={ev.yearBadgeText}>{year}</Text>
-                </View>
+            {/* Thumbnail */}
+            {img ? (
+              <View style={cs.imgBox}>
+                <Image source={{ uri: img }} style={cs.img} contentFit="cover" transition={250} />
+                <LinearGradient colors={['transparent', 'rgba(0,0,0,0.55)']} style={cs.imgFade} />
               </View>
             ) : (
-              <View style={[ev.noImageHero, { backgroundColor: catColor + '0A' }]}>
-                <Text style={[ev.noImageYear, { color: catColor }]}>{year}</Text>
-                <View style={[ev.noImageLine, { backgroundColor: catColor + '20' }]} />
+              <View style={[cs.imgBox, { backgroundColor: cc + '08' }]}>
+                <Text style={[cs.imgYear, { color: cc }]}>{year}</Text>
               </View>
             )}
 
-            <View style={ev.content}>
-              <View style={ev.metaRow}>
-                <View style={[ev.catPill, { backgroundColor: catColor + '14', borderColor: catColor + '28' }]}>
-                  <View style={[ev.catDot, { backgroundColor: catColor }]} />
-                  <Text style={[ev.catText, { color: catColor }]}>{catLabel}</Text>
-                </View>
-                {imageUri && (
-                  <Text style={[ev.yearSmall, { color: theme.subtext }]}>{year}</Text>
-                )}
+            {/* Text */}
+            <View style={cs.body}>
+              <View style={cs.meta}>
+                <View style={[cs.dot, { backgroundColor: cc }]} />
+                <Text style={[cs.tag, { color: cc }]}>{ct}</Text>
+                <Text style={[cs.yr, { color: theme.subtext }]}>{year}</Text>
               </View>
-
-              <Text style={[ev.title, { color: theme.text }]} numberOfLines={2}>
-                {title}
-              </Text>
-
-              {preview !== '' && (
-                <Text style={[ev.narrative, { color: theme.subtext }]} numberOfLines={2}>
-                  {preview}
-                </Text>
-              )}
+              <Text style={[cs.title, { color: theme.text }]} numberOfLines={2}>{title}</Text>
             </View>
-
-            <View style={[ev.connector, { backgroundColor: catColor + '40' }]} />
           </View>
         </TouchableOpacity>
       </Animated.View>
@@ -192,146 +185,133 @@ const EventCard = React.memo(({
   );
 });
 
-const ev = StyleSheet.create({
-  wrapper: { flexDirection: 'row', paddingRight: 20 },
-  spineCol: { width: SPINE_X + 20, alignItems: 'center', paddingLeft: SPINE_X - 5 },
-  spineLine: { flex: 1, width: 2, borderRadius: 1 },
+const cs = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'center' },
+  spine: { width: 26, alignItems: 'center' },
+  line: { flex: 1, width: 1.5, borderRadius: 1 },
   node: {
-    width: 10, height: 10, borderRadius: 5, zIndex: 2,
-    shadowOpacity: 0.5, shadowRadius: 8, shadowOffset: { width: 0, height: 0 }, elevation: 4,
+    width: 7, height: 7, borderRadius: 4, zIndex: 2,
+    shadowOpacity: 0.6, shadowRadius: 6, shadowOffset: { width: 0, height: 0 }, elevation: 3,
   },
-  cardOuter: { flex: 1 },
+  conn: { height: 1.5, borderRadius: 1, marginLeft: -1 },
+  wrap: { flex: 1, marginRight: 12 },
   card: {
-    flex: 1, borderRadius: 16, overflow: 'hidden',
-    borderWidth: 1,
-    shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 }, elevation: 3,
+    flex: 1, flexDirection: 'row', borderRadius: 14, overflow: 'hidden', borderWidth: 1,
   },
-  imageWrap: { height: 100, overflow: 'hidden' },
-  image: { width: '100%', height: '100%' },
-  imageOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 50 },
-  yearBadgeImage: {
-    position: 'absolute', bottom: 8, left: 12,
-    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6,
-  },
-  yearBadgeText: { color: '#fff', fontSize: 12, fontWeight: '900', letterSpacing: 0.5 },
-  noImageHero: {
-    height: 60, alignItems: 'center', justifyContent: 'center',
-  },
-  noImageYear: { fontSize: 26, fontWeight: '900', letterSpacing: -1, opacity: 0.25 },
-  noImageLine: { position: 'absolute', bottom: 0, left: 16, right: 16, height: 1 },
-  content: { flex: 1, padding: 12, gap: 4 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  catPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5, borderWidth: 1,
-  },
-  catDot: { width: 4, height: 4, borderRadius: 2 },
-  catText: { fontSize: 9, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase' },
-  yearSmall: { fontSize: 10, fontWeight: '600', opacity: 0.4 },
-  title: {
-    fontSize: 14, fontWeight: '800', letterSpacing: -0.2, lineHeight: 18,
-    fontFamily: SERIF,
-  },
-  narrative: { fontSize: 11, lineHeight: 16, opacity: 0.6 },
-  connector: {
-    position: 'absolute', left: -10, top: '45%' as any, width: 10, height: 2, borderRadius: 1,
-  },
+  imgBox: { width: 58, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  img: { width: 58, height: '100%' },
+  imgFade: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 20 },
+  imgYear: { fontSize: 15, fontWeight: '900', opacity: 0.2, letterSpacing: -0.5 },
+  body: { flex: 1, paddingHorizontal: 10, paddingVertical: 8, justifyContent: 'center', gap: 3 },
+  meta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  dot: { width: 4, height: 4, borderRadius: 2 },
+  tag: { fontSize: 8, fontWeight: '800', letterSpacing: 1 },
+  yr: { fontSize: 9, fontWeight: '600', opacity: 0.3, marginLeft: 'auto' },
+  title: { fontSize: 12, fontWeight: '700', lineHeight: 16, letterSpacing: -0.1, fontFamily: SERIF },
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// ERA DIVIDER – cu aceeași corecție de padding
+// ERA DIVIDER — century separator, also arc-animated
 // ══════════════════════════════════════════════════════════════════════════════
-const EraDivider = React.memo(({ century, label, count, theme, gold, scrollY, itemIndex }: {
-  century: number; label: string; count: number;
-  theme: any; gold: string; scrollY: SharedValue<number>; itemIndex: number;
+const EraCard = React.memo(({
+  century, label, count, yOff, scrollY, theme, isDark, gold,
+}: {
+  century: number; label: string; count: number; yOff: number;
+  scrollY: SharedValue<number>; theme: any; isDark: boolean; gold: string;
 }) => {
-  const cardCenter = PADDING_TOP + itemIndex * ITEM_SIZE + CARD_H / 2;
+  const mid = yOff + ERA_H / 2;
 
-  const animStyle = useAnimatedStyle(() => {
-    const viewportCenter = scrollY.value + H / 2;
-    const distance = Math.abs(cardCenter - viewportCenter);
-    const t = Math.min(distance / EFFECT_RADIUS, 1);
+  const style = useAnimatedStyle(() => {
+    const vc = scrollY.value + H / 2 - CENTER_Y;
+    const d = mid - vc;
+    const ad = Math.abs(d);
+    const t = Math.min(ad / FOCUS_ZONE, 1);
     const angle = t * (Math.PI / 2);
-    const shift = (MAX_SHIFT * 0.5) * Math.cos(angle);
-    const scale = 1 + (MAX_SCALE * 0.2) * Math.cos(angle);
-    const opacity = interpolate(t, [0, 0.5, 1], [1, 0.85, 0.5], Extrapolation.CLAMP);
-
+    const tx = ARC_SHIFT * 0.6 * Math.cos(angle);
+    const sc = interpolate(t, [0, 1], [1.1, 0.82], Extrapolation.CLAMP);
+    const op = interpolate(t, [0, 0.5, 1], [1, 0.75, 0.35], Extrapolation.CLAMP);
     return {
-      transform: [
-        { translateX: shift },
-        { scale },
-      ],
-      opacity,
+      transform: [{ translateX: tx }, { scale: sc }],
+      opacity: op,
+    };
+  });
+
+  // Pulsing glow on the era node
+  const nodeStyle = useAnimatedStyle(() => {
+    const vc = scrollY.value + H / 2 - CENTER_Y;
+    const t = Math.min(Math.abs(mid - vc) / (FOCUS_ZONE * 0.4), 1);
+    return {
+      transform: [{ scale: interpolate(t, [0, 1], [2.5, 0.8], Extrapolation.CLAMP) }],
+      opacity: interpolate(t, [0, 1], [1, 0.25], Extrapolation.CLAMP),
+    };
+  });
+
+  const glowStyle = useAnimatedStyle(() => {
+    const vc = scrollY.value + H / 2 - CENTER_Y;
+    const t = Math.min(Math.abs(mid - vc) / (FOCUS_ZONE * 0.3), 1);
+    return {
+      opacity: interpolate(t, [0, 1], [0.35, 0], Extrapolation.CLAMP),
+      transform: [{ scale: interpolate(t, [0, 1], [4, 1], Extrapolation.CLAMP) }],
     };
   });
 
   return (
-    <Animated.View style={[ed.wrapper, { height: CARD_H, marginBottom: CARD_GAP }, animStyle]}>
-      <View style={ed.spineCol}>
-        <View style={[ed.spineLine, { backgroundColor: theme.border }]} />
-        <View style={[ed.eraNode, { backgroundColor: gold, shadowColor: gold }]}>
-          <Text style={ed.eraNodeText}>{century}</Text>
+    <View style={[es.row, { height: ERA_H, marginBottom: ITEM_GAP }]}>
+      {/* Spine with glowing node */}
+      <View style={es.spine}>
+        <View style={[es.line, { backgroundColor: gold + '50' }]} />
+        <View style={es.nodeWrap}>
+          <Animated.View style={[es.glow, { backgroundColor: gold }, glowStyle]} />
+          <Animated.View style={[es.node, { backgroundColor: gold, shadowColor: gold }, nodeStyle]} />
         </View>
-        <View style={[ed.spineLine, { backgroundColor: theme.border }]} />
+        <View style={[es.line, { backgroundColor: gold + '50' }]} />
       </View>
 
-      <View style={ed.content}>
-        <View style={ed.inner}>
-          <Text style={[ed.label, { color: gold }]}>{label}</Text>
-          <View style={[ed.divider, { backgroundColor: gold + '25' }]} />
-          <Text style={[ed.count, { color: theme.subtext }]}>
-            {count} {count === 1 ? 'event' : 'events'}
-          </Text>
+      {/* Label card */}
+      <Animated.View style={[es.wrap, style]}>
+        <View style={[es.card, {
+          backgroundColor: isDark ? gold + '0A' : gold + '08',
+          borderColor: gold + '22',
+        }]}>
+          <View style={[es.badge, { backgroundColor: gold }]}>
+            <Text style={es.badgeNum}>{century}</Text>
+          </View>
+          <View style={es.texts}>
+            <Text style={[es.label, { color: gold }]}>{label}</Text>
+            <Text style={[es.count, { color: theme.subtext }]}>
+              {count} event{count !== 1 ? 's' : ''}
+            </Text>
+          </View>
         </View>
-      </View>
-    </Animated.View>
+      </Animated.View>
+    </View>
   );
 });
 
-const ed = StyleSheet.create({
-  wrapper: { flexDirection: 'row', paddingRight: 20 },
-  spineCol: { width: SPINE_X + 20, alignItems: 'center', paddingLeft: SPINE_X - 10 },
-  spineLine: { flex: 1, width: 2, borderRadius: 1 },
-  eraNode: {
-    width: 22, height: 22, borderRadius: 11,
-    alignItems: 'center', justifyContent: 'center', zIndex: 3,
-    shadowOpacity: 0.4, shadowRadius: 10, shadowOffset: { width: 0, height: 0 }, elevation: 6,
+const es = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'center' },
+  spine: { width: 26, alignItems: 'center' },
+  line: { flex: 1, width: 1.5, borderRadius: 1 },
+  nodeWrap: { alignItems: 'center', justifyContent: 'center' },
+  glow: { position: 'absolute', width: 7, height: 7, borderRadius: 4 },
+  node: {
+    width: 7, height: 7, borderRadius: 4, zIndex: 3,
+    shadowOpacity: 0.55, shadowRadius: 8, shadowOffset: { width: 0, height: 0 }, elevation: 5,
   },
-  eraNodeText: { color: '#000', fontSize: 8, fontWeight: '900', letterSpacing: 0.3 },
-  content: { flex: 1, justifyContent: 'center', paddingRight: 20 },
-  inner: { alignItems: 'flex-start', gap: 6 },
-  label: {
-    fontSize: 20, fontWeight: '900', letterSpacing: -0.5,
-    fontFamily: SERIF,
+  wrap: { flex: 1, marginRight: 12 },
+  card: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, borderWidth: 1,
   },
-  divider: { width: 30, height: 2, borderRadius: 1 },
-  count: { fontSize: 11, fontWeight: '600', opacity: 0.5, letterSpacing: 0.5 },
+  badge: { width: 24, height: 24, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
+  badgeNum: { color: '#000', fontSize: 9, fontWeight: '900', letterSpacing: 0.2 },
+  texts: { flex: 1 },
+  label: { fontSize: 13, fontWeight: '800', letterSpacing: -0.2, fontFamily: SERIF },
+  count: { fontSize: 9, fontWeight: '600', opacity: 0.4, letterSpacing: 0.4, marginTop: 1 },
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// FOCUS INDICATOR – ajustat exact pe centrul ecranului
-// ══════════════════════════════════════════════════════════════════════════════
-const FocusIndicator = ({ theme, gold }: { theme: any; gold: string }) => (
-  <View style={fi.wrap} pointerEvents="none">
-    <View style={[fi.line, { backgroundColor: gold + '20' }]} />
-  </View>
-);
-const fi = StyleSheet.create({
-  wrap: {
-    position: 'absolute',
-    left: SPINE_X + 16,
-    right: 0,
-    top: H / 2,                // centrul exact al ecranului
-    marginTop: -CARD_H / 2,    // ajustat să fie la jumătatea înălțimii cardului
-    height: 0,
-    zIndex: 10,
-  },
-  line: { height: 1, borderRadius: 1 },
-});
-
-// ══════════════════════════════════════════════════════════════════════════════
-// MAIN COMPONENT
+// MAIN
 // ══════════════════════════════════════════════════════════════════════════════
 export default function TimelineScreen({ allEvents }: Props) {
   const { theme, isDark, isPremium } = useTheme();
@@ -341,196 +321,123 @@ export default function TimelineScreen({ allEvents }: Props) {
   const scrollY = useSharedValue(0);
   const gold = isPremium ? '#D4A843' : theme.gold;
 
-  const timelineItems = useMemo((): TimelineItem[] => {
-    const sorted = allEvents
-      .filter(e => extractYear(e) > 0)
-      .sort((a, b) => extractYear(a) - extractYear(b));
-
-    const items: TimelineItem[] = [];
-    let lastCentury = -1;
-
-    const centuryCounts = new Map<number, number>();
-    for (const e of sorted) {
-      const c = Math.ceil(extractYear(e) / 100);
-      centuryCounts.set(c, (centuryCounts.get(c) ?? 0) + 1);
-    }
-
-    let idx = 0;
-    for (const event of sorted) {
-      const c = Math.ceil(extractYear(event) / 100);
-      if (c !== lastCentury) {
-        items.push({
-          type: 'era',
-          century: c,
-          label: getCenturyLabel(c * 100),
-          count: centuryCounts.get(c) ?? 0,
-        });
-        lastCentury = c;
+  // Build items with pre-computed Y offsets
+  const { items, nEvents, nEras } = useMemo(() => {
+    const sorted = allEvents.filter(x => extractYear(x) > 0).sort((a, b) => extractYear(a) - extractYear(b));
+    const out: TItem[] = [];
+    let lastC = -1, y = 0;
+    const cc = new Map<number, number>();
+    for (const x of sorted) { const k = Math.ceil(extractYear(x) / 100); cc.set(k, (cc.get(k) ?? 0) + 1); }
+    let eras = 0;
+    for (const x of sorted) {
+      const k = Math.ceil(extractYear(x) / 100);
+      if (k !== lastC) {
+        out.push({ k: 'era', century: k, label: centuryLabel(k * 100), count: cc.get(k) ?? 0, y, h: ERA_H });
+        y += ERA_TOTAL;
+        lastC = k;
+        eras++;
       }
-      items.push({ type: 'event', event, index: idx++ });
+      out.push({ k: 'ev', event: x, y, h: ITEM_H });
+      y += ITEM_TOTAL;
     }
-
-    return items;
+    return { items: out, nEvents: sorted.length, nEras: eras };
   }, [allEvents]);
 
-  const totalEvents = useMemo(
-    () => timelineItems.filter(i => i.type === 'event').length,
-    [timelineItems],
-  );
-  const totalCenturies = useMemo(
-    () => timelineItems.filter(i => i.type === 'era').length,
-    [timelineItems],
-  );
+  const scrollHandler = useAnimatedScrollHandler({ onScroll: (ev) => { scrollY.value = ev.contentOffset.y; } });
 
-  const scrollHandler = useAnimatedScrollHandler({
-    onScroll: (e) => { scrollY.value = e.contentOffset.y; },
-  });
+  const press = useCallback((ev: any) => { haptic('light'); setSelectedEvent(ev); }, []);
 
-  const onEventPress = useCallback((event: any) => {
-    haptic('light');
-    setSelectedEvent(event);
-  }, []);
-
-  const renderItem = useCallback(({ item, index }: { item: TimelineItem; index: number }) => {
-    if (item.type === 'era') {
-      return (
-        <EraDivider
-          century={item.century}
-          label={item.label}
-          count={item.count}
-          theme={theme}
-          gold={gold}
-          scrollY={scrollY}
-          itemIndex={index}
-        />
-      );
+  const renderItem = useCallback(({ item }: { item: TItem }) => {
+    if (item.k === 'era') {
+      return <EraCard century={item.century} label={item.label} count={item.count} yOff={item.y} scrollY={scrollY} theme={theme} isDark={isDark} gold={gold} />;
     }
+    return <EvCard event={item.event} yOff={item.y} scrollY={scrollY} theme={theme} isDark={isDark} language={language} gold={gold} onPress={() => press(item.event)} />;
+  }, [theme, isDark, language, gold, scrollY, press]);
 
-    return (
-      <EventCard
-        event={item.event}
-        itemIndex={index}
-        scrollY={scrollY}
-        theme={theme}
-        isDark={isDark}
-        language={language}
-        gold={gold}
-        onPress={() => onEventPress(item.event)}
-      />
-    );
-  }, [theme, isDark, language, gold, scrollY, onEventPress]);
+  const getLayout = useCallback((_: any, i: number) => {
+    const item = items[i];
+    if (!item) return { length: ITEM_TOTAL, offset: 0, index: i };
+    return { length: item.h + ITEM_GAP, offset: item.y, index: i };
+  }, [items]);
 
-  const getItemLayout = useCallback((_: any, index: number) => ({
-    length: ITEM_SIZE,
-    offset: ITEM_SIZE * index,
-    index,
-  }), []);
-
-  const keyExtractor = useCallback((item: TimelineItem, index: number) => {
-    if (item.type === 'era') return `era-${item.century}`;
-    return `ev-${extractYear(item.event)}-${index}`;
-  }, []);
+  const keyEx = useCallback((item: TItem, i: number) => item.k === 'era' ? `e${item.century}` : `v${i}`, []);
 
   return (
-    <View style={[s.root, { backgroundColor: theme.background }]}>
-      {isPremium && (
-        <LinearGradient
-          colors={['#0A0815', '#05040A']}
-          style={StyleSheet.absoluteFill}
-        />
-      )}
+    <View style={[m.root, { backgroundColor: theme.background }]}>
+      {isPremium && <LinearGradient colors={['#0A0815', '#05040A']} style={StyleSheet.absoluteFill} />}
 
-      <View style={[s.header, { paddingTop: insets.top + 4 }]}>
-        <View style={s.headerRow}>
-          <View style={[s.headerIcon, { backgroundColor: gold + '15' }]}>
-            <Clock size={16} color={gold} strokeWidth={2.2} />
+      {/* Header */}
+      <View style={[m.hdr, { paddingTop: insets.top + 4 }]}>
+        <View style={m.hdrRow}>
+          <View style={[m.hdrIcon, { backgroundColor: gold + '15' }]}>
+            <Clock size={14} color={gold} strokeWidth={2.2} />
           </View>
           <View>
-            <Text style={[s.headerTitle, { color: theme.text }]}>
-              {t('timeline') || 'Timeline'}
-            </Text>
-            <Text style={[s.headerSub, { color: theme.subtext }]}>
-              {totalEvents} events across {totalCenturies} centuries
-            </Text>
+            <Text style={[m.hdrTitle, { color: theme.text }]}>{t('timeline') || 'Timeline'}</Text>
+            <Text style={[m.hdrSub, { color: theme.subtext }]}>{nEvents} events · {nEras} centuries</Text>
           </View>
         </View>
       </View>
+      <View style={[m.sep, { backgroundColor: theme.border }]} />
 
-      <View style={[s.separator, { backgroundColor: theme.border }]} />
-
-      {totalEvents === 0 ? (
-        <View style={s.emptyWrap}>
-          <View style={[s.emptyIcon, { borderColor: theme.subtext + '20' }]}>
-            <Clock size={28} color={theme.subtext + '40'} strokeWidth={1.5} />
+      {nEvents === 0 ? (
+        <View style={m.empty}>
+          <View style={[m.emptyRing, { borderColor: theme.subtext + '20' }]}>
+            <Clock size={24} color={theme.subtext + '40'} strokeWidth={1.5} />
           </View>
-          <Text style={[s.emptyText, { color: theme.text }]}>
-            {t('no_events') || 'No events yet'}
-          </Text>
-          <Text style={[s.emptySub, { color: theme.subtext }]}>
-            Events will appear as you explore more days
-          </Text>
+          <Text style={[m.emptyT, { color: theme.text }]}>{t('no_events') || 'No events yet'}</Text>
+          <Text style={[m.emptyS, { color: theme.subtext }]}>Events will appear as you explore more days</Text>
         </View>
       ) : (
         <View style={{ flex: 1 }}>
-          <FocusIndicator theme={theme} gold={gold} />
+          {/* Spine background */}
+          <View style={[m.spineBg, { backgroundColor: theme.border }]} pointerEvents="none" />
+
+          {/* Focus ring on the spine at viewport center */}
+          <View style={[m.focusWrap, { top: H / 2 - CENTER_Y - 11 }]} pointerEvents="none">
+            <View style={[m.focusRing, { borderColor: gold + '18' }]} />
+            <View style={[m.focusDot, { backgroundColor: gold + '35' }]} />
+          </View>
 
           <Animated.FlatList
-            data={timelineItems}
+            data={items}
             renderItem={renderItem}
-            keyExtractor={keyExtractor}
-            getItemLayout={getItemLayout}
+            keyExtractor={keyEx}
+            getItemLayout={getLayout}
             onScroll={scrollHandler}
             scrollEventThrottle={16}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{
-              paddingTop: PADDING_TOP,
-              paddingBottom: PADDING_BOTTOM + insets.bottom,
+              paddingTop: H * 0.45,
+              paddingBottom: H * 0.45 + insets.bottom,
+              paddingLeft: 8,
             }}
             removeClippedSubviews={Platform.OS === 'android'}
-            maxToRenderPerBatch={8}
-            windowSize={7}
+            maxToRenderPerBatch={18}
+            windowSize={13}
           />
-
-          <View style={[s.spineOverlay, { backgroundColor: theme.border }]} pointerEvents="none" />
         </View>
       )}
 
-      <StoryModal
-        visible={!!selectedEvent}
-        event={selectedEvent}
-        onClose={() => setSelectedEvent(null)}
-        theme={theme}
-      />
+      <StoryModal visible={!!selectedEvent} event={selectedEvent} onClose={() => setSelectedEvent(null)} theme={theme} />
     </View>
   );
 }
 
-const s = StyleSheet.create({
+const m = StyleSheet.create({
   root: { flex: 1 },
-
-  header: { paddingHorizontal: 20, paddingBottom: 14 },
-  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  headerIcon: {
-    width: 36, height: 36, borderRadius: 12,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  headerTitle: {
-    fontSize: 20, fontWeight: '800', letterSpacing: -0.3,
-    fontFamily: SERIF,
-  },
-  headerSub: { fontSize: 12, fontWeight: '500', opacity: 0.5, marginTop: 1 },
-  separator: { height: StyleSheet.hairlineWidth },
-
-  emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 40 },
-  emptyIcon: {
-    width: 64, height: 64, borderRadius: 32, borderWidth: 2,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 4,
-  },
-  emptyText: { fontSize: 17, fontWeight: '700', letterSpacing: -0.2 },
-  emptySub: { fontSize: 13, fontWeight: '400', opacity: 0.5, textAlign: 'center', lineHeight: 19 },
-
-  spineOverlay: {
-    position: 'absolute', left: SPINE_X + 14, top: 0, bottom: 0,
-    width: 2, borderRadius: 1, opacity: 0.15, zIndex: -1,
-  },
+  hdr: { paddingHorizontal: 20, paddingBottom: 10 },
+  hdrRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  hdrIcon: { width: 30, height: 30, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  hdrTitle: { fontSize: 17, fontWeight: '800', letterSpacing: -0.3, fontFamily: SERIF },
+  hdrSub: { fontSize: 10, fontWeight: '500', opacity: 0.4, marginTop: 1 },
+  sep: { height: StyleSheet.hairlineWidth },
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, paddingHorizontal: 40 },
+  emptyRing: { width: 52, height: 52, borderRadius: 26, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+  emptyT: { fontSize: 15, fontWeight: '700' },
+  emptyS: { fontSize: 11.5, opacity: 0.4, textAlign: 'center', lineHeight: 17 },
+  spineBg: { position: 'absolute', left: 21, top: 0, bottom: 0, width: 1.5, borderRadius: 1, opacity: 0.15, zIndex: 0 },
+  focusWrap: { position: 'absolute', left: 8, width: 26, height: 22, alignItems: 'center', justifyContent: 'center', zIndex: 10 },
+  focusRing: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.5 },
+  focusDot: { position: 'absolute', width: 5, height: 5, borderRadius: 3 },
 });
