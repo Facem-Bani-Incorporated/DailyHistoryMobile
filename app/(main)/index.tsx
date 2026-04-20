@@ -19,6 +19,7 @@ import LockedTomorrowCard from '../../components/LockedTomorrowCard';
 import MapScreen from '../../components/MapScreen';
 import ProfileAvatar from '../../components/ProfileAvatar';
 import SearchScreen from '../../components/SearchScreen';
+import { StoryModal } from '../../components/StoryModal';
 import StreakIcon from '../../components/StreakIcon';
 import type { Tab } from '../../components/TabBar';
 import TabBar from '../../components/TabBar';
@@ -36,7 +37,6 @@ import { useNotificationEventStore } from '../../store/useNotificationEventStore
 import { useUserSavedEvents } from '../../store/useSavedStore';
 import { haptic } from '../../utils/haptics';
 import { schedulePersonalizedNotification } from '../../utils/Notifications';
-import { StoryModal } from '../../components/StoryModal';
 import SavedScreen from './saved';
 
 const { width: W } = Dimensions.get('window');
