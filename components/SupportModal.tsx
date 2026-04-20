@@ -2,19 +2,19 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Animated,
-    Keyboard,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Animated,
+  Keyboard,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '../api';
@@ -56,9 +56,11 @@ export default function SupportModal({ visible, onClose }: Props) {
   const [subj, setSubj] = useState('');
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState(false);
+  const [kbVisible, setKbVisible] = useState(false);
 
   const subjRef = useRef<TextInput>(null);
   const msgRef = useRef<TextInput>(null);
+  const scrollRef = useRef<ScrollView>(null);
 
   // Animations
   const fadeIn = useRef(new Animated.Value(0)).current;
@@ -76,6 +78,15 @@ export default function SupportModal({ visible, onClose }: Props) {
       ]).start();
     }
   }, [visible]);
+
+  // Track keyboard for Android (KeyboardAvoidingView is iOS-only reliable)
+  useEffect(() => {
+    const showEv = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEv = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const s = Keyboard.addListener(showEv, () => setKbVisible(true));
+    const h = Keyboard.addListener(hideEv, () => setKbVisible(false));
+    return () => { s.remove(); h.remove(); };
+  }, []);
 
   const animateResult = useCallback(() => {
     resultScale.setValue(0.7); resultFade.setValue(0);
@@ -96,6 +107,13 @@ export default function SupportModal({ visible, onClose }: Props) {
   }, [cat, subj, msg, animateResult]);
 
   const close = useCallback(() => { Keyboard.dismiss(); onClose(); }, [onClose]);
+
+  // Scroll to a field when focused (critical for Android + long forms on iOS)
+  const scrollToField = useCallback((yOffset: number) => {
+    setTimeout(() => {
+      scrollRef.current?.scrollTo({ y: yOffset, animated: true });
+    }, Platform.OS === 'ios' ? 100 : 250);
+  }, []);
 
   // ── SENDING ──
   if (screen === 'sending') {
@@ -121,7 +139,6 @@ export default function SupportModal({ visible, onClose }: Props) {
         <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} translucent backgroundColor="transparent" />
         <View style={[st.root, st.center, { backgroundColor: theme.background, paddingTop: insets.top }]}>
           <Animated.View style={{ alignItems: 'center', opacity: resultFade, transform: [{ scale: resultScale }] }}>
-            {/* Icon circle */}
             <View style={[st.resCircle, { backgroundColor: `${accent}10`, borderColor: `${accent}20` }]}>
               <View style={[st.resInner, { backgroundColor: `${accent}15` }]}>
                 <Ionicons name={ok ? 'checkmark' : 'close'} size={36} color={accent} />
@@ -146,9 +163,9 @@ export default function SupportModal({ visible, onClose }: Props) {
   return (
     <Modal visible={visible} animationType="slide" transparent={false} statusBarTranslucent>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} translucent backgroundColor="transparent" />
-      <KeyboardAvoidingView style={[st.root, { backgroundColor: theme.background, paddingTop: insets.top }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <View style={[st.root, { backgroundColor: theme.background, paddingTop: insets.top }]}>
 
-        {/* Header */}
+        {/* Header — OUTSIDE KAV so it stays put */}
         <View style={st.hdr}>
           <TouchableOpacity onPress={close} style={st.hdrBtn} hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}>
             <Ionicons name="chevron-down" size={22} color={theme.text} />
@@ -157,96 +174,125 @@ export default function SupportModal({ visible, onClose }: Props) {
           <View style={st.hdrBtn} />
         </View>
 
-        <ScrollView contentContainerStyle={[st.scroll, { paddingBottom: insets.bottom + 40 }]} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-          <Animated.View style={{ opacity: fadeIn, transform: [{ translateY: slideUp }] }}>
+        <KeyboardAvoidingView
+          style={st.flex}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 10 : 0}
+        >
+          <ScrollView
+            ref={scrollRef}
+            contentContainerStyle={[
+              st.scroll,
+              { paddingBottom: (kbVisible ? 20 : insets.bottom + 40) },
+            ]}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          >
+            <Animated.View style={{ opacity: fadeIn, transform: [{ translateY: slideUp }] }}>
 
-            {/* Subtitle */}
-            <Text style={[st.sub, { color: theme.subtext }]}>{tx(language, 'subtitle')}</Text>
+              <Text style={[st.sub, { color: theme.subtext }]}>{tx(language, 'subtitle')}</Text>
 
-            {/* Decorative line */}
-            <View style={st.decoRow}>
-              <View style={[st.decoLine, { backgroundColor: theme.border }]} />
-              <View style={[st.decoDot, { backgroundColor: gold }]} />
-              <View style={[st.decoLine, { backgroundColor: theme.border }]} />
-            </View>
+              <View style={st.decoRow}>
+                <View style={[st.decoLine, { backgroundColor: theme.border }]} />
+                <View style={[st.decoDot, { backgroundColor: gold }]} />
+                <View style={[st.decoLine, { backgroundColor: theme.border }]} />
+              </View>
 
-            {/* Category */}
-            <Text style={[st.label, { color: theme.text }]}>{tx(language, 'cat')}</Text>
-            <View style={st.catWrap}>
-              {CATS.map((c, i) => {
-                const on = cat === c.value;
-                return (
-                  <TouchableOpacity key={c.value} onPress={() => { setCat(c.value); setErr(false); }} activeOpacity={0.6}
-                    style={[st.catCard, {
-                      backgroundColor: on ? `${c.color}0D` : isDark ? '#131110' : '#FAFAF8',
-                      borderColor: on ? `${c.color}45` : theme.border,
-                      borderWidth: on ? 1.5 : 1,
-                    }]}>
-                    <View style={[st.catIconWrap, { backgroundColor: `${c.color}${on ? '18' : '0A'}` }]}>
-                      <Ionicons name={c.icon} size={18} color={c.color} />
-                    </View>
-                    <Text style={[st.catText, { color: on ? c.color : theme.text }]}>{tx(language, c.value)}</Text>
-                    {on && (
-                      <View style={[st.catCheck, { backgroundColor: `${c.color}18` }]}>
-                        <Ionicons name="checkmark" size={12} color={c.color} />
+              {/* Category */}
+              <Text style={[st.label, { color: theme.text }]}>{tx(language, 'cat')}</Text>
+              <View style={st.catWrap}>
+                {CATS.map((c) => {
+                  const on = cat === c.value;
+                  return (
+                    <TouchableOpacity key={c.value} onPress={() => { setCat(c.value); setErr(false); }} activeOpacity={0.6}
+                      style={[st.catCard, {
+                        backgroundColor: on ? `${c.color}0D` : isDark ? '#131110' : '#FAFAF8',
+                        borderColor: on ? `${c.color}45` : theme.border,
+                        borderWidth: on ? 1.5 : 1,
+                      }]}>
+                      <View style={[st.catIconWrap, { backgroundColor: `${c.color}${on ? '18' : '0A'}` }]}>
+                        <Ionicons name={c.icon} size={18} color={c.color} />
                       </View>
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            {/* Subject */}
-            <View style={st.fieldWrap}>
-              <Text style={[st.label, { color: theme.text }]}>{tx(language, 'subject')}</Text>
-              <View style={[st.inputWrap, { backgroundColor: isDark ? '#131110' : '#FAFAF8', borderColor: err && subj.trim().length === 0 ? '#FF3B30' + '60' : theme.border }]}>
-                <Ionicons name="text-outline" size={16} color={theme.subtext + '50'} style={{ marginTop: 1 }} />
-                <TextInput ref={subjRef} value={subj} onChangeText={t => { setSubj(t); setErr(false); }}
-                  placeholder={tx(language, 'subjectPh')} placeholderTextColor={theme.subtext + '40'}
-                  style={[st.input, { color: theme.text }]} returnKeyType="next"
-                  onSubmitEditing={() => msgRef.current?.focus()} maxLength={120} />
+                      <Text style={[st.catText, { color: on ? c.color : theme.text }]}>{tx(language, c.value)}</Text>
+                      {on && (
+                        <View style={[st.catCheck, { backgroundColor: `${c.color}18` }]}>
+                          <Ionicons name="checkmark" size={12} color={c.color} />
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
-              <Text style={[st.charCount, { color: theme.subtext }]}>{subj.length}/120</Text>
-            </View>
 
-            {/* Message */}
-            <View style={st.fieldWrap}>
-              <Text style={[st.label, { color: theme.text }]}>{tx(language, 'message')}</Text>
-              <View style={[st.inputWrap, st.inputWrapBig, { backgroundColor: isDark ? '#131110' : '#FAFAF8', borderColor: err && msg.trim().length === 0 ? '#FF3B30' + '60' : theme.border }]}>
-                <TextInput ref={msgRef} value={msg} onChangeText={t => { setMsg(t); setErr(false); }}
-                  placeholder={tx(language, 'messagePh')} placeholderTextColor={theme.subtext + '40'}
-                  style={[st.input, st.inputBig, { color: theme.text }]} multiline textAlignVertical="top" maxLength={2000} />
+              {/* Subject */}
+              <View style={st.fieldWrap} onLayout={e => (subjRef as any).layoutY = e.nativeEvent.layout.y}>
+                <Text style={[st.label, { color: theme.text }]}>{tx(language, 'subject')}</Text>
+                <View style={[st.inputWrap, { backgroundColor: isDark ? '#131110' : '#FAFAF8', borderColor: err && subj.trim().length === 0 ? '#FF3B3060' : theme.border }]}>
+                  <Ionicons name="text-outline" size={16} color={theme.subtext + '50'} style={{ marginTop: 1 }} />
+                  <TextInput
+                    ref={subjRef}
+                    value={subj}
+                    onChangeText={t => { setSubj(t); setErr(false); }}
+                    onFocus={() => scrollToField((subjRef as any).layoutY ?? 300)}
+                    placeholder={tx(language, 'subjectPh')}
+                    placeholderTextColor={theme.subtext + '40'}
+                    style={[st.input, { color: theme.text }]}
+                    returnKeyType="next"
+                    onSubmitEditing={() => msgRef.current?.focus()}
+                    maxLength={120}
+                  />
+                </View>
+                <Text style={[st.charCount, { color: theme.subtext }]}>{subj.length}/120</Text>
               </View>
-              <Text style={[st.charCount, { color: theme.subtext }]}>{msg.length}/2000</Text>
-            </View>
 
-            {/* Error */}
-            {err && (
-              <View style={st.errRow}>
-                <View style={[st.errDot, { backgroundColor: '#FF3B30' }]} />
-                <Text style={st.errText}>{tx(language, 'req')}</Text>
+              {/* Message */}
+              <View style={st.fieldWrap} onLayout={e => (msgRef as any).layoutY = e.nativeEvent.layout.y}>
+                <Text style={[st.label, { color: theme.text }]}>{tx(language, 'message')}</Text>
+                <View style={[st.inputWrap, st.inputWrapBig, { backgroundColor: isDark ? '#131110' : '#FAFAF8', borderColor: err && msg.trim().length === 0 ? '#FF3B3060' : theme.border }]}>
+                  <TextInput
+                    ref={msgRef}
+                    value={msg}
+                    onChangeText={t => { setMsg(t); setErr(false); }}
+                    onFocus={() => scrollToField((msgRef as any).layoutY ?? 500)}
+                    placeholder={tx(language, 'messagePh')}
+                    placeholderTextColor={theme.subtext + '40'}
+                    style={[st.input, st.inputBig, { color: theme.text }]}
+                    multiline
+                    textAlignVertical="top"
+                    maxLength={2000}
+                    scrollEnabled
+                  />
+                </View>
+                <Text style={[st.charCount, { color: theme.subtext }]}>{msg.length}/2000</Text>
               </View>
-            )}
 
-            {/* Send */}
-            <TouchableOpacity onPress={handleSend} activeOpacity={0.7}
-              style={[st.sendBtn, { backgroundColor: gold }]}>
-              <Ionicons name="paper-plane" size={15} color="#000" />
-              <Text style={st.sendText}>{tx(language, 'send')}</Text>
-            </TouchableOpacity>
+              {err && (
+                <View style={st.errRow}>
+                  <View style={[st.errDot, { backgroundColor: '#FF3B30' }]} />
+                  <Text style={st.errText}>{tx(language, 'req')}</Text>
+                </View>
+              )}
 
-          </Animated.View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+              <TouchableOpacity onPress={handleSend} activeOpacity={0.7}
+                style={[st.sendBtn, { backgroundColor: gold }]}>
+                <Ionicons name="paper-plane" size={15} color="#000" />
+                <Text style={st.sendText}>{tx(language, 'send')}</Text>
+              </TouchableOpacity>
+
+            </Animated.View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }
 
 const st = StyleSheet.create({
   root: { flex: 1 },
+  flex: { flex: 1 },
   center: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 36 },
 
-  // Header
   hdr: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 10 },
   hdrBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   hdrTitle: { fontSize: 15, fontWeight: '600', letterSpacing: 0.3 },
@@ -254,12 +300,10 @@ const st = StyleSheet.create({
   scroll: { paddingHorizontal: 20, paddingTop: 4 },
   sub: { fontSize: 14, fontWeight: '500', textAlign: 'center', opacity: 0.4, marginBottom: 16, fontFamily: SERIF, fontStyle: 'italic' },
 
-  // Deco
   decoRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 22 },
   decoLine: { flex: 1, height: StyleSheet.hairlineWidth },
   decoDot: { width: 5, height: 5, borderRadius: 2.5, opacity: 0.5 },
 
-  // Categories
   label: { fontSize: 13, fontWeight: '700', letterSpacing: 0.2, marginBottom: 10, marginLeft: 2 },
   catWrap: { gap: 6, marginBottom: 26 },
   catCard: {
@@ -270,23 +314,20 @@ const st = StyleSheet.create({
   catText: { fontSize: 14, fontWeight: '600', letterSpacing: 0.1, flex: 1 },
   catCheck: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
 
-  // Fields
   fieldWrap: { marginBottom: 20 },
   inputWrap: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 10,
     borderRadius: 14, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12,
   },
-  inputWrapBig: { minHeight: 130 },
+  inputWrapBig: { minHeight: 140 },
   input: { flex: 1, fontSize: 14.5, fontWeight: '500', padding: 0, margin: 0 },
-  inputBig: { minHeight: 106, textAlignVertical: 'top' },
+  inputBig: { minHeight: 116, textAlignVertical: 'top', paddingTop: 2 },
   charCount: { fontSize: 10, fontWeight: '500', opacity: 0.3, textAlign: 'right', marginTop: 5, marginRight: 4 },
 
-  // Error
   errRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 18, paddingLeft: 4 },
   errDot: { width: 6, height: 6, borderRadius: 3 },
   errText: { color: '#FF3B30', fontSize: 12.5, fontWeight: '600' },
 
-  // Send
   sendBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9,
     paddingVertical: 16, borderRadius: 14, marginTop: 4,
@@ -294,11 +335,9 @@ const st = StyleSheet.create({
   },
   sendText: { color: '#000', fontSize: 15, fontWeight: '700', letterSpacing: 0.3 },
 
-  // Sending
   sendingRing: { width: 80, height: 80, borderRadius: 40, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
   sendingText: { fontSize: 14, fontWeight: '600', opacity: 0.5 },
 
-  // Result
   resCircle: { width: 100, height: 100, borderRadius: 50, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
   resInner: { width: 70, height: 70, borderRadius: 35, alignItems: 'center', justifyContent: 'center' },
   resTitle: { fontSize: 22, fontWeight: '800', letterSpacing: -0.3, marginBottom: 8, fontFamily: SERIF },

@@ -288,6 +288,7 @@ interface GamificationState {
   dailyGoalsCompleted: number; dailyGoalDates: string[];
   weeklyRecaps: Record<string, WeeklyRecap>; currentWeekKey: string | null;
   calendarLog: Record<string, DayLog>; _userId: string | null;
+  restoreStreak: () => void;
   recordDailyVisit: () => void;
   markEventRead: (eventId: string, category?: string, year?: string) => void;
   resetDailyProgress: () => void;
@@ -341,7 +342,10 @@ export const useGamificationStore = create<GamificationState>()(
         set(updates);
         setTimeout(() => { try { get().checkAchievements(); } catch {} }, 50);
       },
-
+restoreStreak: () => set((state) => ({
+  currentStreak: state.longestStreak,
+  lastActiveDate: todayISO(),
+})),
       markEventRead: (eventId: string, category?: string, _year?: string) => {
         const today = todayISO();
         const { readEventsToday, readDate, totalEventsRead, calendarLog, totalXP, todayXP, xpDate, currentStreak, categoriesRead, categoryCount, dailyGoalsCompleted, dailyGoalDates } = get();

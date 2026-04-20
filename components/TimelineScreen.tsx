@@ -1,8 +1,8 @@
 // components/TimelineScreen.tsx
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Clock } from 'lucide-react-native';
-import React, { useCallback, useMemo, useState } from 'react';
+import { Clock, Sparkles } from 'lucide-react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Dimensions,
   Platform,
@@ -17,6 +17,7 @@ import Animated, {
   type SharedValue,
   useAnimatedScrollHandler,
   useAnimatedStyle,
+  useDerivedValue,
   useSharedValue,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -29,155 +30,199 @@ import { StoryModal } from './StoryModal';
 const { width: W, height: H } = Dimensions.get('window');
 const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
 
-// ── Compact sizes — fits ~6-7 items on screen ───────────────────────────────
-const ITEM_H = 72;
-const ITEM_GAP = 6;
-const ITEM_TOTAL = ITEM_H + ITEM_GAP;
-const ERA_H = 50;
-const ERA_TOTAL = ERA_H + ITEM_GAP;
+// ── Responsive sizing ──────────────────────────────────────────────────────
+const IS_SMALL = W < 360;
+const IS_LARGE = W > 420;
 
-// ── Arc geometry ────────────────────────────────────────────────────────────
-// Imagine a huge circle to the LEFT of the spine. Items sit on its rim.
-// The item at viewport-center is at the 3-o'clock position (rightmost).
-// Items above/below curve away toward 12/6-o'clock (leftward + smaller).
-const ARC_SHIFT = W * 0.18;          // max horizontal push at center
-const FOCUS_ZONE = H * 0.44;         // half-height of the effect window
-const CENTER_Y = 56;                 // header height offset
+const ITEM_H      = IS_SMALL ? 92  : IS_LARGE ? 108 : 100;
+const ERA_H       = IS_SMALL ? 100 : IS_LARGE ? 116 : 108;
+const ITEM_GAP    = 10;
+const ITEM_TOTAL  = ITEM_H + ITEM_GAP;
+const ERA_TOTAL   = ERA_H  + ITEM_GAP;
+
+const SPINE_X     = 52;   // spine center from left edge
+const YEAR_W      = 62;   // year capsule width
+const YEAR_H      = 26;
+const HEADER_H    = 56;   // header bar height (ignoring safe area)
+
+// ── Category system ────────────────────────────────────────────────────────
+const CAT: Record<string, { color: string; tag: string; tKey: string }> = {
+  war_conflict:      { color: '#E84545', tag: 'WAR',  tKey: 'war' },
+  tech_innovation:   { color: '#3E7BFA', tag: 'TECH', tKey: 'technology' },
+  science_discovery: { color: '#A855F7', tag: 'SCI',  tKey: 'science' },
+  politics_state:    { color: '#F59E0B', tag: 'POL',  tKey: 'politics' },
+  culture_arts:      { color: '#10B981', tag: 'ART',  tKey: 'culture' },
+  natural_disaster:  { color: '#F97316', tag: 'NAT',  tKey: 'nature' },
+  exploration:       { color: '#06B6D4', tag: 'EXP',  tKey: 'exploration' },
+  religion_phil:     { color: '#8B6F47', tag: 'REL',  tKey: 'religion' },
+};
+const DEF_CAT = { color: '#8B7355', tag: 'HIS', tKey: 'history' };
+const getCat = (c?: string) => CAT[(c ?? '').toLowerCase()] ?? DEF_CAT;
+
+// ── Local translations ─────────────────────────────────────────────────────
+type TKeys = 'events' | 'event' | 'centuries' | 'century' |
+             'empty_title' | 'empty_desc' | 'ancient' | 'chapter' |
+             'bc' | 'of' | 'jump_top';
+const TL: Record<string, Record<TKeys, string>> = {
+  en: { events: 'events', event: 'event', centuries: 'centuries', century: 'century',
+        empty_title: 'Your timeline awaits', empty_desc: 'Events you explore will be woven into history here.',
+        ancient: 'Ancient Era', chapter: 'Chapter', bc: 'BC', of: 'of', jump_top: 'Back to start' },
+  ro: { events: 'evenimente', event: 'eveniment', centuries: 'secole', century: 'secol',
+        empty_title: 'Cronologia te așteaptă', empty_desc: 'Evenimentele pe care le explorezi vor fi adăugate aici.',
+        ancient: 'Era Antică', chapter: 'Capitolul', bc: 'î.Hr.', of: 'din', jump_top: 'Sus' },
+  fr: { events: 'événements', event: 'événement', centuries: 'siècles', century: 'siècle',
+        empty_title: 'Votre chronologie attend', empty_desc: 'Les événements que vous explorez apparaîtront ici.',
+        ancient: 'Ère Ancienne', chapter: 'Chapitre', bc: 'av. J.-C.', of: 'de', jump_top: 'Haut' },
+  de: { events: 'Ereignisse', event: 'Ereignis', centuries: 'Jahrhunderte', century: 'Jahrhundert',
+        empty_title: 'Deine Zeitleiste wartet', empty_desc: 'Erkundete Ereignisse erscheinen hier in der Geschichte.',
+        ancient: 'Antike', chapter: 'Kapitel', bc: 'v. Chr.', of: 'von', jump_top: 'Nach oben' },
+  es: { events: 'eventos', event: 'evento', centuries: 'siglos', century: 'siglo',
+        empty_title: 'Tu cronología espera', empty_desc: 'Los eventos que explores aparecerán aquí.',
+        ancient: 'Era Antigua', chapter: 'Capítulo', bc: 'a.C.', of: 'de', jump_top: 'Arriba' },
+};
+const tl = (lang: string, k: TKeys) => (TL[lang] ?? TL.en)[k] ?? TL.en[k];
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
-const CAT_COLORS: Record<string, string> = {
-  war_conflict: '#E84545', tech_innovation: '#3E7BFA', science_discovery: '#A855F7',
-  politics_state: '#F59E0B', culture_arts: '#10B981', natural_disaster: '#F97316',
-  exploration: '#06B6D4', religion_phil: '#8B6F47',
-};
-const CAT_TAG: Record<string, string> = {
-  war_conflict: 'WAR', tech_innovation: 'TECH', science_discovery: 'SCI',
-  politics_state: 'POL', culture_arts: 'ART', natural_disaster: 'NAT',
-  exploration: 'EXP', religion_phil: 'REL',
-};
 const extractYear = (ev: any): number => {
   const r = String(ev?.eventDate ?? ev?.event_date ?? ev?.year ?? '').trim();
-  if (/^\d{4}$/.test(r)) return parseInt(r);
+  if (/^-?\d{1,4}$/.test(r)) return parseInt(r);
   if (r.includes('-') && r.split('-')[0].length === 4) return parseInt(r.split('-')[0]);
-  return 0;
+  const m = r.match(/-?\d{1,4}/);
+  return m ? parseInt(m[0]) : 0;
 };
-const catColor = (c?: string) => CAT_COLORS[(c ?? '').toLowerCase()] ?? '#8B7355';
-const catTag = (c?: string) => CAT_TAG[(c ?? '').toLowerCase()] ?? 'HIS';
-const centuryLabel = (y: number) => {
-  if (y <= 0) return 'Ancient';
-  const n = Math.ceil(y / 100);
-  const s = n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th';
-  return `${n}${s} Century`;
+
+const toRoman = (n: number): string => {
+  if (n <= 0) return '—';
+  const map: [string, number][] = [
+    ['M',1000],['CM',900],['D',500],['CD',400],['C',100],['XC',90],
+    ['L',50],['XL',40],['X',10],['IX',9],['V',5],['IV',4],['I',1],
+  ];
+  let r = '', x = n;
+  for (const [s, v] of map) { while (x >= v) { r += s; x -= v; } }
+  return r;
+};
+
+const centuryLabel = (n: number, lang: string): string => {
+  const r = toRoman(n);
+  switch (lang) {
+    case 'ro': return `Secolul ${r}`;
+    case 'fr': return `${r}${n === 1 ? 'ᵉʳ' : 'ᵉ'} siècle`;
+    case 'es': return `Siglo ${r}`;
+    case 'de': return `${n}. Jahrhundert`;
+    default: {
+      const s = n % 100 === 11 || n % 100 === 12 || n % 100 === 13
+        ? 'th' : n % 10 === 1 ? 'st' : n % 10 === 2 ? 'nd' : n % 10 === 3 ? 'rd' : 'th';
+      return `${n}${s} Century`;
+    }
+  }
+};
+
+const formatYear = (y: number, lang: string): string =>
+  y < 0 ? `${Math.abs(y)} ${tl(lang, 'bc')}` : `${y}`;
+
+const centuryRange = (century: number): string => {
+  const start = (century - 1) * 100 + 1;
+  const end = century * 100;
+  return `${start}–${end}`;
 };
 
 // ── Types ───────────────────────────────────────────────────────────────────
 type TItem =
-  | { k: 'era'; century: number; label: string; count: number; y: number; h: number }
+  | { k: 'era'; century: number; count: number; y: number; h: number }
   | { k: 'ev';  event: any;      y: number; h: number };
 interface Props { allEvents: any[] }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// EVENT CARD — compact, arc-animated
+// EVENT ROW — year capsule on spine + card with image
 // ══════════════════════════════════════════════════════════════════════════════
-const EvCard = React.memo(({
-  event, yOff, scrollY, theme, isDark, language, gold, onPress,
+const EvRow = React.memo(({
+  event, yOff, scrollY, theme, isDark, language, onPress,
 }: {
   event: any; yOff: number; scrollY: SharedValue<number>;
-  theme: any; isDark: boolean; language: string; gold: string;
-  onPress: () => void;
+  theme: any; isDark: boolean; language: string; onPress: () => void;
 }) => {
   const year = extractYear(event);
+  const yearStr = formatYear(year, language);
   const title = event.titleTranslations?.[language] ?? event.titleTranslations?.en ?? '';
   const img = event.gallery?.[0];
-  const cc = catColor(event.category);
-  const ct = catTag(event.category);
+  const { color: cc, tag: ct } = getCat(event.category);
   const mid = yOff + ITEM_H / 2;
+  const focusZone = H * 0.32;
 
-  // ── Arc animation ──
+  // Distance-based focus: item in viewport center gets highlighted
   const cardStyle = useAnimatedStyle(() => {
-    const vc = scrollY.value + H / 2 - CENTER_Y;
-    const d = mid - vc;                           // signed distance
-    const ad = Math.abs(d);
-    const t = Math.min(ad / FOCUS_ZONE, 1);       // 0 at center → 1 at edge
-    const angle = t * (Math.PI / 2);
-
-    // Circular translateX: cos(0)=1 → cos(π/2)=0
-    const tx = ARC_SHIFT * Math.cos(angle);
-
-    // Scale: big at center, small at edges
-    const sc = interpolate(t, [0, 0.35, 1], [1.15, 0.98, 0.78], Extrapolation.CLAMP);
-
-    // Opacity
-    const op = interpolate(t, [0, 0.4, 1], [1, 0.7, 0.3], Extrapolation.CLAMP);
-
-    // Subtle rotation following the arc tangent
-    const rot = interpolate(d, [-FOCUS_ZONE, 0, FOCUS_ZONE], [2, 0, -2], Extrapolation.CLAMP);
-
-    return {
-      transform: [{ translateX: tx }, { scale: sc }, { rotate: `${rot}deg` }],
-      opacity: op,
-    };
+    const vc = scrollY.value + H / 2;
+    const d = Math.abs(mid - vc);
+    const t = Math.min(d / focusZone, 1);
+    const sc = interpolate(t, [0, 1], [1.02, 0.97], Extrapolation.CLAMP);
+    const op = interpolate(t, [0, 1], [1, 0.55], Extrapolation.CLAMP);
+    return { transform: [{ scale: sc }], opacity: op };
   });
 
-  // Spine node
-  const nodeStyle = useAnimatedStyle(() => {
-    const vc = scrollY.value + H / 2 - CENTER_Y;
-    const t = Math.min(Math.abs(mid - vc) / (FOCUS_ZONE * 0.5), 1);
+  const yearStyle = useAnimatedStyle(() => {
+    const vc = scrollY.value + H / 2;
+    const t = Math.min(Math.abs(mid - vc) / focusZone, 1);
     return {
-      transform: [{ scale: interpolate(t, [0, 1], [1.9, 0.6], Extrapolation.CLAMP) }],
-      opacity: interpolate(t, [0, 1], [1, 0.2], Extrapolation.CLAMP),
+      transform: [{ scale: interpolate(t, [0, 1], [1.08, 0.94], Extrapolation.CLAMP) }],
     };
-  });
-
-  // Connector stretches with the arc shift
-  const connStyle = useAnimatedStyle(() => {
-    const vc = scrollY.value + H / 2 - CENTER_Y;
-    const t = Math.min(Math.abs(mid - vc) / FOCUS_ZONE, 1);
-    const w = interpolate(t, [0, 1], [20, 5], Extrapolation.CLAMP);
-    const o = interpolate(t, [0, 1], [0.45, 0.06], Extrapolation.CLAMP);
-    return { width: w, opacity: o };
   });
 
   return (
-    <View style={[cs.row, { height: ITEM_H, marginBottom: ITEM_GAP }]}>
-      {/* Spine */}
-      <View style={cs.spine}>
-        <View style={[cs.line, { backgroundColor: theme.border }]} />
-        <Animated.View style={[cs.node, { backgroundColor: cc, shadowColor: cc }, nodeStyle]} />
-        <View style={[cs.line, { backgroundColor: theme.border }]} />
-      </View>
+    <View style={[rs.row, { height: ITEM_H, marginBottom: ITEM_GAP }]}>
+      {/* Spine line (continuous vertical) */}
+      <View style={[rs.spineLine, { backgroundColor: theme.border, left: SPINE_X - 0.75 }]} />
 
-      {/* Connector bridge */}
-      <Animated.View style={[cs.conn, { backgroundColor: cc }, connStyle]} />
+      {/* Year capsule anchored on spine */}
+      <Animated.View style={[rs.yearWrap, yearStyle, {
+        left: SPINE_X - YEAR_W / 2,
+        backgroundColor: isDark ? '#15130F' : '#FFFFFF',
+        borderColor: cc + '55',
+      }]}>
+        <View style={[rs.yearAccent, { backgroundColor: cc }]} />
+        <Text style={[rs.yearText, { color: cc, fontSize: yearStr.length > 5 ? 10 : 12 }]} numberOfLines={1}>
+          {yearStr}
+        </Text>
+      </Animated.View>
 
-      {/* Card body */}
-      <Animated.View style={[cs.wrap, cardStyle]}>
-        <TouchableOpacity onPress={onPress} activeOpacity={0.82} style={{ flex: 1 }}>
-          <View style={[cs.card, {
-            backgroundColor: isDark ? '#0F0F14' : '#FAFAF8',
-            borderColor: isDark ? '#1C1C24' : '#ECEAE5',
+      {/* Horizontal connector */}
+      <View style={[rs.conn, { backgroundColor: cc + '30', left: SPINE_X + YEAR_W / 2 - 2 }]} />
+
+      {/* Card */}
+      <Animated.View style={[rs.cardWrap, cardStyle, { left: SPINE_X + YEAR_W / 2 + 14 }]}>
+        <TouchableOpacity onPress={onPress} activeOpacity={0.82} style={rs.cardTouch}>
+          <View style={[rs.card, {
+            backgroundColor: isDark ? '#0F0E0C' : '#FFFFFF',
+            borderColor: isDark ? '#1E1B17' : '#EEEAE3',
+            shadowColor: cc,
           }]}>
-            {/* Thumbnail */}
+            {/* Image */}
             {img ? (
-              <View style={cs.imgBox}>
-                <Image source={{ uri: img }} style={cs.img} contentFit="cover" transition={250} />
-                <LinearGradient colors={['transparent', 'rgba(0,0,0,0.55)']} style={cs.imgFade} />
+              <View style={rs.imgBox}>
+                <Image source={{ uri: img }} style={rs.img} contentFit="cover" transition={240} />
+                <LinearGradient
+                  colors={['transparent', cc + '20']}
+                  style={StyleSheet.absoluteFill}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                />
               </View>
             ) : (
-              <View style={[cs.imgBox, { backgroundColor: cc + '08' }]}>
-                <Text style={[cs.imgYear, { color: cc }]}>{year}</Text>
+              <View style={[rs.imgBox, { backgroundColor: cc + '12' }]}>
+                <Text style={[rs.imgPlaceholder, { color: cc }]}>{ct}</Text>
               </View>
             )}
 
-            {/* Text */}
-            <View style={cs.body}>
-              <View style={cs.meta}>
-                <View style={[cs.dot, { backgroundColor: cc }]} />
-                <Text style={[cs.tag, { color: cc }]}>{ct}</Text>
-                <Text style={[cs.yr, { color: theme.subtext }]}>{year}</Text>
+            {/* Body */}
+            <View style={rs.body}>
+              <View style={rs.tagRow}>
+                <View style={[rs.tagDot, { backgroundColor: cc }]} />
+                <Text style={[rs.tagText, { color: cc }]}>{ct}</Text>
               </View>
-              <Text style={[cs.title, { color: theme.text }]} numberOfLines={2}>{title}</Text>
+              <Text style={[rs.title, { color: theme.text }]} numberOfLines={3}>{title}</Text>
             </View>
+
+            {/* Left color bar */}
+            <View style={[rs.sideBar, { backgroundColor: cc }]} />
           </View>
         </TouchableOpacity>
       </Animated.View>
@@ -185,103 +230,122 @@ const EvCard = React.memo(({
   );
 });
 
-const cs = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center' },
-  spine: { width: 26, alignItems: 'center' },
-  line: { flex: 1, width: 1.5, borderRadius: 1 },
-  node: {
-    width: 7, height: 7, borderRadius: 4, zIndex: 2,
-    shadowOpacity: 0.6, shadowRadius: 6, shadowOffset: { width: 0, height: 0 }, elevation: 3,
+const rs = StyleSheet.create({
+  row: { position: 'relative' },
+  spineLine: { position: 'absolute', top: 0, bottom: -ITEM_GAP, width: 1.5, borderRadius: 1, opacity: 0.5 },
+  yearWrap: {
+    position: 'absolute', top: (ITEM_H - YEAR_H) / 2,
+    width: YEAR_W, height: YEAR_H, borderRadius: YEAR_H / 2,
+    borderWidth: 1, flexDirection: 'row', alignItems: 'center',
+    paddingLeft: 8, paddingRight: 10, zIndex: 3,
   },
-  conn: { height: 1.5, borderRadius: 1, marginLeft: -1 },
-  wrap: { flex: 1, marginRight: 12 },
+  yearAccent: { width: 5, height: 5, borderRadius: 3, marginRight: 6 },
+  yearText: { fontWeight: '800', letterSpacing: 0.3, flex: 1, textAlign: 'center', fontFamily: SERIF },
+  conn: { position: 'absolute', top: ITEM_H / 2 - 0.75, width: 14, height: 1.5, borderRadius: 1, zIndex: 1 },
+  cardWrap: {
+    position: 'absolute', top: 0, bottom: 0, right: 14,
+  },
+  cardTouch: { flex: 1 },
   card: {
-    flex: 1, flexDirection: 'row', borderRadius: 14, overflow: 'hidden', borderWidth: 1,
+    flex: 1, flexDirection: 'row', borderRadius: 16, overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+    shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.06, shadowRadius: 10,
+    elevation: 2,
   },
-  imgBox: { width: 58, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  img: { width: 58, height: '100%' },
-  imgFade: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 20 },
-  imgYear: { fontSize: 15, fontWeight: '900', opacity: 0.2, letterSpacing: -0.5 },
-  body: { flex: 1, paddingHorizontal: 10, paddingVertical: 8, justifyContent: 'center', gap: 3 },
-  meta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  dot: { width: 4, height: 4, borderRadius: 2 },
-  tag: { fontSize: 8, fontWeight: '800', letterSpacing: 1 },
-  yr: { fontSize: 9, fontWeight: '600', opacity: 0.3, marginLeft: 'auto' },
-  title: { fontSize: 12, fontWeight: '700', lineHeight: 16, letterSpacing: -0.1, fontFamily: SERIF },
+  sideBar: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 2.5, opacity: 0.85 },
+  imgBox: {
+    width: ITEM_H - 12, height: ITEM_H - 12, margin: 6,
+    borderRadius: 11, overflow: 'hidden',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  img: { width: '100%', height: '100%' },
+  imgPlaceholder: { fontSize: 14, fontWeight: '900', opacity: 0.5, letterSpacing: 1.5 },
+  body: { flex: 1, paddingHorizontal: 12, paddingVertical: 10, justifyContent: 'center', gap: 6 },
+  tagRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  tagDot: { width: 5, height: 5, borderRadius: 3 },
+  tagText: { fontSize: 9, fontWeight: '800', letterSpacing: 1.5 },
+  title: { fontSize: 13.5, fontWeight: '700', lineHeight: 18, letterSpacing: -0.1, fontFamily: SERIF },
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// ERA DIVIDER — century separator, also arc-animated
+// ERA ROW — chapter divider
 // ══════════════════════════════════════════════════════════════════════════════
-const EraCard = React.memo(({
-  century, label, count, yOff, scrollY, theme, isDark, gold,
+const EraRow = React.memo(({
+  century, count, yOff, scrollY, theme, isDark, gold, language,
 }: {
-  century: number; label: string; count: number; yOff: number;
-  scrollY: SharedValue<number>; theme: any; isDark: boolean; gold: string;
+  century: number; count: number; yOff: number;
+  scrollY: SharedValue<number>; theme: any; isDark: boolean; gold: string; language: string;
 }) => {
   const mid = yOff + ERA_H / 2;
+  const focusZone = H * 0.35;
+  const roman = toRoman(century);
+  const label = centuryLabel(century, language);
+  const range = centuryRange(century);
 
   const style = useAnimatedStyle(() => {
-    const vc = scrollY.value + H / 2 - CENTER_Y;
-    const d = mid - vc;
-    const ad = Math.abs(d);
-    const t = Math.min(ad / FOCUS_ZONE, 1);
-    const angle = t * (Math.PI / 2);
-    const tx = ARC_SHIFT * 0.6 * Math.cos(angle);
-    const sc = interpolate(t, [0, 1], [1.1, 0.82], Extrapolation.CLAMP);
-    const op = interpolate(t, [0, 0.5, 1], [1, 0.75, 0.35], Extrapolation.CLAMP);
-    return {
-      transform: [{ translateX: tx }, { scale: sc }],
-      opacity: op,
-    };
-  });
-
-  // Pulsing glow on the era node
-  const nodeStyle = useAnimatedStyle(() => {
-    const vc = scrollY.value + H / 2 - CENTER_Y;
-    const t = Math.min(Math.abs(mid - vc) / (FOCUS_ZONE * 0.4), 1);
-    return {
-      transform: [{ scale: interpolate(t, [0, 1], [2.5, 0.8], Extrapolation.CLAMP) }],
-      opacity: interpolate(t, [0, 1], [1, 0.25], Extrapolation.CLAMP),
-    };
+    const vc = scrollY.value + H / 2;
+    const t = Math.min(Math.abs(mid - vc) / focusZone, 1);
+    const sc = interpolate(t, [0, 1], [1.015, 0.98], Extrapolation.CLAMP);
+    const op = interpolate(t, [0, 1], [1, 0.7], Extrapolation.CLAMP);
+    return { transform: [{ scale: sc }], opacity: op };
   });
 
   const glowStyle = useAnimatedStyle(() => {
-    const vc = scrollY.value + H / 2 - CENTER_Y;
-    const t = Math.min(Math.abs(mid - vc) / (FOCUS_ZONE * 0.3), 1);
+    const vc = scrollY.value + H / 2;
+    const t = Math.min(Math.abs(mid - vc) / (focusZone * 0.6), 1);
     return {
       opacity: interpolate(t, [0, 1], [0.35, 0], Extrapolation.CLAMP),
-      transform: [{ scale: interpolate(t, [0, 1], [4, 1], Extrapolation.CLAMP) }],
+      transform: [{ scale: interpolate(t, [0, 1], [2.2, 0.6], Extrapolation.CLAMP) }],
     };
   });
 
   return (
     <View style={[es.row, { height: ERA_H, marginBottom: ITEM_GAP }]}>
-      {/* Spine with glowing node */}
-      <View style={es.spine}>
-        <View style={[es.line, { backgroundColor: gold + '50' }]} />
-        <View style={es.nodeWrap}>
-          <Animated.View style={[es.glow, { backgroundColor: gold }, glowStyle]} />
-          <Animated.View style={[es.node, { backgroundColor: gold, shadowColor: gold }, nodeStyle]} />
-        </View>
-        <View style={[es.line, { backgroundColor: gold + '50' }]} />
-      </View>
+      {/* Gold spine segment */}
+      <View style={[es.spineGold, { backgroundColor: gold + '80', left: SPINE_X - 1 }]} />
 
-      {/* Label card */}
+      {/* Glowing node */}
+      <Animated.View style={[es.glow, { backgroundColor: gold, left: SPINE_X - 12 }, glowStyle]} />
+
+      {/* Card */}
       <Animated.View style={[es.wrap, style]}>
         <View style={[es.card, {
-          backgroundColor: isDark ? gold + '0A' : gold + '08',
-          borderColor: gold + '22',
+          backgroundColor: isDark ? '#15110A' : '#FFFBF0',
+          borderColor: gold + '35',
         }]}>
-          <View style={[es.badge, { backgroundColor: gold }]}>
-            <Text style={es.badgeNum}>{century}</Text>
+          {/* Background gradient accent */}
+          <LinearGradient
+            colors={[gold + '18', 'transparent']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={StyleSheet.absoluteFill}
+          />
+
+          {/* Roman numeral badge */}
+          <View style={[es.romanWrap, { borderColor: gold + '55' }]}>
+            <View style={[es.romanInner, { backgroundColor: gold }]}>
+              <Text style={es.romanText}>{roman}</Text>
+            </View>
+            <Sparkles size={10} color={gold} style={es.sparkle} />
           </View>
+
+          {/* Text block */}
           <View style={es.texts}>
-            <Text style={[es.label, { color: gold }]}>{label}</Text>
-            <Text style={[es.count, { color: theme.subtext }]}>
-              {count} event{count !== 1 ? 's' : ''}
+            <Text style={[es.chapterTag, { color: gold }]}>
+              {tl(language, 'chapter').toUpperCase()} · {century}
             </Text>
+            <Text style={[es.label, { color: theme.text }]} numberOfLines={1}>{label}</Text>
+            <View style={es.metaRow}>
+              <Text style={[es.range, { color: theme.subtext }]}>{range}</Text>
+              <View style={[es.metaDot, { backgroundColor: theme.subtext + '60' }]} />
+              <Text style={[es.count, { color: theme.subtext }]}>
+                {count} {tl(language, count === 1 ? 'event' : 'events')}
+              </Text>
+            </View>
           </View>
+
+          {/* Right ornament */}
+          <View style={[es.ornament, { backgroundColor: gold + '15' }]} />
         </View>
       </Animated.View>
     </View>
@@ -289,25 +353,40 @@ const EraCard = React.memo(({
 });
 
 const es = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center' },
-  spine: { width: 26, alignItems: 'center' },
-  line: { flex: 1, width: 1.5, borderRadius: 1 },
-  nodeWrap: { alignItems: 'center', justifyContent: 'center' },
-  glow: { position: 'absolute', width: 7, height: 7, borderRadius: 4 },
-  node: {
-    width: 7, height: 7, borderRadius: 4, zIndex: 3,
-    shadowOpacity: 0.55, shadowRadius: 8, shadowOffset: { width: 0, height: 0 }, elevation: 5,
+  row: { position: 'relative' },
+  spineGold: { position: 'absolute', top: 0, bottom: -ITEM_GAP, width: 2, borderRadius: 1 },
+  glow: {
+    position: 'absolute', top: ERA_H / 2 - 12, width: 24, height: 24, borderRadius: 12, zIndex: 1,
   },
-  wrap: { flex: 1, marginRight: 12 },
+  wrap: {
+    position: 'absolute', top: 6, bottom: 6, left: SPINE_X + 18, right: 14,
+  },
   card: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, borderWidth: 1,
+    flex: 1, borderRadius: 14, borderWidth: 1, overflow: 'hidden',
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    paddingHorizontal: 14, paddingRight: 18,
   },
-  badge: { width: 24, height: 24, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
-  badgeNum: { color: '#000', fontSize: 9, fontWeight: '900', letterSpacing: 0.2 },
-  texts: { flex: 1 },
-  label: { fontSize: 13, fontWeight: '800', letterSpacing: -0.2, fontFamily: SERIF },
-  count: { fontSize: 9, fontWeight: '600', opacity: 0.4, letterSpacing: 0.4, marginTop: 1 },
+  romanWrap: {
+    width: 52, height: 52, borderRadius: 14, borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center',
+    padding: 4,
+  },
+  romanInner: {
+    flex: 1, alignSelf: 'stretch', borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  romanText: { color: '#000', fontSize: 13, fontWeight: '900', letterSpacing: 0.5, fontFamily: SERIF },
+  sparkle: { position: 'absolute', top: -2, right: -2 },
+  texts: { flex: 1, gap: 3 },
+  chapterTag: { fontSize: 9.5, fontWeight: '800', letterSpacing: 2 },
+  label: { fontSize: 16, fontWeight: '800', letterSpacing: -0.3, fontFamily: SERIF },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 2 },
+  range: { fontSize: 10.5, fontWeight: '600', opacity: 0.55, letterSpacing: 0.3 },
+  metaDot: { width: 3, height: 3, borderRadius: 1.5, opacity: 0.5 },
+  count: { fontSize: 10.5, fontWeight: '600', opacity: 0.55 },
+  ornament: {
+    position: 'absolute', right: -18, top: -18, width: 80, height: 80, borderRadius: 40,
+  },
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -319,20 +398,24 @@ export default function TimelineScreen({ allEvents }: Props) {
   const insets = useSafeAreaInsets();
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
   const scrollY = useSharedValue(0);
-  const gold = isPremium ? '#D4A843' : theme.gold;
+  const gold = isPremium ? '#D4A843' : (theme.gold ?? '#C77E08');
 
   // Build items with pre-computed Y offsets
-  const { items, nEvents, nEras } = useMemo(() => {
-    const sorted = allEvents.filter(x => extractYear(x) > 0).sort((a, b) => extractYear(a) - extractYear(b));
+  const { items, nEvents, nEras, totalHeight, yearRange } = useMemo(() => {
+    const sorted = allEvents.filter(x => extractYear(x) !== 0).sort((a, b) => extractYear(a) - extractYear(b));
     const out: TItem[] = [];
-    let lastC = -1, y = 0;
+    let lastC = -Infinity, y = 0, eras = 0;
     const cc = new Map<number, number>();
-    for (const x of sorted) { const k = Math.ceil(extractYear(x) / 100); cc.set(k, (cc.get(k) ?? 0) + 1); }
-    let eras = 0;
     for (const x of sorted) {
-      const k = Math.ceil(extractYear(x) / 100);
+      const yr = extractYear(x);
+      const k = yr > 0 ? Math.ceil(yr / 100) : Math.floor(yr / 100);
+      cc.set(k, (cc.get(k) ?? 0) + 1);
+    }
+    for (const x of sorted) {
+      const yr = extractYear(x);
+      const k = yr > 0 ? Math.ceil(yr / 100) : Math.floor(yr / 100);
       if (k !== lastC) {
-        out.push({ k: 'era', century: k, label: centuryLabel(k * 100), count: cc.get(k) ?? 0, y, h: ERA_H });
+        out.push({ k: 'era', century: k, count: cc.get(k) ?? 0, y, h: ERA_H });
         y += ERA_TOTAL;
         lastC = k;
         eras++;
@@ -340,18 +423,50 @@ export default function TimelineScreen({ allEvents }: Props) {
       out.push({ k: 'ev', event: x, y, h: ITEM_H });
       y += ITEM_TOTAL;
     }
-    return { items: out, nEvents: sorted.length, nEras: eras };
+    const first = sorted.length ? extractYear(sorted[0]) : 0;
+    const last  = sorted.length ? extractYear(sorted[sorted.length - 1]) : 0;
+    return { items: out, nEvents: sorted.length, nEras: eras, totalHeight: y, yearRange: { first, last } };
   }, [allEvents]);
 
-  const scrollHandler = useAnimatedScrollHandler({ onScroll: (ev) => { scrollY.value = ev.contentOffset.y; } });
+  const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (ev) => { scrollY.value = ev.contentOffset.y; },
+  });
+
+  // Progress bar fill (0–1)
+  const progress = useDerivedValue(() => {
+    const max = Math.max(1, totalHeight - H * 0.5);
+    return Math.max(0, Math.min(1, scrollY.value / max));
+  }, [totalHeight]);
+
+  const progressStyle = useAnimatedStyle(() => ({
+    height: `${progress.value * 100}%`,
+  }));
+
+  // Current-era badge (updates on scroll end — cheap, no per-frame work)
+  const [displayCentury, setDisplayCentury] = useState(0);
+  useEffect(() => {
+    const first = items.find(i => i.k === 'era');
+    if (first && first.k === 'era') setDisplayCentury(first.century);
+  }, [items]);
+
+  const onScrollJS = useCallback((e: any) => {
+    const y = e.nativeEvent.contentOffset.y + H / 2;
+    let c = 0;
+    for (const it of items) {
+      if (it.k === 'era' && it.y <= y) c = it.century;
+    }
+    if (c !== 0 && c !== displayCentury) setDisplayCentury(c);
+  }, [items, displayCentury]);
 
   const press = useCallback((ev: any) => { haptic('light'); setSelectedEvent(ev); }, []);
 
   const renderItem = useCallback(({ item }: { item: TItem }) => {
     if (item.k === 'era') {
-      return <EraCard century={item.century} label={item.label} count={item.count} yOff={item.y} scrollY={scrollY} theme={theme} isDark={isDark} gold={gold} />;
+      return <EraRow century={item.century} count={item.count} yOff={item.y}
+               scrollY={scrollY} theme={theme} isDark={isDark} gold={gold} language={language} />;
     }
-    return <EvCard event={item.event} yOff={item.y} scrollY={scrollY} theme={theme} isDark={isDark} language={language} gold={gold} onPress={() => press(item.event)} />;
+    return <EvRow event={item.event} yOff={item.y} scrollY={scrollY}
+             theme={theme} isDark={isDark} language={language} onPress={() => press(item.event)} />;
   }, [theme, isDark, language, gold, scrollY, press]);
 
   const getLayout = useCallback((_: any, i: number) => {
@@ -360,61 +475,106 @@ export default function TimelineScreen({ allEvents }: Props) {
     return { length: item.h + ITEM_GAP, offset: item.y, index: i };
   }, [items]);
 
-  const keyEx = useCallback((item: TItem, i: number) => item.k === 'era' ? `e${item.century}` : `v${i}`, []);
+  const keyEx = useCallback((item: TItem, i: number) =>
+    item.k === 'era' ? `e${item.century}` : `v${i}-${extractYear(item.event)}`, []);
 
   return (
     <View style={[m.root, { backgroundColor: theme.background }]}>
       {isPremium && <LinearGradient colors={['#0A0815', '#05040A']} style={StyleSheet.absoluteFill} />}
 
-      {/* Header */}
-      <View style={[m.hdr, { paddingTop: insets.top + 4 }]}>
-        <View style={m.hdrRow}>
-          <View style={[m.hdrIcon, { backgroundColor: gold + '15' }]}>
-            <Clock size={14} color={gold} strokeWidth={2.2} />
+      {/* ── HEADER ── */}
+      <View style={[m.hdrWrap, { paddingTop: insets.top }]}>
+        <LinearGradient
+          colors={[theme.background, theme.background + 'F0', theme.background + '00']}
+          style={[StyleSheet.absoluteFill, { height: insets.top + HEADER_H + 20 }]}
+          pointerEvents="none"
+        />
+        <View style={m.hdr}>
+          <View style={m.hdrLeft}>
+            <View style={[m.hdrIcon, { backgroundColor: gold + '15', borderColor: gold + '30' }]}>
+              <Clock size={14} color={gold} strokeWidth={2.2} />
+            </View>
+            <View>
+              <Text style={[m.hdrTitle, { color: theme.text }]}>{t('timeline') || 'Timeline'}</Text>
+              <Text style={[m.hdrSub, { color: theme.subtext }]}>
+                {nEvents} {tl(language, nEvents === 1 ? 'event' : 'events')} · {nEras} {tl(language, nEras === 1 ? 'century' : 'centuries')}
+              </Text>
+            </View>
           </View>
-          <View>
-            <Text style={[m.hdrTitle, { color: theme.text }]}>{t('timeline') || 'Timeline'}</Text>
-            <Text style={[m.hdrSub, { color: theme.subtext }]}>{nEvents} events · {nEras} centuries</Text>
-          </View>
+
+          {/* Current era badge (right side) */}
+          {displayCentury !== 0 && (
+            <View style={[m.eraBadge, { backgroundColor: gold + '14', borderColor: gold + '30' }]}>
+              <Text style={[m.eraBadgeText, { color: gold }]}>{toRoman(Math.abs(displayCentury))}</Text>
+            </View>
+          )}
         </View>
+        <View style={[m.sep, { backgroundColor: theme.border }]} />
       </View>
-      <View style={[m.sep, { backgroundColor: theme.border }]} />
 
       {nEvents === 0 ? (
         <View style={m.empty}>
-          <View style={[m.emptyRing, { borderColor: theme.subtext + '20' }]}>
-            <Clock size={24} color={theme.subtext + '40'} strokeWidth={1.5} />
+          <View style={[m.emptyRing, { borderColor: gold + '25' }]}>
+            <View style={[m.emptyInner, { backgroundColor: gold + '10' }]}>
+              <Clock size={26} color={gold} strokeWidth={1.6} />
+            </View>
           </View>
-          <Text style={[m.emptyT, { color: theme.text }]}>{t('no_events') || 'No events yet'}</Text>
-          <Text style={[m.emptyS, { color: theme.subtext }]}>Events will appear as you explore more days</Text>
+          <Text style={[m.emptyT, { color: theme.text }]}>{tl(language, 'empty_title')}</Text>
+          <Text style={[m.emptyS, { color: theme.subtext }]}>{tl(language, 'empty_desc')}</Text>
         </View>
       ) : (
         <View style={{ flex: 1 }}>
-          {/* Spine background */}
-          <View style={[m.spineBg, { backgroundColor: theme.border }]} pointerEvents="none" />
+          {/* Top fade overlay (fades items entering from top) */}
+          <LinearGradient
+            colors={[theme.background, theme.background + '00']}
+            style={[m.fadeTop, { top: insets.top + HEADER_H, height: 40 }]}
+            pointerEvents="none"
+          />
 
-          {/* Focus ring on the spine at viewport center */}
-          <View style={[m.focusWrap, { top: H / 2 - CENTER_Y - 11 }]} pointerEvents="none">
-            <View style={[m.focusRing, { borderColor: gold + '18' }]} />
-            <View style={[m.focusDot, { backgroundColor: gold + '35' }]} />
+          {/* Bottom fade overlay */}
+          <LinearGradient
+            colors={[theme.background + '00', theme.background]}
+            style={[m.fadeBot, { height: 80, bottom: insets.bottom }]}
+            pointerEvents="none"
+          />
+
+          {/* Scroll progress rail (right edge) */}
+          <View style={[m.progRail, {
+            backgroundColor: theme.border + '80',
+            top: insets.top + HEADER_H + 20,
+            bottom: insets.bottom + 20,
+          }]} pointerEvents="none">
+            <Animated.View style={[m.progFill, { backgroundColor: gold }, progressStyle]} />
           </View>
 
+          {/* Year range labels on rail */}
+          <View style={[m.railTop, { top: insets.top + HEADER_H + 8 }]} pointerEvents="none">
+            <Text style={[m.railYear, { color: theme.subtext }]}>{formatYear(yearRange.first, language)}</Text>
+          </View>
+          <View style={[m.railBot, { bottom: insets.bottom + 8 }]} pointerEvents="none">
+            <Text style={[m.railYear, { color: theme.subtext }]}>{formatYear(yearRange.last, language)}</Text>
+          </View>
+
+          {/* List */}
           <Animated.FlatList
             data={items}
             renderItem={renderItem}
             keyExtractor={keyEx}
             getItemLayout={getLayout}
             onScroll={scrollHandler}
+            onMomentumScrollEnd={onScrollJS}
+            onScrollEndDrag={onScrollJS}
             scrollEventThrottle={16}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{
-              paddingTop: H * 0.45,
-              paddingBottom: H * 0.45 + insets.bottom,
-              paddingLeft: 8,
+              paddingTop: insets.top + HEADER_H + 16,
+              paddingBottom: insets.bottom + 60,
+              paddingRight: 24,
             }}
             removeClippedSubviews={Platform.OS === 'android'}
-            maxToRenderPerBatch={18}
-            windowSize={13}
+            maxToRenderPerBatch={12}
+            windowSize={11}
+            initialNumToRender={8}
           />
         </View>
       )}
@@ -426,18 +586,52 @@ export default function TimelineScreen({ allEvents }: Props) {
 
 const m = StyleSheet.create({
   root: { flex: 1 },
-  hdr: { paddingHorizontal: 20, paddingBottom: 10 },
-  hdrRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  hdrIcon: { width: 30, height: 30, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
-  hdrTitle: { fontSize: 17, fontWeight: '800', letterSpacing: -0.3, fontFamily: SERIF },
-  hdrSub: { fontSize: 10, fontWeight: '500', opacity: 0.4, marginTop: 1 },
-  sep: { height: StyleSheet.hairlineWidth },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, paddingHorizontal: 40 },
-  emptyRing: { width: 52, height: 52, borderRadius: 26, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
-  emptyT: { fontSize: 15, fontWeight: '700' },
-  emptyS: { fontSize: 11.5, opacity: 0.4, textAlign: 'center', lineHeight: 17 },
-  spineBg: { position: 'absolute', left: 21, top: 0, bottom: 0, width: 1.5, borderRadius: 1, opacity: 0.15, zIndex: 0 },
-  focusWrap: { position: 'absolute', left: 8, width: 26, height: 22, alignItems: 'center', justifyContent: 'center', zIndex: 10 },
-  focusRing: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.5 },
-  focusDot: { position: 'absolute', width: 5, height: 5, borderRadius: 3 },
+
+  // Header
+  hdrWrap: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20 },
+  hdr: {
+    height: HEADER_H, paddingHorizontal: 20,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+  },
+  hdrLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  hdrIcon: {
+    width: 32, height: 32, borderRadius: 10, borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  hdrTitle: { fontSize: 18, fontWeight: '800', letterSpacing: -0.3, fontFamily: SERIF },
+  hdrSub: { fontSize: 10.5, fontWeight: '500', opacity: 0.5, marginTop: 1, letterSpacing: 0.2 },
+  eraBadge: {
+    minWidth: 40, height: 28, paddingHorizontal: 10, borderRadius: 9, borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  eraBadgeText: { fontSize: 12, fontWeight: '900', letterSpacing: 0.5, fontFamily: SERIF },
+  sep: { height: StyleSheet.hairlineWidth, opacity: 0.6 },
+
+  // Empty state
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 40 },
+  emptyRing: {
+    width: 84, height: 84, borderRadius: 42, borderWidth: 1.5,
+    alignItems: 'center', justifyContent: 'center', padding: 8, marginBottom: 4,
+  },
+  emptyInner: { flex: 1, alignSelf: 'stretch', borderRadius: 36, alignItems: 'center', justifyContent: 'center' },
+  emptyT: { fontSize: 17, fontWeight: '800', fontFamily: SERIF, letterSpacing: -0.3 },
+  emptyS: { fontSize: 12.5, opacity: 0.5, textAlign: 'center', lineHeight: 19 },
+
+  // Fades
+  fadeTop: { position: 'absolute', left: 0, right: 0, zIndex: 5 },
+  fadeBot: { position: 'absolute', left: 0, right: 0, zIndex: 5 },
+
+  // Progress rail
+  progRail: {
+    position: 'absolute', right: 10, width: 2, borderRadius: 1,
+    overflow: 'hidden', zIndex: 6,
+  },
+  progFill: { width: '100%', borderRadius: 1 },
+  railTop: { position: 'absolute', right: 4, zIndex: 6 },
+  railBot: { position: 'absolute', right: 4, zIndex: 6 },
+  railYear: {
+    fontSize: 8.5, fontWeight: '700', letterSpacing: 0.5, opacity: 0.45,
+    transform: [{ rotate: '90deg' }],
+    width: 50, textAlign: 'center',
+  },
 });
