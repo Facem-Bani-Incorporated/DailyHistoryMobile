@@ -46,7 +46,8 @@
         {
           "androidAppId": "ca-app-pub-7999755031829705~7590936786"
         }
-      ]
+      ],
+      "@react-native-firebase/app"
     ],
     "experiments": {
       "typedRoutes": true
