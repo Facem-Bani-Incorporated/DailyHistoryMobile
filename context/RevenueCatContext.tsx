@@ -23,6 +23,7 @@ import Purchases, {
 } from 'react-native-purchases';
 import RevenueCatUI, { PAYWALL_RESULT } from 'react-native-purchases-ui';
 
+import { syncProStatus } from '../services/authService';
 import { useAuthStore } from '../store/useAuthStore';
 
 export const PRO_ENTITLEMENT = 'Daily History Pro';
@@ -140,6 +141,15 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
       }
     })();
   }, [ready, user?.id]);
+
+  // ── Sync is_pro to backend whenever subscription state changes ──
+  const prevIsProRef = useRef<boolean | null>(null);
+  useEffect(() => {
+    if (!ready || !user?.id) return;
+    if (prevIsProRef.current === isPro) return;
+    prevIsProRef.current = isPro;
+    syncProStatus(isPro);
+  }, [isPro, ready, user?.id]);
 
   const refresh = useCallback(async () => {
     try {

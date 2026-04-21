@@ -336,7 +336,15 @@ export default function ProfileModal({ visible, onClose }: Props) {
                     )}
                   </View>
                   <View style={s.heroText}>
-                    <Text style={[s.heroName, { color: theme.text }]} numberOfLines={1}>{displayName}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Text style={[s.heroName, { color: theme.text }]} numberOfLines={1}>{displayName}</Text>
+                      {isPro && (
+                        <View style={[s.proBadge, { backgroundColor: gold }]}>
+                          <Ionicons name="sparkles" size={8} color="#000" />
+                          <Text style={s.proBadgeT}>PRO</Text>
+                        </View>
+                      )}
+                    </View>
                     {displayEmail !== '' && (
                       <Text style={[s.heroEmail, { color: theme.subtext }]} numberOfLines={1}>{displayEmail}</Text>
                     )}
@@ -496,7 +504,10 @@ export default function ProfileModal({ visible, onClose }: Props) {
                     gold={gold}
                     isDark={isDark}
                     theme={theme}
-                    onPress={() => setMode('premium')}
+                    onPress={async () => {
+                      if (!isPro) { await presentPaywall(); return; }
+                      setMode('premium');
+                    }}
                   />
                 </View>
               </View>
@@ -638,6 +649,8 @@ const makeStyles = (theme: any, isDark: boolean, gold: string, isPremium: boolea
   proRestore: { alignItems: 'center', paddingVertical: 4 },
   proRestoreT: { fontSize: 11.5, fontWeight: '600', letterSpacing: 0.2 },
 
+  proBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 2.5, borderRadius: 6 },
+  proBadgeT: { fontSize: 8.5, fontWeight: '900', color: '#000', letterSpacing: 0.8 },
   logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 14, backgroundColor: '#FF3B3008', borderWidth: 1, borderColor: '#FF3B3018', gap: 7, marginTop: 4, marginBottom: 34 },
   logoutText: { color: '#FF3B30', fontSize: 13.5, fontWeight: '600', letterSpacing: 0.2 },
   footer: { alignItems: 'center', gap: 5, paddingBottom: 10 },

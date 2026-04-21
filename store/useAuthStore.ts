@@ -21,6 +21,7 @@ interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
   setAuth: (token: string, user: User) => void;
+  updateUser: (patch: Partial<User>) => void;
   logout: () => void;
 }
 
@@ -36,6 +37,10 @@ export const useAuthStore = create<AuthState>()(
           user,
           isAuthenticated: true,
         }),
+      updateUser: (patch) =>
+        set((state) => ({
+          user: state.user ? { ...state.user, ...patch } : state.user,
+        })),
       logout: () => {
         // ── Sync gamification to server before clearing ──
         try {

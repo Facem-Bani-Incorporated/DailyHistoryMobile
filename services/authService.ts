@@ -1,6 +1,18 @@
 import api from '../api';
 import { useAuthStore } from '../store/useAuthStore';
 
+export async function syncProStatus(isPro: boolean): Promise<void> {
+  const userId = useAuthStore.getState().user?.id;
+  if (!userId) return;
+  try {
+    await api.patch('/users/me/pro', null, { params: { isPro } });
+    useAuthStore.getState().updateUser({ is_pro: isPro });
+    if (__DEV__) console.log('[Pro] Synced is_pro =', isPro);
+  } catch (e) {
+    if (__DEV__) console.warn('[Pro] syncProStatus failed', e);
+  }
+}
+
 export const authService = {
   async loginWithGoogle(idToken: string) {
     try {

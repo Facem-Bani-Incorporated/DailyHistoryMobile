@@ -11,6 +11,7 @@ import {
   Easing,
   FlatList,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -42,6 +43,7 @@ import WeeklyRecapModal from '../../components/WeeklyRecapModal';
 import { AD_UNIT_IDS } from '../../config/ads';
 import { AllEventsProvider } from '../../context/AllEventsContext';
 import { useLanguage } from '../../context/LanguageContext';
+import { useRevenueCat } from '../../context/RevenueCatContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useInterstitialAd } from '../../hooks/useInterstitialAd';
 import { useRewardedUnlock } from '../../hooks/useRewardedUnlock';
@@ -53,7 +55,8 @@ import { haptic } from '../../utils/haptics';
 import { schedulePersonalizedNotification } from '../../utils/Notifications';
 import SavedScreen from './saved';
 
-const { width: W } = Dimensions.get('window');
+const { width: W, height: H } = Dimensions.get('window');
+const CARD_H = H * 0.55;
 const CACHE_TTL = 30 * 60 * 1000;
 const MAX_FWD = 1;
 const PAST_DAYS = 200;
@@ -311,11 +314,68 @@ const AnimatedPage = ({
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
+// PRO DIVIDER — animated gold separator hinting at pro content below
+// ═════════════════════════════════════════════════════════════════════════════
+const ProDivider = ({ gold }: { gold: string }) => {
+  const bounce = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(bounce, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(bounce, { toValue: 0, duration: 900, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ]),
+    ).start();
+  }, []);
+  const ty = bounce.interpolate({ inputRange: [0, 1], outputRange: [0, 5] });
+  return (
+    <View style={_pd.wrap}>
+      <View style={_pd.row}>
+        <View style={[_pd.line, { backgroundColor: gold + '30' }]} />
+        <View style={[_pd.pill, { backgroundColor: gold + '15' }]}>
+          <Ionicons name="sparkles" size={10} color={gold} />
+          <Text style={[_pd.pillT, { color: gold }]}>PRO</Text>
+        </View>
+        <View style={[_pd.line, { backgroundColor: gold + '30' }]} />
+      </View>
+      <Animated.View style={{ transform: [{ translateY: ty }] }}>
+        <Ionicons name="chevron-down" size={16} color={gold + '60'} />
+      </Animated.View>
+    </View>
+  );
+};
+const _pd = StyleSheet.create({
+  wrap: { alignItems: 'center', paddingVertical: 14, gap: 6 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, width: '100%' },
+  line: { flex: 1, height: 1 },
+  pill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  pillT: { fontWeight: '800', fontSize: 10, letterSpacing: 1.5 },
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// LOCKED PRO OVERLAY — shown on top of pro cards for non-pro users
+// ═════════════════════════════════════════════════════════════════════════════
+const LockedProOverlay = ({ gold, onPress }: { gold: string; onPress: () => void }) => (
+  <TouchableOpacity activeOpacity={0.9} onPress={onPress}
+    style={[StyleSheet.absoluteFill, _lo.wrap]}>
+    <View style={[_lo.badge, { backgroundColor: gold + '20', borderColor: gold + '50' }]}>
+      <Ionicons name="lock-closed" size={22} color={gold} />
+    </View>
+    <Text style={[_lo.text, { color: gold }]}>UNLOCK PRO</Text>
+  </TouchableOpacity>
+);
+const _lo = StyleSheet.create({
+  wrap: { backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 30, alignItems: 'center', justifyContent: 'center', gap: 10, zIndex: 10 },
+  badge: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5 },
+  text: { fontWeight: '900', fontSize: 11, letterSpacing: 2 },
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
 // MAIN SCREEN
 // ═════════════════════════════════════════════════════════════════════════════
 export default function HomeScreen() {
   const { theme, isDark, isPremium } = useTheme();
   const { t, language } = useLanguage();
+  const { isPro, presentPaywall, presentPaywallIfNeeded } = useRevenueCat();
   const insets = useSafeAreaInsets();
   const userSaved = useUserSavedEvents();
   const recordVisit = useGamificationStore(s => s.recordDailyVisit);
@@ -357,9 +417,6 @@ export default function HomeScreen() {
   const [allEvents, setAllEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('today');
-  const [tier, setTier] = useState<Tier>('free');
-  const tierRef = useRef<Tier>('free');
-  useEffect(() => { tierRef.current = tier; }, [tier]);
   const user = useAuthStore(s => s.user);
   const [seenSaved, setSeenSaved] = useState(userSaved.length);
   useEffect(() => { setSeenSaved(userSaved.length); }, [user?.id]);
@@ -373,16 +430,16 @@ export default function HomeScreen() {
     if (pendingEvent) { setNotifEvent(pendingEvent); clearPendingEvent(); }
   }, [pendingEvent]);
 
-  // Ad trigger: every 3 stories read
+  // Ad trigger: every 3 stories read (skip for pro)
   const prevEventsRead = useRef(totalEventsRead);
   useEffect(() => {
-    if (totalEventsRead > prevEventsRead.current) {
+    if (!isPro && totalEventsRead > prevEventsRead.current) {
       if (totalEventsRead % STORY_AD_FREQUENCY === 0) {
         maybeShowInterstitial(totalEventsRead);
       }
     }
     prevEventsRead.current = totalEventsRead;
-  }, [totalEventsRead]);
+  }, [totalEventsRead, isPro]);
 
   // ── Data loading ──
   const mem = useRef<Record<string, PD>>({});
@@ -429,7 +486,9 @@ export default function HomeScreen() {
       setLoading(false);
       setTick(t => t + 1);
       fetchAll();
-      for (let i = 2; i <= 7; i++) fetchOne(-i).catch(() => { });
+      // Prefetch pro data + older free days
+      fetchOne(0, 'pro').catch(() => {}); fetchOne(-1, 'pro').catch(() => {}); fetchOne(1, 'pro').catch(() => {});
+      for (let i = 2; i <= 7; i++) { fetchOne(-i).catch(() => { }); fetchOne(-i, 'pro').catch(() => {}); }
       const notifPref = await AsyncStorage.getItem('notifications_enabled');
       if (notifPref !== 'false') {
         fetchOne(1).then(d => schedulePersonalizedNotification(d.data, language))
@@ -456,11 +515,14 @@ export default function HomeScreen() {
       const idx = viewableItems[0].index ?? TODAY_INDEX;
       const newOff = idx - PAST_DAYS;
       setOff(newOff);
-      const cur = tierRef.current;
-      const key1 = mk(cur, isoFor(newOff - 1));
-      const key2 = mk(cur, isoFor(newOff + 1));
-      if (!mem.current[key1]) fetchOne(newOff - 1, cur).then(() => setTick(t => t + 1)).catch(() => { });
-      if (!mem.current[key2]) fetchOne(newOff + 1, cur).then(() => setTick(t => t + 1)).catch(() => { });
+      const key1 = mk('free', isoFor(newOff - 1));
+      const key2 = mk('free', isoFor(newOff + 1));
+      if (!mem.current[key1]) fetchOne(newOff - 1).then(() => setTick(t => t + 1)).catch(() => { });
+      if (!mem.current[key2]) fetchOne(newOff + 1).then(() => setTick(t => t + 1)).catch(() => { });
+      // Prefetch pro data for current ± 1
+      fetchOne(newOff, 'pro').catch(() => {});
+      fetchOne(newOff - 1, 'pro').catch(() => {});
+      fetchOne(newOff + 1, 'pro').catch(() => {});
     }
   });
   const viewConfigRef = useRef({ viewAreaCoveragePercentThreshold: 50 });
@@ -491,29 +553,23 @@ export default function HomeScreen() {
     haptic('medium');
     const idx = newOff + PAST_DAYS;
     if (idx >= 0 && idx < DAY_OFFSETS.length) {
-      fetchOne(newOff, tierRef.current).then(() => {
+      fetchOne(newOff).then(() => {
+        fetchOne(newOff, 'pro').catch(() => {});
         setTick(t => t + 1);
         listRef.current?.scrollToIndex({ index: idx, animated: false });
       });
     }
   }, [fetchOne]);
 
-  const switchTier = useCallback((newTier: Tier) => {
-    if (newTier === tierRef.current) return;
-    haptic('light');
-    setTier(newTier);
-    Promise.all([
-      fetchOne(off, newTier),
-      fetchOne(off - 1, newTier),
-      fetchOne(off + 1, newTier),
-    ]).then(() => setTick(t => t + 1)).catch(() => { });
-  }, [off, fetchOne]);
+  const goldColor = isPremium ? '#D4A843' : theme.gold;
 
   // ── Item renderer — wrapped in AnimatedPage for depth effect ──
+  const sortByImpact = (a: any, b: any) => (b.impactScore ?? 0) - (a.impactScore ?? 0);
+
   const renderItem = useCallback(({ item: dayOff }: { item: number }) => {
     let content: React.ReactNode = null;
 
-    if (dayOff === 1) {
+    if (dayOff === 1 && !isPro) {
       if (tab === 'today' && !tomorrowMainUnlocked) {
         content = <LockedTomorrowCard variant="main" onUnlock={handleUnlockMain} isReady={isUnlockReady} />;
       } else if (tab === 'discover' && !tomorrowDiscoverUnlocked) {
@@ -521,23 +577,74 @@ export default function HomeScreen() {
       }
     }
 
-    if (!content && dayOff < 0 && Math.abs(dayOff) % AD_FREQUENCY === 0 && tab === 'today') {
+    if (!content && !isPro && dayOff < 0 && Math.abs(dayOff) % AD_FREQUENCY === 0 && tab === 'today') {
       content = <AdCard />;
     }
 
     if (!content) {
       const iso = isoFor(dayOff);
-      const pg = mem.current[mk(tier, iso)] ?? EMPTY;
-      const sorted = [...pg.data].sort((a, b) => (b.impactScore ?? 0) - (a.impactScore ?? 0));
-      const main = sorted[0] ?? null;
+      const freePg = mem.current[mk('free', iso)] ?? EMPTY;
+      const proPg = mem.current[mk('pro', iso)] ?? EMPTY;
+      const freeSorted = [...freePg.data].sort(sortByImpact);
+      const proSorted = [...proPg.data].sort(sortByImpact);
+      const freeMain = freeSorted[0] ?? null;
+      const proMain = proSorted[0] ?? null;
       const pi = labelFor(dayOff, language);
 
       if (tab === 'today') {
-        content = (pg.empty || !main)
-          ? <EmptyDay isToday={pi.isToday} theme={theme} t={t} />
-          : <HistoryCard event={main} allEvents={allEvents} />;
+        if (freePg.empty || !freeMain) {
+          content = <EmptyDay isToday={pi.isToday} theme={theme} t={t} />;
+        } else if (proMain) {
+          // Free card + scrollable PRO card below
+          content = (
+            <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} nestedScrollEnabled>
+              <View style={{ height: CARD_H }}>
+                <HistoryCard event={freeMain} allEvents={allEvents} />
+              </View>
+              <ProDivider gold={goldColor} />
+              <View style={{ height: CARD_H, position: 'relative' }}>
+                {isPro ? (
+                  <HistoryCard event={proMain} allEvents={allEvents} />
+                ) : (
+                  <>
+                    <HistoryCard event={proMain} allEvents={allEvents} />
+                    <LockedProOverlay gold={goldColor} onPress={() => presentPaywall()} />
+                  </>
+                )}
+              </View>
+              <View style={{ height: 20 }} />
+            </ScrollView>
+          );
+        } else {
+          content = <HistoryCard event={freeMain} allEvents={allEvents} />;
+        }
       } else {
-        content = <DiscoverSection events={sorted} theme={theme} t={t} />;
+        // Discover tab
+        if (proSorted.length > 0) {
+          content = (
+            <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} nestedScrollEnabled>
+              <View style={{ height: H * 0.58 }}>
+                <DiscoverSection events={freeSorted} theme={theme} t={t} />
+              </View>
+              <ProDivider gold={goldColor} />
+              {proSorted.map((event: any, i: number) => (
+                <View key={event.id ?? i} style={{ height: CARD_H * 0.7, marginBottom: 10, position: 'relative' }}>
+                  {isPro ? (
+                    <HistoryCard event={event} allEvents={allEvents} />
+                  ) : (
+                    <>
+                      <HistoryCard event={event} allEvents={allEvents} />
+                      <LockedProOverlay gold={goldColor} onPress={() => presentPaywall()} />
+                    </>
+                  )}
+                </View>
+              ))}
+              <View style={{ height: 20 }} />
+            </ScrollView>
+          );
+        } else {
+          content = <DiscoverSection events={freeSorted} theme={theme} t={t} />;
+        }
       }
     }
 
@@ -547,9 +654,9 @@ export default function HomeScreen() {
       </AnimatedPage>
     );
   }, [
-    tab, tier, theme, t, language, allEvents, tick,
+    tab, theme, t, language, allEvents, tick, goldColor, isPro,
     tomorrowMainUnlocked, tomorrowDiscoverUnlocked, isUnlockReady,
-    handleUnlockMain, handleUnlockDiscover, scrollX,
+    handleUnlockMain, handleUnlockDiscover, scrollX, presentPaywall,
   ]);
 
   const getItemLayout = useCallback((_: any, index: number) => ({
@@ -561,10 +668,15 @@ export default function HomeScreen() {
   const canFwd = off < MAX_FWD;
   const showChrome = tab === 'today' || tab === 'discover' || tab === 'search';
   const badgeCnt = newAch.length;
-  const switchTab = useCallback((t: Tab) => {
+  const PRO_ONLY_TABS: Tab[] = ['timeline', 'saved'];
+  const switchTab = useCallback(async (t: Tab) => {
+    if (PRO_ONLY_TABS.includes(t) && !isPro) {
+      await presentPaywallIfNeeded();
+      return;
+    }
     setTab(t);
     if (t === 'saved') setSeenSaved(userSaved.length);
-  }, [userSaved.length]);
+  }, [userSaved.length, isPro, presentPaywallIfNeeded]);
   const swipeOn = tab === 'today' || tab === 'discover';
   const isTomorrowNext = off === 0 && canFwd;
   const isTomorrowLocked = isTomorrowNext && (
@@ -572,8 +684,7 @@ export default function HomeScreen() {
     (tab === 'discover' && !tomorrowDiscoverUnlocked)
   );
 
-  const goldColor = isPremium ? '#D4A843' : theme.gold;
-  const shouldShowBanner = SHOW_BANNER_TABS.includes(tab) && !loading;
+  const shouldShowBanner = SHOW_BANNER_TABS.includes(tab) && !loading && !isPro;
 
   return (
     <AllEventsProvider events={allEvents}>
@@ -598,7 +709,7 @@ export default function HomeScreen() {
               </View>
 
               <View style={ms.headerRight}>
-                <GetProButton variant="header" gold={goldColor} />
+                {!isPro && <GetProButton variant="header" gold={goldColor} />}
 
                 <TouchableOpacity onPress={() => { haptic('light'); setLeadVis(true); }}
                   activeOpacity={0.6} style={ms.iconBtn}>
@@ -633,32 +744,6 @@ export default function HomeScreen() {
             </View>
 
             {isPremium && <PremiumAccentLine />}
-
-            {/* Tier toggle (Free / Pro) */}
-            {tab !== 'search' && (
-              <View style={ms.tierToggleWrap}>
-                <View style={[ms.tierToggle, {
-                  backgroundColor: isPremium ? '#14101C' : isDark ? '#1A1A1A' : '#F2EFE9',
-                  borderColor: isPremium ? '#2A2230' : theme.border,
-                }]}>
-                  <TouchableOpacity
-                    onPress={() => switchTier('free')}
-                    activeOpacity={0.75}
-                    style={[ms.tierChip, tier === 'free' && { backgroundColor: theme.text }]}
-                  >
-                    <Text style={[ms.tierChipT, { color: tier === 'free' ? theme.background : theme.subtext }]}>FREE</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => switchTier('pro')}
-                    activeOpacity={0.75}
-                    style={[ms.tierChip, tier === 'pro' && { backgroundColor: goldColor }]}
-                  >
-                    <Ionicons name="sparkles" size={10} color={tier === 'pro' ? '#000' : goldColor} />
-                    <Text style={[ms.tierChipT, { color: tier === 'pro' ? '#000' : goldColor, marginLeft: 4 }]}>PRO</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
 
             {/* Date nav */}
             {tab !== 'search' && (
@@ -873,26 +958,6 @@ const makeStyles = (theme: any, isDark: boolean, isPremium: boolean) => StyleShe
     paddingHorizontal: 3,
   },
   achBadgeT: { fontSize: 9, fontWeight: '900', color: '#FFF' },
-
-  // Tier toggle
-  tierToggleWrap: { alignItems: 'center', marginBottom: 10 },
-  tierToggle: {
-    flexDirection: 'row',
-    borderRadius: 14,
-    padding: 2,
-    borderWidth: 1,
-    gap: 2,
-  },
-  tierChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 5,
-    borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 58,
-  },
-  tierChipT: { fontSize: 10, fontWeight: '800', letterSpacing: 1.5 },
 
   // Date nav
   dateNav: { flexDirection: 'row', alignItems: 'center', paddingBottom: 14 },
