@@ -271,7 +271,7 @@ const StreakModal = ({ visible, onClose }: { visible: boolean; onClose: () => vo
   const [showAll, setShowAll] = useState(false);
   const items = showAll ? readEventsToday : readEventsToday.slice(0, 4);
 
-  const { showRewardedAd, isRewardedReady } = useRewardedAd();
+  const { showRewardedAd, showRewardedAdForRestore, isRewardedReady } = useRewardedAd();
 
   // State detection
   const isBroken = streak === 0 && longest > 0;
@@ -343,13 +343,10 @@ const StreakModal = ({ visible, onClose }: { visible: boolean; onClose: () => vo
   }, [visible]);
 
   // ── Streak recovery handler ──
-  // NOTE: For this to actually restore the streak after the ad completes,
-  // add a `restoreStreak()` method to useGamificationStore and wire it into
-  // useRewardedAd's onEarnedReward callback. See bottom of file for example.
+  // Uses the dedicated showRewardedAdForRestore which tells useRewardedAd
+  // to restore the streak (instead of granting XP) when the ad completes.
   const handleRestoreStreak = () => {
-    showRewardedAd();
-    // If your store exposes it synchronously you can also call:
-    // useGamificationStore.getState().restoreStreak?.();
+    showRewardedAdForRestore();
   };
 
   const bg = isDark ? '#07060A' : '#FDFBF7';
@@ -886,34 +883,3 @@ const ic = StyleSheet.create({
   },
   badgeT: { fontSize: 9, fontWeight: '900', color: '#FFF', letterSpacing: -0.3 },
 });
-
-// ═══════════════════════════════════════════════════════════════════════════════
-//  STORE WIRING — ADD TO useGamificationStore.ts
-// ═══════════════════════════════════════════════════════════════════════════════
-// To make the "Restore Streak" button actually restore the streak after the ad,
-// add this method to your gamification store:
-//
-//   restoreStreak: () => set((state) => ({
-//     currentStreak: state.longestStreak,  // or previous broken streak
-//     lastStreakDate: todayDateString(),
-//   })),
-//
-// Then in your useRewardedAd hook, add a reward callback system:
-//
-//   const [pendingReward, setPendingReward] = useState<'xp' | 'restore' | null>(null);
-//
-//   const showRewardedAdFor = (type: 'xp' | 'restore') => {
-//     setPendingReward(type);
-//     rewardedAd.show();
-//   };
-//
-//   // In the onEarnedReward handler:
-//   if (pendingReward === 'restore') {
-//     useGamificationStore.getState().restoreStreak();
-//   } else {
-//     useGamificationStore.getState().addXP(50);
-//   }
-//   setPendingReward(null);
-//
-// Then replace handleRestoreStreak() above with showRewardedAdFor('restore').
-// ═══════════════════════════════════════════════════════════════════════════════

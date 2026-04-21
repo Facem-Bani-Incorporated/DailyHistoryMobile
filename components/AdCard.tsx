@@ -32,14 +32,27 @@ export default function AdCard() {
           </View>
         </View>
 
-        {/* Ad container — centered */}
+        {/* Ad container — centered. We show a placeholder or hide if failed */}
         <View style={[styles.adWrap, !loaded && styles.adLoading]}>
           <BannerAd
             unitId={AD_UNIT_IDS.BANNER}
             size={BannerAdSize.MEDIUM_RECTANGLE}
-            requestOptions={{ requestNonPersonalizedAdsOnly: true }}
-            onAdLoaded={() => setLoaded(true)}
-            onAdFailedToLoad={() => setError(true)}
+            onAdLoaded={() => {
+              console.log('[Ads][AdCard] LOADED — unitId=', AD_UNIT_IDS.BANNER);
+              setLoaded(true);
+            }}
+            onAdFailedToLoad={(err: any) => {
+              console.warn(
+                '[Ads][AdCard] FAILED',
+                '\n  code   :', err?.code ?? '(none)',
+                '\n  message:', err?.message ?? '(none)',
+                '\n  raw    :', JSON.stringify(err, Object.getOwnPropertyNames(err ?? {})),
+                '\n  unitId :', AD_UNIT_IDS.BANNER,
+              );
+              setError(true);
+            }}
+            onAdOpened={() => console.log('[Ads][AdCard] OPENED')}
+            onAdClosed={() => console.log('[Ads][AdCard] CLOSED')}
           />
         </View>
 

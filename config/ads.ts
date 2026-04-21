@@ -1,19 +1,20 @@
 // config/ads.ts
 import { TestIds } from 'react-native-google-mobile-ads';
 
-// ── Flip to false for production ──
+// true  → test ads (pentru debugging/testare)
+// false → real AdMob IDs (pentru producție)
 const USE_TEST_IDS = true;
 
 // ── Real Ad Unit IDs from AdMob ──
 const PRODUCTION_IDS = {
-  BANNER: 'ca-app-pub-7999755031829705/5483648199',
-  INTERSTITIAL: 'ca-app-pub-7999755031829705/9813775443',
-  REWARDED: 'ca-app-pub-7999755031829705/1025528432',
+  BANNER: 'ca-app-pub-2338557822432313/1375182105',
+  INTERSTITIAL: 'ca-app-pub-2338557822432313/3442955557',
+  REWARDED: 'ca-app-pub-2338557822432313/4532675945',
 };
 
 // ── Export: uses test IDs in dev, real in prod ──
 export const AD_UNIT_IDS = {
-  BANNER: USE_TEST_IDS ? TestIds.ADAPTIVE_BANNER : PRODUCTION_IDS.BANNER,
+  BANNER: USE_TEST_IDS ? TestIds.BANNER : PRODUCTION_IDS.BANNER,
   INTERSTITIAL: USE_TEST_IDS ? TestIds.INTERSTITIAL : PRODUCTION_IDS.INTERSTITIAL,
   REWARDED: USE_TEST_IDS ? TestIds.REWARDED : PRODUCTION_IDS.REWARDED,
 };
