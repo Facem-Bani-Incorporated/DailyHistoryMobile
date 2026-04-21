@@ -23,6 +23,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Language, useLanguage } from '../context/LanguageContext';
+import { useRevenueCat } from '../context/RevenueCatContext';
 import { ThemeMode, useTheme } from '../context/ThemeContext';
 import { useNotifications } from '../hooks/usenotifications';
 import { useAuthStore } from '../store/useAuthStore';
@@ -209,6 +210,24 @@ export default function ProfileModal({ visible, onClose }: Props) {
   const insets = useSafeAreaInsets();
   const [langExpanded, setLangExpanded] = useState(false);
   const [supportVisible, setSupportVisible] = useState(false);
+
+  // ── RevenueCat subscription ──
+  const { isPro, presentPaywall, presentCustomerCenter, restorePurchases } = useRevenueCat();
+  const [restoreLoading, setRestoreLoading] = useState(false);
+
+  const handleUnlockPro = async () => {
+    await presentPaywall();
+  };
+
+  const handleManagePro = async () => {
+    await presentCustomerCenter();
+  };
+
+  const handleRestore = async () => {
+    if (restoreLoading) return;
+    setRestoreLoading(true);
+    try { await restorePurchases(); } finally { setRestoreLoading(false); }
+  };
 
   // ── Notifications hook ──
   const {
@@ -482,6 +501,55 @@ export default function ProfileModal({ visible, onClose }: Props) {
                 </View>
               </View>
 
+              {/* ══ SUBSCRIPTION ══ */}
+              <SectionTitle label="Subscription" theme={theme} />
+              <View style={[s.proCard, {
+                backgroundColor: isPremium ? '#0F0D14' : theme.card,
+                borderColor: isPro ? `${gold}55` : isPremium ? '#2A2230' : theme.border,
+              }]}>
+                <View style={s.proHeader}>
+                  <View style={[s.proIcon, { backgroundColor: `${gold}18`, borderColor: `${gold}40` }]}>
+                    <Ionicons name="sparkles" size={18} color={gold} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[s.proTitle, { color: theme.text }]}>
+                      {isPro ? 'Daily History Pro' : 'Unlock Daily History Pro'}
+                    </Text>
+                    <Text style={[s.proSub, { color: theme.subtext }]}>
+                      {isPro
+                        ? 'Your subscription is active'
+                        : 'Curated PRO events, ad-free, and more'}
+                    </Text>
+                  </View>
+                  {isPro && (
+                    <View style={[s.proActiveBadge, { backgroundColor: gold }]}>
+                      <Text style={s.proActiveBadgeT}>ACTIVE</Text>
+                    </View>
+                  )}
+                </View>
+
+                <TouchableOpacity
+                  onPress={isPro ? handleManagePro : handleUnlockPro}
+                  activeOpacity={0.85}
+                  style={[s.proCta, { backgroundColor: gold }]}
+                >
+                  <Ionicons name={isPro ? 'settings-outline' : 'sparkles'} size={15} color="#000" />
+                  <Text style={s.proCtaT}>
+                    {isPro ? 'Manage subscription' : 'Unlock Pro'}
+                  </Text>
+                </TouchableOpacity>
+
+                {!isPro && (
+                  <TouchableOpacity onPress={handleRestore} activeOpacity={0.6} style={s.proRestore}>
+                    {restoreLoading ? (
+                      <ActivityIndicator size="small" color={theme.subtext} />
+                    ) : (
+                      <Text style={[s.proRestoreT, { color: theme.subtext }]}>Restore purchases</Text>
+                    )}
+                  </TouchableOpacity>
+                )}
+              </View>
+
               {/* ══ ACCOUNT ══ */}
               <SectionTitle label={t('account')} theme={theme} />
               <View style={[s.card, { backgroundColor: isPremium ? '#0F0D14' : theme.card, borderColor: isPremium ? '#2A2230' : theme.border }]}>
@@ -557,6 +625,19 @@ const makeStyles = (theme: any, isDark: boolean, gold: string, isPremium: boolea
   themeBtn: { flex: 1, alignItems: 'center', paddingVertical: 16, paddingHorizontal: 6, borderRadius: 14, borderWidth: 1.5, gap: 9 },
   themeCircle: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   themeLabel: { fontSize: 11.5, letterSpacing: 0.3 },
+  // Subscription
+  proCard: { borderRadius: 18, borderWidth: 1, padding: 16, marginBottom: 20, gap: 14 },
+  proHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  proIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  proTitle: { fontSize: 15, fontWeight: '800', letterSpacing: -0.1, marginBottom: 2 },
+  proSub: { fontSize: 11.5, fontWeight: '500', opacity: 0.6, lineHeight: 16 },
+  proActiveBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  proActiveBadgeT: { fontSize: 9, fontWeight: '900', color: '#000', letterSpacing: 1.2 },
+  proCta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingVertical: 12, borderRadius: 12 },
+  proCtaT: { fontSize: 13.5, fontWeight: '800', color: '#000', letterSpacing: 0.3 },
+  proRestore: { alignItems: 'center', paddingVertical: 4 },
+  proRestoreT: { fontSize: 11.5, fontWeight: '600', letterSpacing: 0.2 },
+
   logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 14, backgroundColor: '#FF3B3008', borderWidth: 1, borderColor: '#FF3B3018', gap: 7, marginTop: 4, marginBottom: 34 },
   logoutText: { color: '#FF3B30', fontSize: 13.5, fontWeight: '600', letterSpacing: 0.2 },
   footer: { alignItems: 'center', gap: 5, paddingBottom: 10 },

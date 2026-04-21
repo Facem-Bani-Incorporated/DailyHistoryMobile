@@ -1,276 +1,801 @@
 // utils/locationExtractor.ts
-// Extrage coordonate din titlul și narațiunea unui eveniment
-// Fără API extern, fără coordonate în DB — totul local
+// ═══════════════════════════════════════════════════════════════════════════════
+// LOCATION EXTRACTOR — Multi-strategy cascade:
+//   1. Use event.location if present (format: "City, Country")
+//   2. If null, scan event text (title, narrative, sourceUrl) for known places
+//   3. Tolerates natural-feature locations (oceans, gulfs, deserts) → country
+//   4. Falls back to country centroid if only a country can be identified
+// ═══════════════════════════════════════════════════════════════════════════════
 
-export interface ExtractedLocation {
+export interface LocationResult {
   latitude: number;
   longitude: number;
-  label: string; // numele locației găsite
+  label: string;       // display-ready "City, Country" or region name
+  city: string;
+  country: string;
 }
 
-// ── Dicționar complet: orașe mari + țări + imperii istorice + regiuni
-// Ordine importantă: orașele sunt ÎNAINTE de țări (match mai specific câștigă)
-const LOCATION_KEYWORDS: Array<{
-  keywords: string[];
-  latitude: number;
-  longitude: number;
-  label: string;
-  priority: number; // mai mare = mai specific
-}> = [
-  // ── ORAȘE MAJORE (priority 3)
-  { keywords: ['paris', 'île-de-france', 'ile-de-france'], latitude: 48.8566, longitude: 2.3522, label: 'Paris, France', priority: 3 },
-  { keywords: ['london', 'londra', 'westminster'], latitude: 51.5074, longitude: -0.1278, label: 'London, UK', priority: 3 },
-  { keywords: ['berlin', 'potsdam', 'prussia', 'prusia', 'prusia'], latitude: 52.52, longitude: 13.405, label: 'Berlin, Germany', priority: 3 },
-  { keywords: ['rome', 'roma', 'vatican', 'lazio'], latitude: 41.9028, longitude: 12.4964, label: 'Rome, Italy', priority: 3 },
-  { keywords: ['moscow', 'moscova', 'kremlin', 'moskva'], latitude: 55.7558, longitude: 37.6173, label: 'Moscow, Russia', priority: 3 },
-  { keywords: ['st. petersburg', 'saint petersburg', 'petrograd', 'leningrad', 'stalingrad', 'volgograd'], latitude: 59.9343, longitude: 30.3351, label: 'St. Petersburg, Russia', priority: 3 },
-  { keywords: ['new york', 'manhattan', 'brooklyn', 'wall street'], latitude: 40.7128, longitude: -74.006, label: 'New York, USA', priority: 3 },
-  { keywords: ['washington dc', 'washington d.c', 'white house', 'pentagon', 'capitol hill'], latitude: 38.9072, longitude: -77.0369, label: 'Washington D.C., USA', priority: 3 },
-  { keywords: ['hiroshima'], latitude: 34.3853, longitude: 132.4553, label: 'Hiroshima, Japan', priority: 3 },
-  { keywords: ['nagasaki'], latitude: 32.7503, longitude: 129.8779, label: 'Nagasaki, Japan', priority: 3 },
-  { keywords: ['tokyo', 'edo', 'tokio'], latitude: 35.6762, longitude: 139.6503, label: 'Tokyo, Japan', priority: 3 },
-  { keywords: ['beijing', 'peking', 'forbidden city'], latitude: 39.9042, longitude: 116.4074, label: 'Beijing, China', priority: 3 },
-  { keywords: ['shanghai'], latitude: 31.2304, longitude: 121.4737, label: 'Shanghai, China', priority: 3 },
-  { keywords: ['istanbul', 'constantinople', 'byzantium', 'bizant'], latitude: 41.0082, longitude: 28.9784, label: 'Istanbul, Turkey', priority: 3 },
-  { keywords: ['jerusalem', 'ierusalim', 'holy city', 'temple mount'], latitude: 31.7683, longitude: 35.2137, label: 'Jerusalem', priority: 3 },
-  { keywords: ['cairo', 'cairo', 'giza', 'memphis egypt'], latitude: 30.0444, longitude: 31.2357, label: 'Cairo, Egypt', priority: 3 },
-  { keywords: ['athens', 'atena', 'athenian', 'acropolis'], latitude: 37.9838, longitude: 23.7275, label: 'Athens, Greece', priority: 3 },
-  { keywords: ['vienna', 'wien', 'viana', 'habsbur', 'austrian capital'], latitude: 48.2082, longitude: 16.3738, label: 'Vienna, Austria', priority: 3 },
-  { keywords: ['madrid', 'castile', 'castilia'], latitude: 40.4168, longitude: -3.7038, label: 'Madrid, Spain', priority: 3 },
-  { keywords: ['barcelona'], latitude: 41.3851, longitude: 2.1734, label: 'Barcelona, Spain', priority: 3 },
-  { keywords: ['lisbon', 'lisboa', 'portugal capital'], latitude: 38.7223, longitude: -9.1393, label: 'Lisbon, Portugal', priority: 3 },
-  { keywords: ['amsterdam', 'dutch republic', 'netherlands capital'], latitude: 52.3676, longitude: 4.9041, label: 'Amsterdam, Netherlands', priority: 3 },
-  { keywords: ['brussels', 'bruxelles', 'brüssel'], latitude: 50.8503, longitude: 4.3517, label: 'Brussels, Belgium', priority: 3 },
-  { keywords: ['warsaw', 'warszawa', 'varsovia'], latitude: 52.2297, longitude: 21.0122, label: 'Warsaw, Poland', priority: 3 },
-  { keywords: ['prague', 'praga', 'bohemia'], latitude: 50.0755, longitude: 14.4378, label: 'Prague, Czech Republic', priority: 3 },
-  { keywords: ['budapest', 'buda', 'pest', 'hungary capital'], latitude: 47.4979, longitude: 19.0402, label: 'Budapest, Hungary', priority: 3 },
-  { keywords: ['bucharest', 'bucurești', 'bucuresti'], latitude: 44.4268, longitude: 26.1025, label: 'Bucharest, Romania', priority: 3 },
-  { keywords: ['belgrade', 'beograd'], latitude: 44.8176, longitude: 20.4633, label: 'Belgrade, Serbia', priority: 3 },
-  { keywords: ['kyiv', 'kiev', 'kiev'], latitude: 50.4501, longitude: 30.5234, label: 'Kyiv, Ukraine', priority: 3 },
-  { keywords: ['stockholm', 'swedish capital'], latitude: 59.3293, longitude: 18.0686, label: 'Stockholm, Sweden', priority: 3 },
-  { keywords: ['oslo', 'norwegian capital'], latitude: 59.9139, longitude: 10.7522, label: 'Oslo, Norway', priority: 3 },
-  { keywords: ['copenhagen', 'københavn', 'danish capital'], latitude: 55.6761, longitude: 12.5683, label: 'Copenhagen, Denmark', priority: 3 },
-  { keywords: ['helsinki'], latitude: 60.1699, longitude: 24.9384, label: 'Helsinki, Finland', priority: 3 },
-  { keywords: ['zürich', 'zurich', 'bern', 'swiss capital'], latitude: 47.3769, longitude: 8.5417, label: 'Zürich, Switzerland', priority: 3 },
-  { keywords: ['baghdad', 'mesopotamia', 'babylon', 'babylonia', 'iraq capital'], latitude: 33.3152, longitude: 44.3661, label: 'Baghdad, Iraq', priority: 3 },
-  { keywords: ['tehran', 'teheran', 'iran capital'], latitude: 35.6892, longitude: 51.389, label: 'Tehran, Iran', priority: 3 },
-  { keywords: ['delhi', 'new delhi', 'mughal'], latitude: 28.6139, longitude: 77.209, label: 'Delhi, India', priority: 3 },
-  { keywords: ['mumbai', 'bombay'], latitude: 19.076, longitude: 72.8777, label: 'Mumbai, India', priority: 3 },
-  { keywords: ['sydney'], latitude: -33.8688, longitude: 151.2093, label: 'Sydney, Australia', priority: 3 },
-  { keywords: ['buenos aires'], latitude: -34.6037, longitude: -58.3816, label: 'Buenos Aires, Argentina', priority: 3 },
-  { keywords: ['rio de janeiro', 'rio de janeiro'], latitude: -22.9068, longitude: -43.1729, label: 'Rio de Janeiro, Brazil', priority: 3 },
-  { keywords: ['mexico city', 'ciudad de mexico', 'tenochtitlan', 'aztec capital'], latitude: 19.4326, longitude: -99.1332, label: 'Mexico City, Mexico', priority: 3 },
-  { keywords: ['havana', 'habana', 'cuba capital'], latitude: 23.1136, longitude: -82.3666, label: 'Havana, Cuba', priority: 3 },
-  { keywords: ['cape town', 'capetown'], latitude: -33.9249, longitude: 18.4241, label: 'Cape Town, South Africa', priority: 3 },
-  { keywords: ['nairobi'], latitude: -1.2921, longitude: 36.8219, label: 'Nairobi, Kenya', priority: 3 },
-  { keywords: ['lagos'], latitude: 6.5244, longitude: 3.3792, label: 'Lagos, Nigeria', priority: 3 },
-  { keywords: ['singapore', 'singapur'], latitude: 1.3521, longitude: 103.8198, label: 'Singapore', priority: 3 },
-  { keywords: ['hong kong', 'hongkong'], latitude: 22.3193, longitude: 114.1694, label: 'Hong Kong', priority: 3 },
-  { keywords: ['seoul', 'seul', 'joseon', 'chosun'], latitude: 37.5665, longitude: 126.978, label: 'Seoul, South Korea', priority: 3 },
-  { keywords: ['pyongyang', 'north korea capital'], latitude: 39.0392, longitude: 125.7625, label: 'Pyongyang, North Korea', priority: 3 },
-  { keywords: ['hanoi', 'saigon', 'ho chi minh'], latitude: 21.0285, longitude: 105.8542, label: 'Hanoi, Vietnam', priority: 3 },
-  { keywords: ['bangkok', 'siam capital'], latitude: 13.7563, longitude: 100.5018, label: 'Bangkok, Thailand', priority: 3 },
-  { keywords: ['manila', 'philippine capital'], latitude: 14.5995, longitude: 120.9842, label: 'Manila, Philippines', priority: 3 },
-  { keywords: ['jakarta', 'batavia', 'dutch east indies capital'], latitude: -6.2088, longitude: 106.8456, label: 'Jakarta, Indonesia', priority: 3 },
-  { keywords: ['karachi', 'lahore', 'islamabad'], latitude: 33.6844, longitude: 73.0479, label: 'Islamabad, Pakistan', priority: 3 },
-  { keywords: ['kabul', 'afghan capital'], latitude: 34.5553, longitude: 69.2075, label: 'Kabul, Afghanistan', priority: 3 },
+// ─── Country centroids ────────────────────────────────────────────────────────
+const COUNTRY_CENTROIDS: Record<string, { lat: number; lng: number }> = {
+  'Afghanistan': { lat: 33.93, lng: 67.71 },
+  'Albania': { lat: 41.15, lng: 20.17 },
+  'Algeria': { lat: 28.03, lng: 1.66 },
+  'Angola': { lat: -11.2, lng: 17.87 },
+  'Argentina': { lat: -38.42, lng: -63.62 },
+  'Armenia': { lat: 40.07, lng: 45.04 },
+  'Australia': { lat: -25.27, lng: 133.78 },
+  'Austria': { lat: 47.52, lng: 14.55 },
+  'Azerbaijan': { lat: 40.14, lng: 47.58 },
+  'Bahrain': { lat: 26.0, lng: 50.55 },
+  'Bangladesh': { lat: 23.68, lng: 90.36 },
+  'Belarus': { lat: 53.71, lng: 27.95 },
+  'Belgium': { lat: 50.5, lng: 4.47 },
+  'Bolivia': { lat: -16.29, lng: -63.59 },
+  'Bosnia': { lat: 43.92, lng: 17.68 },
+  'Brazil': { lat: -14.24, lng: -51.93 },
+  'Bulgaria': { lat: 42.73, lng: 25.49 },
+  'Cambodia': { lat: 12.57, lng: 104.99 },
+  'Cameroon': { lat: 7.37, lng: 12.35 },
+  'Canada': { lat: 56.13, lng: -106.35 },
+  'Chile': { lat: -35.68, lng: -71.54 },
+  'China': { lat: 35.86, lng: 104.19 },
+  'Colombia': { lat: 4.57, lng: -74.30 },
+  'Congo': { lat: -4.04, lng: 21.76 },
+  'Croatia': { lat: 45.1, lng: 15.2 },
+  'Cuba': { lat: 21.52, lng: -77.78 },
+  'Cyprus': { lat: 35.13, lng: 33.43 },
+  'Czech Republic': { lat: 49.82, lng: 15.47 },
+  'Czechoslovakia': { lat: 49.82, lng: 15.47 },
+  'Denmark': { lat: 56.26, lng: 9.5 },
+  'Ecuador': { lat: -1.83, lng: -78.18 },
+  'Egypt': { lat: 26.82, lng: 30.8 },
+  'England': { lat: 52.36, lng: -1.17 },
+  'Estonia': { lat: 58.6, lng: 25.01 },
+  'Ethiopia': { lat: 9.15, lng: 40.49 },
+  'Finland': { lat: 61.92, lng: 25.75 },
+  'France': { lat: 46.23, lng: 2.21 },
+  'Georgia': { lat: 42.32, lng: 43.36 },
+  'Germany': { lat: 51.17, lng: 10.45 },
+  'West Germany': { lat: 51.17, lng: 10.45 },
+  'East Germany': { lat: 52.52, lng: 13.41 },
+  'Ghana': { lat: 7.95, lng: -1.02 },
+  'Greece': { lat: 39.07, lng: 21.82 },
+  'Guatemala': { lat: 15.78, lng: -90.23 },
+  'Hungary': { lat: 47.16, lng: 19.5 },
+  'Iceland': { lat: 64.96, lng: -19.02 },
+  'India': { lat: 20.59, lng: 78.96 },
+  'Indonesia': { lat: -0.79, lng: 113.92 },
+  'Iran': { lat: 32.43, lng: 53.69 },
+  'Persia': { lat: 32.43, lng: 53.69 },
+  'Iraq': { lat: 33.22, lng: 43.68 },
+  'Ireland': { lat: 53.41, lng: -8.24 },
+  'Israel': { lat: 31.05, lng: 34.85 },
+  'Palestine': { lat: 31.95, lng: 35.23 },
+  'Italy': { lat: 41.87, lng: 12.57 },
+  'Jamaica': { lat: 18.11, lng: -77.3 },
+  'Japan': { lat: 36.2, lng: 138.25 },
+  'Jordan': { lat: 30.59, lng: 36.24 },
+  'Kazakhstan': { lat: 48.02, lng: 66.92 },
+  'Kenya': { lat: -0.02, lng: 37.91 },
+  'Kuwait': { lat: 29.31, lng: 47.48 },
+  'Latvia': { lat: 56.88, lng: 24.60 },
+  'Lebanon': { lat: 33.85, lng: 35.86 },
+  'Libya': { lat: 26.34, lng: 17.23 },
+  'Lithuania': { lat: 55.17, lng: 23.88 },
+  'Luxembourg': { lat: 49.82, lng: 6.13 },
+  'Malaysia': { lat: 4.21, lng: 101.98 },
+  'Mexico': { lat: 23.63, lng: -102.55 },
+  'Moldova': { lat: 47.41, lng: 28.37 },
+  'Mongolia': { lat: 46.86, lng: 103.85 },
+  'Morocco': { lat: 31.79, lng: -7.09 },
+  'Mozambique': { lat: -18.67, lng: 35.53 },
+  'Myanmar': { lat: 21.92, lng: 95.96 },
+  'Burma': { lat: 21.92, lng: 95.96 },
+  'Nepal': { lat: 28.39, lng: 84.12 },
+  'Netherlands': { lat: 52.13, lng: 5.29 },
+  'Holland': { lat: 52.13, lng: 5.29 },
+  'New Zealand': { lat: -40.9, lng: 174.89 },
+  'Nigeria': { lat: 9.08, lng: 8.68 },
+  'North Korea': { lat: 40.34, lng: 127.51 },
+  'Norway': { lat: 60.47, lng: 8.47 },
+  'Pakistan': { lat: 30.38, lng: 69.35 },
+  'Panama': { lat: 8.54, lng: -80.78 },
+  'Peru': { lat: -9.19, lng: -75.02 },
+  'Philippines': { lat: 12.88, lng: 121.77 },
+  'Poland': { lat: 51.92, lng: 19.15 },
+  'Portugal': { lat: 39.40, lng: -8.22 },
+  'Romania': { lat: 45.94, lng: 24.97 },
+  'Russia': { lat: 61.52, lng: 105.32 },
+  'Soviet Union': { lat: 61.52, lng: 105.32 },
+  'USSR': { lat: 61.52, lng: 105.32 },
+  'Saudi Arabia': { lat: 23.89, lng: 45.08 },
+  'Scotland': { lat: 56.49, lng: -4.20 },
+  'Serbia': { lat: 44.02, lng: 21.01 },
+  'Yugoslavia': { lat: 44.02, lng: 21.01 },
+  'Singapore': { lat: 1.35, lng: 103.82 },
+  'Slovakia': { lat: 48.67, lng: 19.70 },
+  'Slovenia': { lat: 46.15, lng: 14.99 },
+  'Somalia': { lat: 5.15, lng: 46.20 },
+  'South Africa': { lat: -30.56, lng: 22.94 },
+  'South Korea': { lat: 35.91, lng: 127.77 },
+  'Korea': { lat: 35.91, lng: 127.77 },
+  'Spain': { lat: 40.46, lng: -3.75 },
+  'Sri Lanka': { lat: 7.87, lng: 80.77 },
+  'Ceylon': { lat: 7.87, lng: 80.77 },
+  'Sudan': { lat: 12.86, lng: 30.22 },
+  'Sweden': { lat: 60.13, lng: 18.64 },
+  'Switzerland': { lat: 46.82, lng: 8.23 },
+  'Syria': { lat: 34.80, lng: 38.99 },
+  'Taiwan': { lat: 23.70, lng: 120.96 },
+  'Tanzania': { lat: -6.37, lng: 34.89 },
+  'Thailand': { lat: 15.87, lng: 100.99 },
+  'Siam': { lat: 15.87, lng: 100.99 },
+  'Tunisia': { lat: 33.89, lng: 9.54 },
+  'Turkey': { lat: 38.96, lng: 35.24 },
+  'Ottoman Empire': { lat: 38.96, lng: 35.24 },
+  'Uganda': { lat: 1.37, lng: 32.29 },
+  'Ukraine': { lat: 48.38, lng: 31.17 },
+  'United Arab Emirates': { lat: 23.42, lng: 53.85 },
+  'UAE': { lat: 23.42, lng: 53.85 },
+  'United Kingdom': { lat: 55.38, lng: -3.44 },
+  'UK': { lat: 55.38, lng: -3.44 },
+  'Wales': { lat: 52.13, lng: -3.78 },
+  'United States': { lat: 37.09, lng: -95.71 },
+  'USA': { lat: 37.09, lng: -95.71 },
+  'Uruguay': { lat: -32.52, lng: -55.77 },
+  'Uzbekistan': { lat: 41.38, lng: 64.59 },
+  'Venezuela': { lat: 6.42, lng: -66.59 },
+  'Vietnam': { lat: 14.06, lng: 108.28 },
+  'Yemen': { lat: 15.55, lng: 48.52 },
+  'Zimbabwe': { lat: -19.02, lng: 29.15 },
+};
 
-  // ── BĂTĂLII & LOCURI ISTORICE CELEBRE (priority 4 — cel mai specific)
-  { keywords: ['waterloo'], latitude: 50.6954, longitude: 4.3975, label: 'Waterloo, Belgium', priority: 4 },
-  { keywords: ['gettysburg'], latitude: 39.8309, longitude: -77.2311, label: 'Gettysburg, USA', priority: 4 },
-  { keywords: ['pearl harbor', 'pearl harbour'], latitude: 21.3619, longitude: -157.9766, label: 'Pearl Harbor, Hawaii', priority: 4 },
-  { keywords: ['normandy', 'normandie', 'd-day', 'omaha beach'], latitude: 49.3705, longitude: -0.5607, label: 'Normandy, France', priority: 4 },
-  { keywords: ['auschwitz', 'birkenau', 'oświęcim'], latitude: 50.0343, longitude: 19.1784, label: 'Auschwitz, Poland', priority: 4 },
-  { keywords: ['thermopylae', 'thermopyle'], latitude: 38.7953, longitude: 22.5331, label: 'Thermopylae, Greece', priority: 4 },
-  { keywords: ['marathon'], latitude: 38.1453, longitude: 23.9614, label: 'Marathon, Greece', priority: 4 },
-  { keywords: ['hastings'], latitude: 50.8543, longitude: 0.5732, label: 'Hastings, England', priority: 4 },
-  { keywords: ['agincourt', 'azincourt'], latitude: 50.4637, longitude: 2.1388, label: 'Agincourt, France', priority: 4 },
-  { keywords: ['trafalgar'], latitude: 36.1855, longitude: -6.0339, label: 'Cape Trafalgar, Spain', priority: 4 },
-  { keywords: ['verdun'], latitude: 49.162, longitude: 5.3872, label: 'Verdun, France', priority: 4 },
-  { keywords: ['somme'], latitude: 50.0122, longitude: 2.7777, label: 'Somme, France', priority: 4 },
-  { keywords: ['gallipoli', 'çanakkale'], latitude: 40.1957, longitude: 26.4093, label: 'Gallipoli, Turkey', priority: 4 },
-  { keywords: ['kursk'], latitude: 51.7304, longitude: 36.1936, label: 'Kursk, Russia', priority: 4 },
-  { keywords: ['chernobyl', 'cernobîl', 'pripyat'], latitude: 51.2729, longitude: 30.2218, label: 'Chernobyl, Ukraine', priority: 4 },
-  { keywords: ['pompeii', 'pompei', 'vesuvius', 'vezuviu'], latitude: 40.7485, longitude: 14.4848, label: 'Pompeii, Italy', priority: 4 },
-  { keywords: ['troy', 'troia', 'trojan'], latitude: 39.9573, longitude: 26.2389, label: 'Troy, Turkey', priority: 4 },
-  { keywords: ['carthage', 'cartagina'], latitude: 36.8528, longitude: 10.3233, label: 'Carthage, Tunisia', priority: 4 },
-  { keywords: ['alexandria', 'alexandria egypt'], latitude: 31.1975, longitude: 29.8925, label: 'Alexandria, Egypt', priority: 4 },
-  { keywords: ['stalingrad'], latitude: 48.7, longitude: 44.5, label: 'Stalingrad (Volgograd), Russia', priority: 4 },
+// ─── City coordinates ─────────────────────────────────────────────────────────
+// Each city is tagged with its country so that text-based lookups
+// can resolve "country" from a matched city.
+const CITY_COORDS: Record<string, { lat: number; lng: number; country: string }> = {
+  // ── Europe ──
+  'London': { lat: 51.5074, lng: -0.1278, country: 'United Kingdom' },
+  'Paris': { lat: 48.8566, lng: 2.3522, country: 'France' },
+  'Berlin': { lat: 52.5200, lng: 13.4050, country: 'Germany' },
+  'Rome': { lat: 41.9028, lng: 12.4964, country: 'Italy' },
+  'Madrid': { lat: 40.4168, lng: -3.7038, country: 'Spain' },
+  'Vienna': { lat: 48.2082, lng: 16.3738, country: 'Austria' },
+  'Warsaw': { lat: 52.2297, lng: 21.0122, country: 'Poland' },
+  'Prague': { lat: 50.0755, lng: 14.4378, country: 'Czech Republic' },
+  'Budapest': { lat: 47.4979, lng: 19.0402, country: 'Hungary' },
+  'Bucharest': { lat: 44.4268, lng: 26.1025, country: 'Romania' },
+  'Athens': { lat: 37.9838, lng: 23.7275, country: 'Greece' },
+  'Amsterdam': { lat: 52.3676, lng: 4.9041, country: 'Netherlands' },
+  'Brussels': { lat: 50.8503, lng: 4.3517, country: 'Belgium' },
+  'Stockholm': { lat: 59.3293, lng: 18.0686, country: 'Sweden' },
+  'Oslo': { lat: 59.9139, lng: 10.7522, country: 'Norway' },
+  'Copenhagen': { lat: 55.6761, lng: 12.5683, country: 'Denmark' },
+  'Helsinki': { lat: 60.1699, lng: 24.9384, country: 'Finland' },
+  'Lisbon': { lat: 38.7169, lng: -9.1399, country: 'Portugal' },
+  'Dublin': { lat: 53.3498, lng: -6.2603, country: 'Ireland' },
+  'Edinburgh': { lat: 55.9533, lng: -3.1883, country: 'United Kingdom' },
+  'Zurich': { lat: 47.3769, lng: 8.5417, country: 'Switzerland' },
+  'Geneva': { lat: 46.2044, lng: 6.1432, country: 'Switzerland' },
+  'Bern': { lat: 46.9480, lng: 7.4474, country: 'Switzerland' },
+  'Kyiv': { lat: 50.4501, lng: 30.5234, country: 'Ukraine' },
+  'Kiev': { lat: 50.4501, lng: 30.5234, country: 'Ukraine' },
+  'Moscow': { lat: 55.7558, lng: 37.6173, country: 'Russia' },
+  'St. Petersburg': { lat: 59.9311, lng: 30.3609, country: 'Russia' },
+  'Saint Petersburg': { lat: 59.9311, lng: 30.3609, country: 'Russia' },
+  'Leningrad': { lat: 59.9311, lng: 30.3609, country: 'Russia' },
+  'Petrograd': { lat: 59.9311, lng: 30.3609, country: 'Russia' },
+  'Barcelona': { lat: 41.3851, lng: 2.1734, country: 'Spain' },
+  'Munich': { lat: 48.1351, lng: 11.5820, country: 'Germany' },
+  'Hamburg': { lat: 53.5753, lng: 10.0153, country: 'Germany' },
+  'Frankfurt': { lat: 50.1109, lng: 8.6821, country: 'Germany' },
+  'Cologne': { lat: 50.9333, lng: 6.9500, country: 'Germany' },
+  'Nuremberg': { lat: 49.4521, lng: 11.0767, country: 'Germany' },
+  'Dresden': { lat: 51.0504, lng: 13.7373, country: 'Germany' },
+  'Leipzig': { lat: 51.3397, lng: 12.3731, country: 'Germany' },
+  'Milan': { lat: 45.4654, lng: 9.1859, country: 'Italy' },
+  'Naples': { lat: 40.8518, lng: 14.2681, country: 'Italy' },
+  'Turin': { lat: 45.0703, lng: 7.6869, country: 'Italy' },
+  'Venice': { lat: 45.4408, lng: 12.3155, country: 'Italy' },
+  'Florence': { lat: 43.7696, lng: 11.2558, country: 'Italy' },
+  'Genoa': { lat: 44.4056, lng: 8.9463, country: 'Italy' },
+  'Sarajevo': { lat: 43.8476, lng: 18.3564, country: 'Bosnia' },
+  'Belgrade': { lat: 44.8176, lng: 20.4633, country: 'Serbia' },
+  'Zagreb': { lat: 45.8150, lng: 15.9819, country: 'Croatia' },
+  'Bratislava': { lat: 48.1486, lng: 17.1077, country: 'Slovakia' },
+  'Sofia': { lat: 42.6977, lng: 23.3219, country: 'Bulgaria' },
+  'Riga': { lat: 56.9496, lng: 24.1052, country: 'Latvia' },
+  'Tallinn': { lat: 59.4370, lng: 24.7536, country: 'Estonia' },
+  'Vilnius': { lat: 54.6872, lng: 25.2797, country: 'Lithuania' },
+  'Minsk': { lat: 53.9045, lng: 27.5615, country: 'Belarus' },
+  'Chisinau': { lat: 47.0105, lng: 28.8638, country: 'Moldova' },
+  'Reykjavik': { lat: 64.1265, lng: -21.8174, country: 'Iceland' },
+  'Luxembourg City': { lat: 49.6116, lng: 6.1319, country: 'Luxembourg' },
+  'Monaco': { lat: 43.7384, lng: 7.4246, country: 'Monaco' },
+  'Valletta': { lat: 35.8997, lng: 14.5147, country: 'Malta' },
+  'Marseille': { lat: 43.2965, lng: 5.3698, country: 'France' },
+  'Lyon': { lat: 45.7640, lng: 4.8357, country: 'France' },
+  'Versailles': { lat: 48.8014, lng: 2.1301, country: 'France' },
+  'Waterloo': { lat: 50.7147, lng: 4.3992, country: 'Belgium' },
+  'Stalingrad': { lat: 48.7194, lng: 44.5018, country: 'Russia' },
+  'Volgograd': { lat: 48.7194, lng: 44.5018, country: 'Russia' },
+  'Kursk': { lat: 51.7304, lng: 36.1927, country: 'Russia' },
+  'Liverpool': { lat: 53.4084, lng: -2.9916, country: 'United Kingdom' },
+  'Manchester': { lat: 53.4808, lng: -2.2426, country: 'United Kingdom' },
+  'Birmingham': { lat: 52.4862, lng: -1.8904, country: 'United Kingdom' },
+  'Glasgow': { lat: 55.8642, lng: -4.2518, country: 'United Kingdom' },
 
-  // ── ȚĂRI (priority 2)
-  { keywords: ['afghanistan', 'afghan'], latitude: 33.9391, longitude: 67.71, label: 'Afghanistan', priority: 2 },
-  { keywords: ['albania', 'albanian'], latitude: 41.1533, longitude: 20.1683, label: 'Albania', priority: 2 },
-  { keywords: ['algeria', 'algerian'], latitude: 28.0339, longitude: 1.6596, label: 'Algeria', priority: 2 },
-  { keywords: ['angola', 'angolan'], latitude: -11.2027, longitude: 17.8739, label: 'Angola', priority: 2 },
-  { keywords: ['argentina', 'argentine', 'argentinian'], latitude: -38.416, longitude: -63.6167, label: 'Argentina', priority: 2 },
-  { keywords: ['australia', 'australian'], latitude: -25.2744, longitude: 133.7751, label: 'Australia', priority: 2 },
-  { keywords: ['austria', 'austrian', 'habsburg', 'habsburg empire'], latitude: 47.5162, longitude: 14.5501, label: 'Austria', priority: 2 },
-  { keywords: ['belgium', 'belgian', 'belgique'], latitude: 50.5039, longitude: 4.4699, label: 'Belgium', priority: 2 },
-  { keywords: ['bolivia', 'bolivian'], latitude: -16.2902, longitude: -63.5887, label: 'Bolivia', priority: 2 },
-  { keywords: ['brazil', 'brasil', 'brazilian'], latitude: -14.235, longitude: -51.9253, label: 'Brazil', priority: 2 },
-  { keywords: ['bulgaria', 'bulgarian'], latitude: 42.7339, longitude: 25.4858, label: 'Bulgaria', priority: 2 },
-  { keywords: ['cambodia', 'cambodian', 'khmer'], latitude: 12.5657, longitude: 104.991, label: 'Cambodia', priority: 2 },
-  { keywords: ['canada', 'canadian'], latitude: 56.1304, longitude: -106.3468, label: 'Canada', priority: 2 },
-  { keywords: ['chile', 'chilean'], latitude: -35.6751, longitude: -71.543, label: 'Chile', priority: 2 },
-  { keywords: ['china', 'chinese', 'qing dynasty', 'ming dynasty', 'han dynasty', 'tang dynasty', 'song dynasty'], latitude: 35.8617, longitude: 104.1954, label: 'China', priority: 2 },
-  { keywords: ['colombia', 'colombian'], latitude: 4.5709, longitude: -74.2973, label: 'Colombia', priority: 2 },
-  { keywords: ['croatia', 'croatian', 'croat', 'hrvatska'], latitude: 45.1, longitude: 15.2, label: 'Croatia', priority: 2 },
-  { keywords: ['cuba', 'cuban'], latitude: 21.5218, longitude: -77.7812, label: 'Cuba', priority: 2 },
-  { keywords: ['czech', 'czechoslovakia', 'bohemia', 'moravia'], latitude: 49.8175, longitude: 15.473, label: 'Czech Republic', priority: 2 },
-  { keywords: ['denmark', 'danish', 'danes'], latitude: 56.2639, longitude: 9.5018, label: 'Denmark', priority: 2 },
-  { keywords: ['egypt', 'egyptian', 'pharaoh', 'ancient egypt', 'nile'], latitude: 26.8206, longitude: 30.8025, label: 'Egypt', priority: 2 },
-  { keywords: ['ethiopia', 'ethiopian', 'abyssinia'], latitude: 9.145, longitude: 40.4897, label: 'Ethiopia', priority: 2 },
-  { keywords: ['finland', 'finnish', 'finns'], latitude: 61.9241, longitude: 25.7482, label: 'Finland', priority: 2 },
-  { keywords: ['france', 'french', 'gaul', 'frankish', 'gallic'], latitude: 46.2276, longitude: 2.2137, label: 'France', priority: 2 },
-  { keywords: ['germany', 'german', 'deutschland', 'reich', 'nazi', 'weimar', 'prussia', 'prussian'], latitude: 51.1657, longitude: 10.4515, label: 'Germany', priority: 2 },
-  { keywords: ['ghana', 'ghanaian', 'gold coast'], latitude: 7.9465, longitude: -1.0232, label: 'Ghana', priority: 2 },
-  { keywords: ['greece', 'greek', 'hellenic', 'hellenistic'], latitude: 39.0742, longitude: 21.8243, label: 'Greece', priority: 2 },
-  { keywords: ['hungary', 'hungarian', 'magyarország'], latitude: 47.1625, longitude: 19.5033, label: 'Hungary', priority: 2 },
-  { keywords: ['india', 'indian', 'hindustan', 'bengal', 'maratha', 'british india', 'mughal empire'], latitude: 20.5937, longitude: 78.9629, label: 'India', priority: 2 },
-  { keywords: ['indonesia', 'indonesian', 'dutch east indies', 'java', 'sumatra', 'borneo'], latitude: -0.7893, longitude: 113.9213, label: 'Indonesia', priority: 2 },
-  { keywords: ['iran', 'persian', 'persia', 'iranian'], latitude: 32.4279, longitude: 53.688, label: 'Iran / Persia', priority: 2 },
-  { keywords: ['iraq', 'iraqi', 'mesopotamian'], latitude: 33.2232, longitude: 43.6793, label: 'Iraq', priority: 2 },
-  { keywords: ['ireland', 'irish', 'éire'], latitude: 53.4129, longitude: -8.2439, label: 'Ireland', priority: 2 },
-  { keywords: ['israel', 'israeli', 'palestine', 'palestinian', 'canaan', 'judea', 'galilee'], latitude: 31.0461, longitude: 34.8516, label: 'Israel / Palestine', priority: 2 },
-  { keywords: ['italy', 'italian', 'italia', 'papal states', 'venetian', 'genoa', 'florence', 'milan', 'naples'], latitude: 41.8719, longitude: 12.5674, label: 'Italy', priority: 2 },
-  { keywords: ['japan', 'japanese', 'nippon', 'samurai', 'shogun', 'meiji', 'tokugawa', 'edo period'], latitude: 36.2048, longitude: 138.2529, label: 'Japan', priority: 2 },
-  { keywords: ['jordan', 'jordanian', 'hashemite'], latitude: 30.5852, longitude: 36.2384, label: 'Jordan', priority: 2 },
-  { keywords: ['kenya', 'kenyan'], latitude: -0.0236, longitude: 37.9062, label: 'Kenya', priority: 2 },
-  { keywords: ['north korea', 'dprk', 'north korean'], latitude: 40.3399, longitude: 127.5101, label: 'North Korea', priority: 2 },
-  { keywords: ['south korea', 'republic of korea', 'south korean'], latitude: 35.9078, longitude: 127.7669, label: 'South Korea', priority: 2 },
-  { keywords: ['lebanon', 'lebanese', 'phoenicia', 'phoenician'], latitude: 33.8547, longitude: 35.8623, label: 'Lebanon', priority: 2 },
-  { keywords: ['libya', 'libyan'], latitude: 26.3351, longitude: 17.2283, label: 'Libya', priority: 2 },
-  { keywords: ['malaysia', 'malaysian', 'malaya', 'malayan'], latitude: 4.2105, longitude: 101.9758, label: 'Malaysia', priority: 2 },
-  { keywords: ['mexico', 'mexican', 'aztec', 'maya', 'mayan', 'new spain'], latitude: 23.6345, longitude: -102.5528, label: 'Mexico', priority: 2 },
-  { keywords: ['mongolia', 'mongolian', 'mongol', 'genghis', 'kublai'], latitude: 46.8625, longitude: 103.8467, label: 'Mongolia', priority: 2 },
-  { keywords: ['morocco', 'moroccan', 'maroc'], latitude: 31.7917, longitude: -7.0926, label: 'Morocco', priority: 2 },
-  { keywords: ['myanmar', 'burma', 'burmese'], latitude: 21.914, longitude: 95.9562, label: 'Myanmar / Burma', priority: 2 },
-  { keywords: ['netherlands', 'dutch', 'holland', 'hollander'], latitude: 52.1326, longitude: 5.2913, label: 'Netherlands', priority: 2 },
-  { keywords: ['new zealand', 'maori'], latitude: -40.9006, longitude: 174.886, label: 'New Zealand', priority: 2 },
-  { keywords: ['nigeria', 'nigerian'], latitude: 9.082, longitude: 8.6753, label: 'Nigeria', priority: 2 },
-  { keywords: ['norway', 'norwegian', 'norse', 'viking'], latitude: 60.472, longitude: 8.4689, label: 'Norway', priority: 2 },
-  { keywords: ['pakistan', 'pakistani'], latitude: 30.3753, longitude: 69.3451, label: 'Pakistan', priority: 2 },
-  { keywords: ['peru', 'peruvian', 'inca', 'incan'], latitude: -9.19, longitude: -75.0152, label: 'Peru', priority: 2 },
-  { keywords: ['philippines', 'filipino', 'philippine'], latitude: 12.8797, longitude: 121.774, label: 'Philippines', priority: 2 },
-  { keywords: ['poland', 'polish', 'polska'], latitude: 51.9194, longitude: 19.1451, label: 'Poland', priority: 2 },
-  { keywords: ['portugal', 'portuguese'], latitude: 39.3999, longitude: -8.2245, label: 'Portugal', priority: 2 },
-  { keywords: ['romania', 'romanian', 'wallachia', 'moldavia', 'transylvania', 'dacia', 'dacian'], latitude: 45.9432, longitude: 24.9668, label: 'Romania', priority: 2 },
-  { keywords: ['russia', 'russian', 'soviet', 'ussr', 'tsarist', 'romanov', 'rus'], latitude: 61.524, longitude: 105.3188, label: 'Russia', priority: 2 },
-  { keywords: ['saudi arabia', 'saudi', 'arabian'], latitude: 23.8859, longitude: 45.0792, label: 'Saudi Arabia', priority: 2 },
-  { keywords: ['serbia', 'serbian', 'yugoslav', 'yugoslavia'], latitude: 44.0165, longitude: 21.0059, label: 'Serbia', priority: 2 },
-  { keywords: ['south africa', 'afrikaner', 'boer', 'zulu', 'apartheid'], latitude: -30.5595, longitude: 22.9375, label: 'South Africa', priority: 2 },
-  { keywords: ['spain', 'spanish', 'castile', 'aragon', 'iberian', 'iberia'], latitude: 40.4637, longitude: -3.7492, label: 'Spain', priority: 2 },
-  { keywords: ['sudan', 'sudanese', 'nubia', 'nubian'], latitude: 12.8628, longitude: 30.2176, label: 'Sudan', priority: 2 },
-  { keywords: ['sweden', 'swedish', 'swedes'], latitude: 60.1282, longitude: 18.6435, label: 'Sweden', priority: 2 },
-  { keywords: ['switzerland', 'swiss', 'swiss confederation'], latitude: 46.8182, longitude: 8.2275, label: 'Switzerland', priority: 2 },
-  { keywords: ['syria', 'syrian', 'damascus'], latitude: 34.802, longitude: 38.9968, label: 'Syria', priority: 2 },
-  { keywords: ['taiwan', 'taiwanese', 'formosa'], latitude: 23.6978, longitude: 120.9605, label: 'Taiwan', priority: 2 },
-  { keywords: ['thailand', 'thai', 'siam', 'siamese'], latitude: 15.87, longitude: 100.9925, label: 'Thailand', priority: 2 },
-  { keywords: ['tunisia', 'tunisian'], latitude: 33.8869, longitude: 9.5375, label: 'Tunisia', priority: 2 },
-  { keywords: ['turkey', 'turkish', 'ottoman', 'anatolia', 'anatolian', 'seljuk'], latitude: 38.9637, longitude: 35.2433, label: 'Turkey', priority: 2 },
-  { keywords: ['ukraine', 'ukrainian'], latitude: 48.3794, longitude: 31.1656, label: 'Ukraine', priority: 2 },
-  { keywords: ['united kingdom', 'britain', 'british', 'england', 'english', 'scotland', 'scottish', 'wales', 'welsh', 'uk'], latitude: 55.3781, longitude: -3.4360, label: 'United Kingdom', priority: 2 },
-  { keywords: ['united states', 'america', 'american', 'usa', 'us army', 'us navy', 'confederate', 'union army'], latitude: 37.0902, longitude: -95.7129, label: 'United States', priority: 2 },
-  { keywords: ['venezuela', 'venezuelan'], latitude: 6.4238, longitude: -66.5897, label: 'Venezuela', priority: 2 },
-  { keywords: ['vietnam', 'vietnamese', 'viet', 'indochina'], latitude: 14.0583, longitude: 108.2772, label: 'Vietnam', priority: 2 },
-  { keywords: ['yemen', 'yemeni'], latitude: 15.5527, longitude: 48.5164, label: 'Yemen', priority: 2 },
+  // ── Middle East & North Africa ──
+  'Jerusalem': { lat: 31.7683, lng: 35.2137, country: 'Israel' },
+  'Tel Aviv': { lat: 32.0853, lng: 34.7818, country: 'Israel' },
+  'Cairo': { lat: 30.0444, lng: 31.2357, country: 'Egypt' },
+  'Alexandria': { lat: 31.2001, lng: 29.9187, country: 'Egypt' },
+  'Baghdad': { lat: 33.3152, lng: 44.3661, country: 'Iraq' },
+  'Beirut': { lat: 33.8938, lng: 35.5018, country: 'Lebanon' },
+  'Damascus': { lat: 33.5138, lng: 36.2765, country: 'Syria' },
+  'Amman': { lat: 31.9454, lng: 35.9284, country: 'Jordan' },
+  'Riyadh': { lat: 24.7136, lng: 46.6753, country: 'Saudi Arabia' },
+  'Mecca': { lat: 21.4225, lng: 39.8262, country: 'Saudi Arabia' },
+  'Medina': { lat: 24.5247, lng: 39.5692, country: 'Saudi Arabia' },
+  'Tehran': { lat: 35.6892, lng: 51.3890, country: 'Iran' },
+  'Istanbul': { lat: 41.0082, lng: 28.9784, country: 'Turkey' },
+  'Constantinople': { lat: 41.0082, lng: 28.9784, country: 'Turkey' },
+  'Ankara': { lat: 39.9334, lng: 32.8597, country: 'Turkey' },
+  'Tripoli': { lat: 32.9027, lng: 13.1771, country: 'Libya' },
+  'Tunis': { lat: 36.8065, lng: 10.1815, country: 'Tunisia' },
+  'Algiers': { lat: 36.7372, lng: 3.0865, country: 'Algeria' },
+  'Casablanca': { lat: 33.5731, lng: -7.5898, country: 'Morocco' },
+  'Rabat': { lat: 34.0209, lng: -6.8416, country: 'Morocco' },
+  'Muscat': { lat: 23.5880, lng: 58.3829, country: 'Oman' },
+  'Dubai': { lat: 25.2048, lng: 55.2708, country: 'UAE' },
+  'Abu Dhabi': { lat: 24.4539, lng: 54.3773, country: 'UAE' },
+  'Doha': { lat: 25.2854, lng: 51.5310, country: 'Qatar' },
+  'Kuwait City': { lat: 29.3759, lng: 47.9774, country: 'Kuwait' },
+  'Sanaa': { lat: 15.3694, lng: 44.1910, country: 'Yemen' },
 
-  // ── IMPERII & ENTITĂȚI ISTORICE (priority 1)
-  { keywords: ['roman empire', 'roman republic', 'ancient rome'], latitude: 41.9028, longitude: 12.4964, label: 'Roman Empire', priority: 1 },
-  { keywords: ['byzantine', 'byzantine empire', 'eastern roman'], latitude: 41.0082, longitude: 28.9784, label: 'Byzantine Empire', priority: 1 },
-  { keywords: ['ottoman empire', 'ottoman sultanate'], latitude: 39.0, longitude: 35.0, label: 'Ottoman Empire', priority: 1 },
-  { keywords: ['mongol empire', 'mongol horde', 'golden horde'], latitude: 47.0, longitude: 103.0, label: 'Mongol Empire', priority: 1 },
-  { keywords: ['british empire', 'british colonies'], latitude: 55.3781, longitude: -3.436, label: 'British Empire', priority: 1 },
-  { keywords: ['french empire', 'napoleonic', 'napoleon'], latitude: 46.2276, longitude: 2.2137, label: 'France (Napoleonic)', priority: 1 },
-  { keywords: ['austro-hungarian', 'austro hungarian', 'habsburg empire'], latitude: 47.5162, longitude: 14.5501, label: 'Austro-Hungarian Empire', priority: 1 },
-  { keywords: ['soviet union', 'soviet', 'ussr', 'red army'], latitude: 61.524, longitude: 105.3188, label: 'Soviet Union', priority: 1 },
-  { keywords: ['holy roman empire', 'holy roman'], latitude: 50.1109, longitude: 8.6821, label: 'Holy Roman Empire', priority: 1 },
-  { keywords: ['ancient greece', 'greek city-states', 'sparta', 'spartan', 'macedonian', 'alexander the great'], latitude: 39.0742, longitude: 21.8243, label: 'Ancient Greece', priority: 1 },
-];
+  // ── Sub-Saharan Africa ──
+  'Nairobi': { lat: -1.2921, lng: 36.8219, country: 'Kenya' },
+  'Addis Ababa': { lat: 9.1450, lng: 40.4897, country: 'Ethiopia' },
+  'Lagos': { lat: 6.5244, lng: 3.3792, country: 'Nigeria' },
+  'Abuja': { lat: 9.0765, lng: 7.3986, country: 'Nigeria' },
+  'Accra': { lat: 5.5600, lng: -0.2057, country: 'Ghana' },
+  'Dakar': { lat: 14.7167, lng: -17.4677, country: 'Senegal' },
+  'Khartoum': { lat: 15.5007, lng: 32.5599, country: 'Sudan' },
+  'Cape Town': { lat: -33.9249, lng: 18.4241, country: 'South Africa' },
+  'Johannesburg': { lat: -26.2041, lng: 28.0473, country: 'South Africa' },
+  'Pretoria': { lat: -25.7479, lng: 28.2293, country: 'South Africa' },
+  'Kinshasa': { lat: -4.4419, lng: 15.2663, country: 'Congo' },
+  'Lusaka': { lat: -15.4167, lng: 28.2833, country: 'Zambia' },
+  'Harare': { lat: -17.8252, lng: 31.0335, country: 'Zimbabwe' },
+  'Mogadishu': { lat: 2.0469, lng: 45.3182, country: 'Somalia' },
+  'Kampala': { lat: 0.3476, lng: 32.5825, country: 'Uganda' },
+  'Dar es Salaam': { lat: -6.7924, lng: 39.2083, country: 'Tanzania' },
+  'Maputo': { lat: -25.9692, lng: 32.5732, country: 'Mozambique' },
+  'Luanda': { lat: -8.8368, lng: 13.2343, country: 'Angola' },
 
-/**
- * Extrage locația dintr-un eveniment bazat pe text
- * @returns ExtractedLocation | null
- */
-export function extractLocation(event: any): ExtractedLocation | null {
-  const lang = ['en', 'ro', 'fr', 'de', 'es'];
-  const titleParts: string[] = [];
-  const narrativeParts: string[] = [];
+  // ── South & Southeast Asia ──
+  'Delhi': { lat: 28.7041, lng: 77.1025, country: 'India' },
+  'New Delhi': { lat: 28.6139, lng: 77.2090, country: 'India' },
+  'Panipat': { lat: 29.3909, lng: 76.9635, country: 'India' },
+  'Mumbai': { lat: 19.0760, lng: 72.8777, country: 'India' },
+  'Bombay': { lat: 19.0760, lng: 72.8777, country: 'India' },
+  'Calcutta': { lat: 22.5726, lng: 88.3639, country: 'India' },
+  'Kolkata': { lat: 22.5726, lng: 88.3639, country: 'India' },
+  'Chennai': { lat: 13.0827, lng: 80.2707, country: 'India' },
+  'Madras': { lat: 13.0827, lng: 80.2707, country: 'India' },
+  'Bangalore': { lat: 12.9716, lng: 77.5946, country: 'India' },
+  'Islamabad': { lat: 33.7294, lng: 73.0931, country: 'Pakistan' },
+  'Karachi': { lat: 24.8607, lng: 67.0011, country: 'Pakistan' },
+  'Dhaka': { lat: 23.8103, lng: 90.4125, country: 'Bangladesh' },
+  'Colombo': { lat: 6.9271, lng: 79.8612, country: 'Sri Lanka' },
+  'Kathmandu': { lat: 27.7172, lng: 85.3240, country: 'Nepal' },
+  'Bangkok': { lat: 13.7563, lng: 100.5018, country: 'Thailand' },
+  'Jakarta': { lat: -6.2088, lng: 106.8456, country: 'Indonesia' },
+  'Manila': { lat: 14.5995, lng: 120.9842, country: 'Philippines' },
+  'Kuala Lumpur': { lat: 3.1390, lng: 101.6869, country: 'Malaysia' },
+  'Rangoon': { lat: 16.8661, lng: 96.1951, country: 'Myanmar' },
+  'Yangon': { lat: 16.8661, lng: 96.1951, country: 'Myanmar' },
+  'Phnom Penh': { lat: 11.5564, lng: 104.9282, country: 'Cambodia' },
+  'Hanoi': { lat: 21.0285, lng: 105.8542, country: 'Vietnam' },
+  'Ho Chi Minh City': { lat: 10.8231, lng: 106.6297, country: 'Vietnam' },
+  'Saigon': { lat: 10.8231, lng: 106.6297, country: 'Vietnam' },
+  'Vientiane': { lat: 17.9757, lng: 102.6331, country: 'Laos' },
 
-  // Adună titluri și narațiuni din toate limbile
-  for (const l of lang) {
-    const t = event.titleTranslations?.[l];
-    const n = event.narrativeTranslations?.[l];
-    if (t) titleParts.push(t);
-    if (n) narrativeParts.push(n.slice(0, 300)); // primele 300 chars din narațiune
+  // ── East Asia ──
+  'Beijing': { lat: 39.9042, lng: 116.4074, country: 'China' },
+  'Peking': { lat: 39.9042, lng: 116.4074, country: 'China' },
+  'Shanghai': { lat: 31.2304, lng: 121.4737, country: 'China' },
+  'Guangzhou': { lat: 23.1291, lng: 113.2644, country: 'China' },
+  'Shenzhen': { lat: 22.5431, lng: 114.0579, country: 'China' },
+  'Chengdu': { lat: 30.5728, lng: 104.0668, country: 'China' },
+  'Nanjing': { lat: 32.0603, lng: 118.7969, country: 'China' },
+  'Wuhan': { lat: 30.5928, lng: 114.3055, country: 'China' },
+  "Xi'an": { lat: 34.3416, lng: 108.9398, country: 'China' },
+  'Hong Kong': { lat: 22.3193, lng: 114.1694, country: 'China' },
+  'Taipei': { lat: 25.0330, lng: 121.5654, country: 'Taiwan' },
+  'Tokyo': { lat: 35.6762, lng: 139.6503, country: 'Japan' },
+  'Osaka': { lat: 34.6937, lng: 135.5023, country: 'Japan' },
+  'Kyoto': { lat: 35.0116, lng: 135.7681, country: 'Japan' },
+  'Hiroshima': { lat: 34.3853, lng: 132.4553, country: 'Japan' },
+  'Nagasaki': { lat: 32.7503, lng: 129.8779, country: 'Japan' },
+  'Nagoya': { lat: 35.1815, lng: 136.9066, country: 'Japan' },
+  'Yokohama': { lat: 35.4437, lng: 139.6380, country: 'Japan' },
+  'Seoul': { lat: 37.5665, lng: 126.9780, country: 'South Korea' },
+  'Pyongyang': { lat: 39.0392, lng: 125.7625, country: 'North Korea' },
+  'Ulaanbaatar': { lat: 47.8864, lng: 106.9057, country: 'Mongolia' },
+
+  // ── Central Asia ──
+  'Tashkent': { lat: 41.2995, lng: 69.2401, country: 'Uzbekistan' },
+  'Almaty': { lat: 43.2220, lng: 76.8512, country: 'Kazakhstan' },
+  'Kabul': { lat: 34.5553, lng: 69.2075, country: 'Afghanistan' },
+
+  // ── Americas ──
+  'New York': { lat: 40.7128, lng: -74.0060, country: 'United States' },
+  'New York City': { lat: 40.7128, lng: -74.0060, country: 'United States' },
+  'Los Angeles': { lat: 34.0522, lng: -118.2437, country: 'United States' },
+  'Chicago': { lat: 41.8781, lng: -87.6298, country: 'United States' },
+  'Houston': { lat: 29.7604, lng: -95.3698, country: 'United States' },
+  'Phoenix': { lat: 33.4484, lng: -112.0740, country: 'United States' },
+  'Philadelphia': { lat: 39.9526, lng: -75.1652, country: 'United States' },
+  'San Antonio': { lat: 29.4241, lng: -98.4936, country: 'United States' },
+  'San Diego': { lat: 32.7157, lng: -117.1611, country: 'United States' },
+  'Dallas': { lat: 32.7767, lng: -96.7970, country: 'United States' },
+  'San Francisco': { lat: 37.7749, lng: -122.4194, country: 'United States' },
+  'Washington': { lat: 38.9072, lng: -77.0369, country: 'United States' },
+  'Washington D.C.': { lat: 38.9072, lng: -77.0369, country: 'United States' },
+  'Washington, D.C.': { lat: 38.9072, lng: -77.0369, country: 'United States' },
+  'Seattle': { lat: 47.6062, lng: -122.3321, country: 'United States' },
+  'Denver': { lat: 39.7392, lng: -104.9903, country: 'United States' },
+  'Boston': { lat: 42.3601, lng: -71.0589, country: 'United States' },
+  'Atlanta': { lat: 33.7490, lng: -84.3880, country: 'United States' },
+  'Miami': { lat: 25.7617, lng: -80.1918, country: 'United States' },
+  'Las Vegas': { lat: 36.1699, lng: -115.1398, country: 'United States' },
+  'Minneapolis': { lat: 44.9778, lng: -93.2650, country: 'United States' },
+  'Detroit': { lat: 42.3314, lng: -83.0458, country: 'United States' },
+  'Portland': { lat: 45.5051, lng: -122.6750, country: 'United States' },
+  'Nashville': { lat: 36.1627, lng: -86.7816, country: 'United States' },
+  'Memphis': { lat: 35.1495, lng: -90.0490, country: 'United States' },
+  'Baltimore': { lat: 39.2904, lng: -76.6122, country: 'United States' },
+  'New Orleans': { lat: 29.9511, lng: -90.0715, country: 'United States' },
+  'Pearl Harbor': { lat: 21.3645, lng: -157.9764, country: 'United States' },
+  'Honolulu': { lat: 21.3069, lng: -157.8583, country: 'United States' },
+  'Hillsborough': { lat: 53.4103, lng: -1.5033, country: 'United Kingdom' },
+  'Sheffield': { lat: 53.3811, lng: -1.4701, country: 'United Kingdom' },
+  'Toronto': { lat: 43.6532, lng: -79.3832, country: 'Canada' },
+  'Montreal': { lat: 45.5017, lng: -73.5673, country: 'Canada' },
+  'Vancouver': { lat: 49.2827, lng: -123.1207, country: 'Canada' },
+  'Ottawa': { lat: 45.4215, lng: -75.6972, country: 'Canada' },
+  'Mexico City': { lat: 19.4326, lng: -99.1332, country: 'Mexico' },
+  'Havana': { lat: 23.1136, lng: -82.3666, country: 'Cuba' },
+  'Guatemala City': { lat: 14.6349, lng: -90.5069, country: 'Guatemala' },
+  'Panama City': { lat: 8.9936, lng: -79.5197, country: 'Panama' },
+  'Bogotá': { lat: 4.7110, lng: -74.0721, country: 'Colombia' },
+  'Bogota': { lat: 4.7110, lng: -74.0721, country: 'Colombia' },
+  'Lima': { lat: -12.0464, lng: -77.0428, country: 'Peru' },
+  'Caracas': { lat: 10.4806, lng: -66.9036, country: 'Venezuela' },
+  'Buenos Aires': { lat: -34.6037, lng: -58.3816, country: 'Argentina' },
+  'Santiago': { lat: -33.4489, lng: -70.6693, country: 'Chile' },
+  'São Paulo': { lat: -23.5505, lng: -46.6333, country: 'Brazil' },
+  'Sao Paulo': { lat: -23.5505, lng: -46.6333, country: 'Brazil' },
+  'Rio de Janeiro': { lat: -22.9068, lng: -43.1729, country: 'Brazil' },
+  'Brasilia': { lat: -15.8267, lng: -47.9218, country: 'Brazil' },
+  'Montevideo': { lat: -34.9011, lng: -56.1645, country: 'Uruguay' },
+  'La Paz': { lat: -16.5000, lng: -68.1500, country: 'Bolivia' },
+  'Quito': { lat: -0.1807, lng: -78.4678, country: 'Ecuador' },
+
+  // ── Oceania ──
+  'Sydney': { lat: -33.8688, lng: 151.2093, country: 'Australia' },
+  'Melbourne': { lat: -37.8136, lng: 144.9631, country: 'Australia' },
+  'Brisbane': { lat: -27.4698, lng: 153.0251, country: 'Australia' },
+  'Perth': { lat: -31.9505, lng: 115.8605, country: 'Australia' },
+  'Auckland': { lat: -36.8485, lng: 174.7633, country: 'New Zealand' },
+  'Wellington': { lat: -41.2865, lng: 174.7762, country: 'New Zealand' },
+};
+
+// ─── Natural features / regions (oceans, gulfs, deserts, islands) ─────────────
+// These are for things like "Gulf of Mexico" or "Sahara Desert" — we map them
+// to representative coords AND assign them a display country (or "Region").
+const REGION_COORDS: Record<string, { lat: number; lng: number; country: string }> = {
+  'Gulf of Mexico': { lat: 25.0, lng: -90.0, country: 'Mexico' },
+  'Gulf of Tonkin': { lat: 20.0, lng: 108.0, country: 'Vietnam' },
+  'Persian Gulf': { lat: 26.5, lng: 52.0, country: 'Iran' },
+  'Mediterranean Sea': { lat: 35.0, lng: 18.0, country: 'Italy' },
+  'Black Sea': { lat: 43.5, lng: 34.0, country: 'Turkey' },
+  'Red Sea': { lat: 20.0, lng: 38.0, country: 'Egypt' },
+  'Caspian Sea': { lat: 41.6, lng: 50.6, country: 'Azerbaijan' },
+  'North Sea': { lat: 56.0, lng: 3.0, country: 'United Kingdom' },
+  'Baltic Sea': { lat: 58.0, lng: 20.0, country: 'Sweden' },
+  'Aegean Sea': { lat: 38.5, lng: 25.0, country: 'Greece' },
+  'Adriatic Sea': { lat: 43.0, lng: 15.5, country: 'Italy' },
+  'Bay of Bengal': { lat: 15.0, lng: 88.0, country: 'India' },
+  'South China Sea': { lat: 15.0, lng: 115.0, country: 'China' },
+  'East China Sea': { lat: 30.0, lng: 125.0, country: 'China' },
+  'Sea of Japan': { lat: 40.0, lng: 135.0, country: 'Japan' },
+  'Coral Sea': { lat: -15.0, lng: 155.0, country: 'Australia' },
+  'Atlantic Ocean': { lat: 0.0, lng: -30.0, country: 'Ocean' },
+  'Pacific Ocean': { lat: 0.0, lng: -160.0, country: 'Ocean' },
+  'Indian Ocean': { lat: -20.0, lng: 80.0, country: 'Ocean' },
+  'Arctic Ocean': { lat: 85.0, lng: 0.0, country: 'Ocean' },
+  'Southern Ocean': { lat: -65.0, lng: 0.0, country: 'Ocean' },
+  'English Channel': { lat: 50.2, lng: -0.5, country: 'United Kingdom' },
+  'Sahara': { lat: 23.0, lng: 13.0, country: 'Algeria' },
+  'Sahara Desert': { lat: 23.0, lng: 13.0, country: 'Algeria' },
+  'Gobi Desert': { lat: 42.5, lng: 103.0, country: 'Mongolia' },
+  'Himalayas': { lat: 28.0, lng: 85.0, country: 'Nepal' },
+  'Alps': { lat: 46.5, lng: 9.0, country: 'Switzerland' },
+  'Andes': { lat: -20.0, lng: -68.0, country: 'Chile' },
+  'Amazon': { lat: -3.5, lng: -62.0, country: 'Brazil' },
+  'Amazon Rainforest': { lat: -3.5, lng: -62.0, country: 'Brazil' },
+  'Nile': { lat: 25.0, lng: 32.5, country: 'Egypt' },
+  'Nile River': { lat: 25.0, lng: 32.5, country: 'Egypt' },
+  'Antarctica': { lat: -82.0, lng: 0.0, country: 'Antarctica' },
+  'Arctic': { lat: 85.0, lng: 0.0, country: 'Arctic' },
+  'Caribbean': { lat: 15.0, lng: -75.0, country: 'Caribbean' },
+  'Balkans': { lat: 43.0, lng: 22.0, country: 'Serbia' },
+  'Scandinavia': { lat: 63.0, lng: 16.0, country: 'Sweden' },
+  'Normandy': { lat: 49.2, lng: 0.5, country: 'France' },
+  'Iberian Peninsula': { lat: 40.0, lng: -5.0, country: 'Spain' },
+  'Space': { lat: 0.0, lng: 0.0, country: 'Space' },
+  'Moon': { lat: 0.0, lng: 0.0, country: 'Space' },
+  'Outer Space': { lat: 0.0, lng: 0.0, country: 'Space' },
+};
+
+// ─── Alias normalization ───────────────────────────────────────────────────────
+const COUNTRY_ALIASES: Record<string, string> = {
+  'UK': 'United Kingdom',
+  'Great Britain': 'United Kingdom',
+  'Britain': 'United Kingdom',
+  'USA': 'United States',
+  'US': 'United States',
+  'U.S.': 'United States',
+  'U.S.A.': 'United States',
+  'America': 'United States',
+  'Soviet Union': 'Russia',
+  'USSR': 'Russia',
+  'West Germany': 'Germany',
+  'East Germany': 'Germany',
+  'Persia': 'Iran',
+  'Siam': 'Thailand',
+  'Burma': 'Myanmar',
+  'Ceylon': 'Sri Lanka',
+  'Yugoslavia': 'Serbia',
+  'Czechoslovakia': 'Czech Republic',
+  'Ottoman Empire': 'Turkey',
+  'Holland': 'Netherlands',
+  'The Netherlands': 'Netherlands',
+  'South Vietnam': 'Vietnam',
+  'North Vietnam': 'Vietnam',
+};
+
+// ─── Core geocoding ───────────────────────────────────────────────────────────
+
+function normalizeCountry(raw: string): string {
+  const trimmed = raw.trim();
+  return COUNTRY_ALIASES[trimmed] ?? trimmed;
+}
+
+function geocodeCity(city: string): { lat: number; lng: number; country: string } | null {
+  if (CITY_COORDS[city]) return CITY_COORDS[city];
+
+  const lower = city.toLowerCase();
+  for (const [key, val] of Object.entries(CITY_COORDS)) {
+    if (key.toLowerCase() === lower) return val;
+  }
+  return null;
+}
+
+function geocodeCountry(country: string): { lat: number; lng: number } | null {
+  const normalized = normalizeCountry(country);
+  if (COUNTRY_CENTROIDS[normalized]) return COUNTRY_CENTROIDS[normalized];
+
+  const lower = normalized.toLowerCase();
+  for (const [key, coords] of Object.entries(COUNTRY_CENTROIDS)) {
+    if (key.toLowerCase() === lower) return coords;
+  }
+  return null;
+}
+
+function geocodeRegion(region: string): { lat: number; lng: number; country: string } | null {
+  if (REGION_COORDS[region]) return REGION_COORDS[region];
+
+  const lower = region.toLowerCase();
+  for (const [key, val] of Object.entries(REGION_COORDS)) {
+    if (key.toLowerCase() === lower) return val;
+  }
+  return null;
+}
+
+// ─── Strategy 1: parse explicit location field ───────────────────────────────
+function parseExplicitLocation(raw: string): LocationResult | null {
+  const label = raw.trim();
+  if (!label) return null;
+
+  // Try matching as a full region name first (e.g. "Gulf of Mexico")
+  const regionDirect = geocodeRegion(label);
+  if (regionDirect) {
+    return {
+      latitude: regionDirect.lat,
+      longitude: regionDirect.lng,
+      label,
+      city: label,
+      country: regionDirect.country,
+    };
   }
 
-  // Fallback pe câmpuri directe
-  if (event.title) titleParts.push(event.title);
-  if (event.narrative) narrativeParts.push(event.narrative?.slice(0, 300));
+  const parts = label.split(',').map((s) => s.trim()).filter(Boolean);
+  if (parts.length === 0) return null;
 
-  const titleText = titleParts.join(' ').toLowerCase();
-  const narrativeText = narrativeParts.join(' ').toLowerCase();
+  // "City, Country" format
+  if (parts.length >= 2) {
+    const city = parts[0];
+    const rawCountry = parts[parts.length - 1];
+    const country = normalizeCountry(rawCountry);
 
-  let bestMatch: typeof LOCATION_KEYWORDS[0] | null = null;
-  let bestScore = -1;
+    // Try city first
+    const cityCoords = geocodeCity(city);
+    if (cityCoords) {
+      return {
+        latitude: cityCoords.lat,
+        longitude: cityCoords.lng,
+        label,
+        city,
+        country: cityCoords.country || country,
+      };
+    }
 
-  for (const loc of LOCATION_KEYWORDS) {
-    for (const keyword of loc.keywords) {
-      const kw = keyword.toLowerCase();
+    // Try region (e.g. "Normandy, France")
+    const regionCoords = geocodeRegion(city);
+    if (regionCoords) {
+      return {
+        latitude: regionCoords.lat,
+        longitude: regionCoords.lng,
+        label,
+        city,
+        country: regionCoords.country || country,
+      };
+    }
 
-      // Check titlu mai întâi (bonus de scor)
-      const inTitle = titleText.includes(kw);
-      const inNarrative = narrativeText.includes(kw);
+    // Fall back to country centroid
+    const countryCoords = geocodeCountry(country);
+    if (countryCoords) {
+      return {
+        latitude: countryCoords.lat,
+        longitude: countryCoords.lng,
+        label,
+        city,
+        country,
+      };
+    }
 
-      if (!inTitle && !inNarrative) continue;
+    return null;
+  }
 
-      // Scor: priority + bonus titlu + lungime keyword (match mai lung = mai specific)
-      const score = loc.priority * 10 + (inTitle ? 20 : 0) + kw.length;
+  // Single value — try city, then region, then country
+  const single = parts[0];
 
-      if (score > bestScore) {
-        bestScore = score;
-        bestMatch = loc;
+  const cityCoords = geocodeCity(single);
+  if (cityCoords) {
+    return {
+      latitude: cityCoords.lat,
+      longitude: cityCoords.lng,
+      label,
+      city: single,
+      country: cityCoords.country,
+    };
+  }
+
+  const regionCoords = geocodeRegion(single);
+  if (regionCoords) {
+    return {
+      latitude: regionCoords.lat,
+      longitude: regionCoords.lng,
+      label,
+      city: single,
+      country: regionCoords.country,
+    };
+  }
+
+  const countryCoords = geocodeCountry(single);
+  if (countryCoords) {
+    return {
+      latitude: countryCoords.lat,
+      longitude: countryCoords.lng,
+      label,
+      city: '',
+      country: normalizeCountry(single),
+    };
+  }
+
+  return null;
+}
+
+// ─── Strategy 2: scan text for known places ──────────────────────────────────
+// Builds a prioritized list of candidates found in the text. Cities beat
+// countries (more specific). First occurrence wins if tied.
+
+type TextMatch = {
+  name: string;
+  index: number;
+  kind: 'city' | 'region' | 'country';
+  lat: number;
+  lng: number;
+  country: string;
+};
+
+// Precompute search keys sorted by length DESC so "New York City" beats "New York"
+const CITY_KEYS = Object.keys(CITY_COORDS).sort((a, b) => b.length - a.length);
+const REGION_KEYS = Object.keys(REGION_COORDS).sort((a, b) => b.length - a.length);
+const COUNTRY_KEYS = Object.keys(COUNTRY_CENTROIDS).sort((a, b) => b.length - a.length);
+const ALIAS_KEYS = Object.keys(COUNTRY_ALIASES).sort((a, b) => b.length - a.length);
+
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function findInText(text: string, name: string): number {
+  // Word-boundary match, case-insensitive
+  const pattern = new RegExp(`\\b${escapeRegex(name)}\\b`, 'i');
+  const m = pattern.exec(text);
+  return m ? m.index : -1;
+}
+
+function scanTextForLocation(text: string): LocationResult | null {
+  if (!text || typeof text !== 'string' || text.length < 3) return null;
+
+  const matches: TextMatch[] = [];
+
+  // Cities (highest priority)
+  for (const city of CITY_KEYS) {
+    const idx = findInText(text, city);
+    if (idx !== -1) {
+      const val = CITY_COORDS[city];
+      matches.push({
+        name: city,
+        index: idx,
+        kind: 'city',
+        lat: val.lat,
+        lng: val.lng,
+        country: val.country,
+      });
+    }
+  }
+
+  // Regions
+  for (const region of REGION_KEYS) {
+    const idx = findInText(text, region);
+    if (idx !== -1) {
+      const val = REGION_COORDS[region];
+      matches.push({
+        name: region,
+        index: idx,
+        kind: 'region',
+        lat: val.lat,
+        lng: val.lng,
+        country: val.country,
+      });
+    }
+  }
+
+  // Countries (lowest priority, but still useful)
+  for (const country of COUNTRY_KEYS) {
+    const idx = findInText(text, country);
+    if (idx !== -1) {
+      const coords = COUNTRY_CENTROIDS[country];
+      matches.push({
+        name: country,
+        index: idx,
+        kind: 'country',
+        lat: coords.lat,
+        lng: coords.lng,
+        country: normalizeCountry(country),
+      });
+    }
+  }
+
+  // Aliases (map to their canonical country)
+  for (const alias of ALIAS_KEYS) {
+    const idx = findInText(text, alias);
+    if (idx !== -1) {
+      const canonical = COUNTRY_ALIASES[alias];
+      const coords = COUNTRY_CENTROIDS[canonical];
+      if (coords) {
+        matches.push({
+          name: alias,
+          index: idx,
+          kind: 'country',
+          lat: coords.lat,
+          lng: coords.lng,
+          country: canonical,
+        });
       }
     }
   }
 
-  if (!bestMatch) return null;
+  if (matches.length === 0) return null;
+
+  // Pick the best match:
+  //   1. Prefer cities over regions over countries
+  //   2. Among same kind, prefer earliest occurrence in text
+  const kindRank: Record<string, number> = { city: 0, region: 1, country: 2 };
+  matches.sort((a, b) => {
+    const kindDiff = kindRank[a.kind] - kindRank[b.kind];
+    if (kindDiff !== 0) return kindDiff;
+    return a.index - b.index;
+  });
+
+  const best = matches[0];
 
   return {
-    latitude: bestMatch.latitude,
-    longitude: bestMatch.longitude,
-    label: bestMatch.label,
+    latitude: best.lat,
+    longitude: best.lng,
+    label: best.kind === 'city' ? `${best.name}, ${best.country}` : best.name,
+    city: best.kind === 'city' ? best.name : '',
+    country: best.country,
   };
 }
 
+// ─── Main export ──────────────────────────────────────────────────────────────
+
 /**
- * Grupează evenimentele după locație (același label = același grup)
+ * Extracts and geocodes a location for an event.
+ *
+ * Strategy cascade:
+ *   1. Use event.location if it's a non-empty string (populated on PRO events)
+ *   2. Fall back to scanning event text (title, narrative, source URL) for
+ *      known cities, regions, or countries (works for FREE events)
+ *   3. Returns null only if nothing usable can be found
  */
-export interface LocationGroup {
-  label: string;
-  latitude: number;
-  longitude: number;
-  events: any[];
-}
+export function extractLocation(event: any): LocationResult | null {
+  if (!event || typeof event !== 'object') return null;
 
-export function groupEventsByLocation(events: any[]): LocationGroup[] {
-  const groups: Record<string, LocationGroup> = {};
-
-  for (const event of events) {
-    const loc = extractLocation(event);
-    if (!loc) continue;
-
-    if (!groups[loc.label]) {
-      groups[loc.label] = {
-        label: loc.label,
-        latitude: loc.latitude,
-        longitude: loc.longitude,
-        events: [],
-      };
-    }
-    groups[loc.label].events.push(event);
+  // ── Strategy 1: explicit event.location field ──
+  const rawLocation = event.location;
+  if (typeof rawLocation === 'string' && rawLocation.trim() !== '') {
+    const fromField = parseExplicitLocation(rawLocation);
+    if (fromField) return fromField;
+    // If parsing failed, fall through to text scanning — don't drop the event
   }
 
-  return Object.values(groups);
+  // ── Strategy 2: scan event text ──
+  // Gather anything that might contain a place name. Order matters: title
+  // matches are most authoritative, then narratives, then the Wikipedia URL.
+  const candidates: string[] = [];
+
+  const titleTrans = event.titleTranslations ?? {};
+  if (typeof titleTrans.en === 'string') candidates.push(titleTrans.en);
+  if (typeof titleTrans.ro === 'string') candidates.push(titleTrans.ro);
+
+  const narrTrans = event.narrativeTranslations ?? event.summaryTranslations ?? {};
+  if (typeof narrTrans.en === 'string') candidates.push(narrTrans.en);
+
+  // Wikipedia URL often encodes the location in the slug
+  // e.g. "Battle_of_Panipat_(1526)" → scanning finds "Panipat"
+  const sourceUrl = event.sourceUrl ?? event.source_url;
+  if (typeof sourceUrl === 'string') {
+    // Decode and replace underscores so regex word boundaries work
+    try {
+      const decoded = decodeURIComponent(sourceUrl).replace(/_/g, ' ');
+      candidates.push(decoded);
+    } catch {
+      candidates.push(sourceUrl.replace(/_/g, ' '));
+    }
+  }
+
+  for (const text of candidates) {
+    const found = scanTextForLocation(text);
+    if (found) return found;
+  }
+
+  return null;
+}
+
+/**
+ * Extracts just the country name from a location label.
+ * Used for display purposes when clustering.
+ */
+export function extractCountryFromLabel(label: string): string {
+  if (!label) return 'Unknown';
+  const parts = label.split(',').map((s) => s.trim());
+  const raw = parts.length >= 2 ? parts[parts.length - 1] : label;
+  return normalizeCountry(raw);
 }

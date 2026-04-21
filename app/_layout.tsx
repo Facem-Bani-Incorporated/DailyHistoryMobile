@@ -7,6 +7,7 @@ import { ActivityIndicator, View } from 'react-native';
 
 import OnboardingScreen from '../components/OnBoardingScreen';
 import { LanguageProvider } from '../context/LanguageContext';
+import { RevenueCatProvider } from '../context/RevenueCatContext';
 import { ThemeProvider, useTheme } from '../context/ThemeContext';
 import { useAdsInit } from '../hooks/useAdsInit';
 import { useGamificationSync } from '../hooks/useGamificationSync';
@@ -138,7 +139,9 @@ export default function RootLayout() {
   return (
     <LanguageProvider>
       <ThemeProvider>
-        <AppContent />
+        <RevenueCatProvider>
+          <AppContent />
+        </RevenueCatProvider>
       </ThemeProvider>
     </LanguageProvider>
   );

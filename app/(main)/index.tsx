@@ -26,6 +26,7 @@ import AchievementToast from '../../components/AchievementToast';
 import AdCard from '../../components/AdCard';
 import CalendarModal from '../../components/CalendarModal';
 import { DiscoverSection } from '../../components/DiscoverSection';
+import GetProButton from '../../components/GetProButton';
 import { HistoryCard } from '../../components/HistoryCard';
 import LeaderboardModal from '../../components/LeaderboardModal';
 import LockedTomorrowCard from '../../components/LockedTomorrowCard';
@@ -85,18 +86,20 @@ const d2o = (date: Date) => {
   return Math.round((d.getTime() - t.getTime()) / 86400000);
 };
 
+type Tier = 'free' | 'pro';
 interface PD { data: any[]; empty: boolean }
 const EMPTY: PD = { data: [], empty: true };
-const ck = (iso: string) => `dh_v2_${iso}`;
-const rC = async (iso: string) => {
+const ck = (iso: string, tier: Tier = 'free') => tier === 'pro' ? `dh_v2_pro_${iso}` : `dh_v2_${iso}`;
+const mk = (tier: Tier, iso: string) => `${tier}_${iso}`;
+const rC = async (iso: string, tier: Tier = 'free') => {
   try {
-    const r = await AsyncStorage.getItem(ck(iso)); if (!r) return null;
+    const r = await AsyncStorage.getItem(ck(iso, tier)); if (!r) return null;
     const e = JSON.parse(r);
     return Date.now() - e.ts > CACHE_TTL ? null : e as { ts: number; data: any[]; empty: boolean };
   } catch { return null; }
 };
-const wC = async (iso: string, d: any[], e: boolean) => {
-  try { await AsyncStorage.setItem(ck(iso), JSON.stringify({ ts: Date.now(), data: d, empty: e })); } catch { }
+const wC = async (iso: string, tier: Tier, d: any[], e: boolean) => {
+  try { await AsyncStorage.setItem(ck(iso, tier), JSON.stringify({ ts: Date.now(), data: d, empty: e })); } catch { }
 };
 
 const DAY_OFFSETS = Array.from({ length: PAST_DAYS + 1 + MAX_FWD }, (_, i) => i - PAST_DAYS);
@@ -354,6 +357,9 @@ export default function HomeScreen() {
   const [allEvents, setAllEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('today');
+  const [tier, setTier] = useState<Tier>('free');
+  const tierRef = useRef<Tier>('free');
+  useEffect(() => { tierRef.current = tier; }, [tier]);
   const user = useAuthStore(s => s.user);
   const [seenSaved, setSeenSaved] = useState(userSaved.length);
   useEffect(() => { setSeenSaved(userSaved.length); }, [user?.id]);
@@ -382,18 +388,20 @@ export default function HomeScreen() {
   const mem = useRef<Record<string, PD>>({});
   const [tick, setTick] = useState(0);
 
-  const fetchOne = useCallback(async (o: number, force = false): Promise<PD> => {
+  const fetchOne = useCallback(async (o: number, tierArg: Tier = 'free', force = false): Promise<PD> => {
     const iso = isoFor(o);
-    if (!force && mem.current[iso]) return mem.current[iso];
+    const key = mk(tierArg, iso);
+    if (!force && mem.current[key]) return mem.current[key];
     if (!force) {
-      const c = await rC(iso);
-      if (c) { mem.current[iso] = { data: c.data, empty: c.empty }; return mem.current[iso]; }
+      const c = await rC(iso, tierArg);
+      if (c) { mem.current[key] = { data: c.data, empty: c.empty }; return mem.current[key]; }
     }
     try {
-      const r = await api.get('/daily-content/by-date', { params: { date: iso, _t: Date.now() } });
+      const path = tierArg === 'pro' ? '/daily-content/pro/by-date' : '/daily-content/by-date';
+      const r = await api.get(path, { params: { date: iso, _t: Date.now() } });
       const data: any[] = r.data?.events ?? [];
       const pg: PD = { data, empty: data.length === 0 };
-      mem.current[iso] = pg; wC(iso, data, pg.empty);
+      mem.current[key] = pg; wC(iso, tierArg, data, pg.empty);
       return pg;
     } catch { return EMPTY; }
   }, []);
@@ -448,10 +456,11 @@ export default function HomeScreen() {
       const idx = viewableItems[0].index ?? TODAY_INDEX;
       const newOff = idx - PAST_DAYS;
       setOff(newOff);
-      const iso1 = isoFor(newOff - 1);
-      const iso2 = isoFor(newOff + 1);
-      if (!mem.current[iso1]) fetchOne(newOff - 1).then(() => setTick(t => t + 1)).catch(() => { });
-      if (!mem.current[iso2]) fetchOne(newOff + 1).then(() => setTick(t => t + 1)).catch(() => { });
+      const cur = tierRef.current;
+      const key1 = mk(cur, isoFor(newOff - 1));
+      const key2 = mk(cur, isoFor(newOff + 1));
+      if (!mem.current[key1]) fetchOne(newOff - 1, cur).then(() => setTick(t => t + 1)).catch(() => { });
+      if (!mem.current[key2]) fetchOne(newOff + 1, cur).then(() => setTick(t => t + 1)).catch(() => { });
     }
   });
   const viewConfigRef = useRef({ viewAreaCoveragePercentThreshold: 50 });
@@ -482,12 +491,23 @@ export default function HomeScreen() {
     haptic('medium');
     const idx = newOff + PAST_DAYS;
     if (idx >= 0 && idx < DAY_OFFSETS.length) {
-      fetchOne(newOff).then(() => {
+      fetchOne(newOff, tierRef.current).then(() => {
         setTick(t => t + 1);
         listRef.current?.scrollToIndex({ index: idx, animated: false });
       });
     }
   }, [fetchOne]);
+
+  const switchTier = useCallback((newTier: Tier) => {
+    if (newTier === tierRef.current) return;
+    haptic('light');
+    setTier(newTier);
+    Promise.all([
+      fetchOne(off, newTier),
+      fetchOne(off - 1, newTier),
+      fetchOne(off + 1, newTier),
+    ]).then(() => setTick(t => t + 1)).catch(() => { });
+  }, [off, fetchOne]);
 
   // ── Item renderer — wrapped in AnimatedPage for depth effect ──
   const renderItem = useCallback(({ item: dayOff }: { item: number }) => {
@@ -507,7 +527,7 @@ export default function HomeScreen() {
 
     if (!content) {
       const iso = isoFor(dayOff);
-      const pg = mem.current[iso] ?? EMPTY;
+      const pg = mem.current[mk(tier, iso)] ?? EMPTY;
       const sorted = [...pg.data].sort((a, b) => (b.impactScore ?? 0) - (a.impactScore ?? 0));
       const main = sorted[0] ?? null;
       const pi = labelFor(dayOff, language);
@@ -527,7 +547,7 @@ export default function HomeScreen() {
       </AnimatedPage>
     );
   }, [
-    tab, theme, t, language, allEvents, tick,
+    tab, tier, theme, t, language, allEvents, tick,
     tomorrowMainUnlocked, tomorrowDiscoverUnlocked, isUnlockReady,
     handleUnlockMain, handleUnlockDiscover, scrollX,
   ]);
@@ -578,6 +598,8 @@ export default function HomeScreen() {
               </View>
 
               <View style={ms.headerRight}>
+                <GetProButton variant="header" gold={goldColor} />
+
                 <TouchableOpacity onPress={() => { haptic('light'); setLeadVis(true); }}
                   activeOpacity={0.6} style={ms.iconBtn}>
                   <Trophy size={19} color={theme.subtext} strokeWidth={1.8} />
@@ -611,6 +633,32 @@ export default function HomeScreen() {
             </View>
 
             {isPremium && <PremiumAccentLine />}
+
+            {/* Tier toggle (Free / Pro) */}
+            {tab !== 'search' && (
+              <View style={ms.tierToggleWrap}>
+                <View style={[ms.tierToggle, {
+                  backgroundColor: isPremium ? '#14101C' : isDark ? '#1A1A1A' : '#F2EFE9',
+                  borderColor: isPremium ? '#2A2230' : theme.border,
+                }]}>
+                  <TouchableOpacity
+                    onPress={() => switchTier('free')}
+                    activeOpacity={0.75}
+                    style={[ms.tierChip, tier === 'free' && { backgroundColor: theme.text }]}
+                  >
+                    <Text style={[ms.tierChipT, { color: tier === 'free' ? theme.background : theme.subtext }]}>FREE</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => switchTier('pro')}
+                    activeOpacity={0.75}
+                    style={[ms.tierChip, tier === 'pro' && { backgroundColor: goldColor }]}
+                  >
+                    <Ionicons name="sparkles" size={10} color={tier === 'pro' ? '#000' : goldColor} />
+                    <Text style={[ms.tierChipT, { color: tier === 'pro' ? '#000' : goldColor, marginLeft: 4 }]}>PRO</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
 
             {/* Date nav */}
             {tab !== 'search' && (
@@ -825,6 +873,26 @@ const makeStyles = (theme: any, isDark: boolean, isPremium: boolean) => StyleShe
     paddingHorizontal: 3,
   },
   achBadgeT: { fontSize: 9, fontWeight: '900', color: '#FFF' },
+
+  // Tier toggle
+  tierToggleWrap: { alignItems: 'center', marginBottom: 10 },
+  tierToggle: {
+    flexDirection: 'row',
+    borderRadius: 14,
+    padding: 2,
+    borderWidth: 1,
+    gap: 2,
+  },
+  tierChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 58,
+  },
+  tierChipT: { fontSize: 10, fontWeight: '800', letterSpacing: 1.5 },
 
   // Date nav
   dateNav: { flexDirection: 'row', alignItems: 'center', paddingBottom: 14 },

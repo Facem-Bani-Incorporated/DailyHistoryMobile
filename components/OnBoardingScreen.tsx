@@ -7,15 +7,22 @@ import {
   Bell,
   BookmarkCheck,
   Calendar,
+  CheckCircle2,
   ChevronRight,
   Clock,
+  Crown,
   Globe2,
   Layers3,
+  Map as MapIcon,
+  Rocket,
   ShieldCheck,
   Sparkles,
 } from 'lucide-react-native';
+
+import { useRevenueCat } from '../context/RevenueCatContext';
 import { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   Dimensions,
   Easing,
@@ -158,7 +165,8 @@ const PulseRing = ({ size, delay, duration }: { size: number; delay: number; dur
 // ── Main component ───────────────────────────────────────────────────────────
 export default function OnboardingScreen({ onComplete }: Props) {
   const insets = useSafeAreaInsets();
-  const [step, setStep] = useState<'features' | 'notifications'>('features');
+  const [step, setStep] = useState<'features' | 'notifications' | 'subscription'>('features');
+  const { isPro, presentPaywall } = useRevenueCat();
 
   // ── Features step animations ──
   const headerFade = useRef(new Animated.Value(0)).current;
@@ -170,6 +178,10 @@ export default function OnboardingScreen({ onComplete }: Props) {
   // ── Notifications step animations ──
   const notifFade = useRef(new Animated.Value(0)).current;
   const notifSlide = useRef(new Animated.Value(30)).current;
+
+  // ── Subscription step animations ──
+  const subFade = useRef(new Animated.Value(0)).current;
+  const subSlide = useRef(new Animated.Value(30)).current;
 
   useEffect(() => {
     if (step === 'features') {
@@ -223,6 +235,22 @@ export default function OnboardingScreen({ onComplete }: Props) {
     }
   }, [step]);
 
+  useEffect(() => {
+    if (step === 'subscription') {
+      subFade.setValue(0);
+      subSlide.setValue(30);
+      Animated.parallel([
+        Animated.timing(subFade, { toValue: 1, duration: 500, useNativeDriver: true }),
+        Animated.timing(subSlide, {
+          toValue: 0,
+          duration: 500,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [step]);
+
   // ── Push permissions ──
   const requestPushPermissions = async () => {
     if (!Device.isDevice) return;
@@ -243,13 +271,29 @@ export default function OnboardingScreen({ onComplete }: Props) {
   const handleEnableNotifs = async () => {
     await AsyncStorage.setItem('notif_prompt_seen', 'true');
     await requestPushPermissions();
-    onComplete();
+    if (isPro) { onComplete(); return; }
+    setStep('subscription');
   };
 
   const handleSkipNotifs = async () => {
     await AsyncStorage.setItem('notif_prompt_seen', 'true');
-    onComplete();
+    if (isPro) { onComplete(); return; }
+    setStep('subscription');
   };
+
+  // ── Subscription step handlers ──
+  const [paywallLoading, setPaywallLoading] = useState(false);
+  const handleUnlockPro = async () => {
+    if (paywallLoading) return;
+    setPaywallLoading(true);
+    try {
+      await presentPaywall();
+    } finally {
+      setPaywallLoading(false);
+      onComplete();
+    }
+  };
+  const handleSkipPro = () => onComplete();
 
   // ── FEATURES STEP ──
   if (step === 'features') {
@@ -307,9 +351,10 @@ export default function OnboardingScreen({ onComplete }: Props) {
     );
   }
 
-  // ── NOTIFICATIONS STEP ──
+  // ── NOTIFICATIONS + SUBSCRIPTION STEPS ──
   return (
     <View style={s.container}>
+      {step === 'notifications' && (
       <Animated.View
         style={[
           s.notifContent,
@@ -401,8 +446,117 @@ export default function OnboardingScreen({ onComplete }: Props) {
           </TouchableOpacity>
         </View>
       </Animated.View>
+      )}
+
+      {step === 'subscription' && renderSubscriptionStep()}
     </View>
   );
+
+  // ── SUBSCRIPTION STEP ──
+  function renderSubscriptionStep() {
+    const benefits = [
+      { icon: Sparkles, title: 'Exclusive PRO stories', desc: 'Curated premium events with deeper research and visuals.' },
+      { icon: MapIcon,  title: 'Unlock every category', desc: 'Full access to all topics — science, art, war, culture.' },
+      { icon: ShieldCheck, title: 'Ad-free experience', desc: 'Read without interruptions. Just history, nothing else.' },
+      { icon: Rocket, title: 'Early access', desc: 'Be the first to try new features as we release them.' },
+    ];
+    return (
+      <Animated.View
+        style={[
+          s.subContent,
+          {
+            paddingTop: insets.top + 16,
+            paddingBottom: insets.bottom + 24,
+            opacity: subFade,
+            transform: [{ translateY: subSlide }],
+          },
+        ]}
+      >
+        <View style={s.notifTopRow}>
+          <View style={{ flex: 1 }} />
+          <TouchableOpacity
+            onPress={handleSkipPro}
+            style={s.skipButton}
+            activeOpacity={0.5}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Text style={s.skipText}>Skip</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 20 }}
+          bounces={false}
+        >
+          <View style={s.subHero}>
+            <View style={s.subCrownWrap}>
+              <LinearGradient
+                colors={['#D4A017', '#F5CE50']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={s.subCrownCircle}
+              >
+                <Crown color="#0B0D11" size={26} strokeWidth={2.2} />
+              </LinearGradient>
+            </View>
+
+            <View style={s.subBadge}>
+              <Sparkles color="#D4A017" size={10} strokeWidth={2.5} />
+              <Text style={s.subBadgeT}>DAILY HISTORY PRO</Text>
+            </View>
+
+            <Text style={s.subTitle}>
+              Go deeper into{'\n'}
+              <Text style={s.subTitleGold}>every story.</Text>
+            </Text>
+            <Text style={s.subSubtitle}>
+              Unlock premium events, remove ads, and support the team building the app.
+            </Text>
+          </View>
+
+          <View style={s.subBenefits}>
+            {benefits.map((b, i) => {
+              const Icon = b.icon;
+              return (
+                <View key={i} style={s.subBenefitRow}>
+                  <View style={s.subBenefitIconWrap}>
+                    <Icon color="#D4A017" size={15} strokeWidth={2.2} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.subBenefitTitle}>{b.title}</Text>
+                    <Text style={s.subBenefitDesc}>{b.desc}</Text>
+                  </View>
+                  <CheckCircle2 color="#D4A017" size={15} strokeWidth={2.2} />
+                </View>
+              );
+            })}
+          </View>
+        </ScrollView>
+
+        <View style={s.subCtaArea}>
+          <Pressable
+            onPress={handleUnlockPro}
+            disabled={paywallLoading}
+            style={({ pressed }) => [s.ctaButton, pressed && { opacity: 0.85 }, paywallLoading && { opacity: 0.7 }]}
+          >
+            {paywallLoading ? (
+              <ActivityIndicator color="#0B0D11" size="small" />
+            ) : (
+              <>
+                <Sparkles color="#0B0D11" size={16} strokeWidth={2.5} style={{ marginRight: 8 }} />
+                <Text style={s.ctaText}>Unlock Pro</Text>
+              </>
+            )}
+          </Pressable>
+
+          <TouchableOpacity onPress={handleSkipPro} activeOpacity={0.5} style={s.laterButton}>
+            <Text style={s.laterText}>Continue with free</Text>
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
+    );
+  }
 }
 
 // ─── STYLES ──────────────────────────────────────────────────────────────────
@@ -663,5 +817,109 @@ const s = StyleSheet.create({
     color: '#444854',
     fontSize: 14,
     fontWeight: '500',
+  },
+
+  // ── Subscription step ──
+  subContent: {
+    flex: 1,
+    paddingHorizontal: 24,
+  },
+  subHero: {
+    alignItems: 'center',
+    paddingTop: 8,
+    paddingBottom: 20,
+  },
+  subCrownWrap: {
+    marginBottom: 22,
+  },
+  subCrownCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#D4A017',
+    shadowOpacity: 0.45,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 12,
+  },
+  subBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 100,
+    backgroundColor: 'rgba(212, 160, 23, 0.08)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(212, 160, 23, 0.2)',
+    marginBottom: 18,
+  },
+  subBadgeT: {
+    color: '#D4A017',
+    fontSize: 9.5,
+    fontWeight: '800',
+    letterSpacing: 2,
+  },
+  subTitle: {
+    fontSize: 30,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.8,
+    lineHeight: 38,
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  subTitleGold: {
+    color: '#D4A017',
+  },
+  subSubtitle: {
+    fontSize: 14,
+    color: '#6B6F7B',
+    lineHeight: 21,
+    textAlign: 'center',
+    letterSpacing: 0.1,
+    maxWidth: W * 0.85,
+  },
+  subBenefits: {
+    gap: 8,
+    marginTop: 8,
+  },
+  subBenefitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#13151B',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#1E2028',
+    gap: 12,
+  },
+  subBenefitIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: 'rgba(212, 160, 23, 0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(212, 160, 23, 0.15)',
+  },
+  subBenefitTitle: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 13.5,
+    letterSpacing: 0.1,
+    marginBottom: 2,
+  },
+  subBenefitDesc: {
+    color: '#555B67',
+    fontSize: 12,
+    lineHeight: 17,
+    letterSpacing: 0.1,
+  },
+  subCtaArea: {
+    paddingTop: 8,
   },
 });

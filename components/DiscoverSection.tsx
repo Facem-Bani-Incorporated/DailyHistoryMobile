@@ -84,6 +84,13 @@ const AnimatedCard = ({ children, delay, style }: { children: React.ReactNode; d
   );
 };
 
+const isProEvent = (event: any): boolean => !!(event?.isPro ?? event?.pro);
+const ProPill = () => (
+  <View style={st.proPill}>
+    <Text style={st.proPillT}>PRO</Text>
+  </View>
+);
+
 /* ═══════════════════════════════════════════
    HERO CARD — Full width, Apple News style
    Big image, bold serif title, color accent bar
@@ -112,6 +119,8 @@ const HeroCard = ({ event, lang, onPress, height }: {
 
       {/* Color accent bar top-left */}
       <View style={[st.heroAccentBar, { backgroundColor: accent }]} />
+
+      {isProEvent(event) && <ProPill />}
 
       <View style={st.heroContent}>
         {/* Category + Year tag */}
@@ -156,6 +165,7 @@ const EditorialCard = ({ event, lang, onPress, height }: {
 
   return (
     <TouchableOpacity activeOpacity={0.92} onPress={onPress} style={[st.editCard, { height }]}>
+      {isProEvent(event) && <ProPill />}
       {/* Thumbnail */}
       <View style={st.editThumb}>
         {img
@@ -213,6 +223,8 @@ const OverlayCard = ({ event, lang, onPress, width, height }: {
 
       {/* Accent line at top */}
       <View style={[st.overlayAccent, { backgroundColor: accent }]} />
+
+      {isProEvent(event) && <ProPill />}
 
       <View style={st.overlayBot}>
         <Text style={[st.overlayCat, { color: accent }]}>{category}</Text>
@@ -421,4 +433,17 @@ const st = StyleSheet.create({
 
   /* ── Mosaic Row ── */
   mosaicRow: { flexDirection: 'row', gap: GAP, flex: 0 },
+
+  /* ── PRO pill (shared across cards) ── */
+  proPill: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    backgroundColor: '#D4A843',
+    zIndex: 3,
+  },
+  proPillT: { fontSize: 9, fontWeight: '900', color: '#000', letterSpacing: 1.8 },
 });

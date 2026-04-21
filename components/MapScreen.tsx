@@ -1,6 +1,7 @@
 // components/MapScreen.tsx
 // ═══════════════════════════════════════════════════════════════════════════════
-// CLEAN HISTORIC MAP - Native markers + elegant preview cards
+// HISTORIC MAP — Country clusters at world zoom, city markers when zoomed in
+// Uses event.location field directly from DB ("City, Country")
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import {
@@ -25,7 +26,7 @@ import {
   Text,
   TouchableOpacity,
   UIManager,
-  View
+  View,
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -45,8 +46,22 @@ const SHEET_CLOSED = 0;
 const SHEET_HALF = H * 0.5;
 const SHEET_FULL = H * 0.88;
 
-const INIT_REGION: Region = { latitude: 30, longitude: 15, latitudeDelta: 100, longitudeDelta: 120 };
-const INIT_CAM = { center: { latitude: 30, longitude: 15 }, pitch: 0, heading: 0, altitude: 20000000, zoom: 1.5 };
+// latitudeDelta threshold: above = world view (clusters), below = city view (individual)
+const ZOOM_CLUSTER_THRESHOLD = 35;
+
+const INIT_REGION: Region = {
+  latitude: 30,
+  longitude: 15,
+  latitudeDelta: 100,
+  longitudeDelta: 120,
+};
+const INIT_CAM = {
+  center: { latitude: 30, longitude: 15 },
+  pitch: 0,
+  heading: 0,
+  altitude: 20000000,
+  zoom: 1.5,
+};
 
 // ─── i18n ──────────────────────────────────────────────────────────────────────
 const T: Record<string, Record<string, string>> = {
@@ -66,9 +81,13 @@ const T: Record<string, Record<string, string>> = {
     natural_disaster: 'Natural Disasters',
     exploration: 'Exploration',
     religion_phil: 'Religion',
-    tap_to_explore: 'Tap a country to explore',
+    personalities: 'Personalities',
+    media: 'Media',
+    sport: 'Sport',
+    tap_to_explore: 'Tap a marker to explore',
     read_more: 'Read Full Story',
     close: 'Close',
+    zoom_hint: 'Zoom in to see city markers',
   },
   ro: {
     loading: 'Se încarcă...',
@@ -86,24 +105,31 @@ const T: Record<string, Record<string, string>> = {
     natural_disaster: 'Dezastre',
     exploration: 'Explorare',
     religion_phil: 'Religie',
-    tap_to_explore: 'Apasă pe o țară',
+    personalities: 'Personalități',
+    media: 'Media',
+    sport: 'Sport',
+    tap_to_explore: 'Apasă pe un marker',
     read_more: 'Citește Articolul',
     close: 'Închide',
+    zoom_hint: 'Mărește pentru a vedea orașe',
   },
 };
 
 // ─── Categories ────────────────────────────────────────────────────────────────
 const CAT: Record<string, { color: string; tKey: string; emoji: string }> = {
-  war_conflict: { color: '#DC2626', tKey: 'war_conflict', emoji: '⚔️' },
-  tech_innovation: { color: '#2563EB', tKey: 'tech_innovation', emoji: '⚡' },
+  war_conflict:      { color: '#DC2626', tKey: 'war_conflict',      emoji: '⚔️' },
+  tech_innovation:   { color: '#2563EB', tKey: 'tech_innovation',   emoji: '⚡' },
   science_discovery: { color: '#7C3AED', tKey: 'science_discovery', emoji: '🔬' },
-  politics_state: { color: '#D97706', tKey: 'politics_state', emoji: '🏛️' },
-  culture_arts: { color: '#059669', tKey: 'culture_arts', emoji: '🎭' },
-  natural_disaster: { color: '#EA580C', tKey: 'natural_disaster', emoji: '🌋' },
-  exploration: { color: '#0891B2', tKey: 'exploration', emoji: '🧭' },
-  religion_phil: { color: '#92400E', tKey: 'religion_phil', emoji: '📜' },
+  politics_state:    { color: '#D97706', tKey: 'politics_state',    emoji: '🏛️' },
+  culture_arts:      { color: '#059669', tKey: 'culture_arts',      emoji: '🎭' },
+  natural_disaster:  { color: '#EA580C', tKey: 'natural_disaster',  emoji: '🌋' },
+  exploration:       { color: '#0891B2', tKey: 'exploration',       emoji: '🧭' },
+  religion_phil:     { color: '#92400E', tKey: 'religion_phil',     emoji: '📜' },
+  personalities:     { color: '#BE185D', tKey: 'personalities',     emoji: '⭐' },
+  media:             { color: '#0F766E', tKey: 'media',             emoji: '🎬' },
+  sport:             { color: '#15803D', tKey: 'sport',             emoji: '🏆' },
 };
-const FALLBACK = '#6B7280';
+const FALLBACK_COLOR = '#6B7280';
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 const getCat = (e: any): string => (e.category ?? '').toString().toLowerCase();
@@ -113,14 +139,6 @@ const getYear = (e: any): string => {
   if (r.includes('-')) return r.split('-')[0];
   return '';
 };
-const extractCountry = (label: string): string => {
-  if (!label) return 'Unknown';
-  const parts = label.split(',').map(s => s.trim());
-  return parts.length >= 2 ? parts[parts.length - 1] : label;
-};
-
-const ALIAS: Record<string, string> = { UK: 'United Kingdom', England: 'United Kingdom', USA: 'United States' };
-const norm = (c: string): string => ALIAS[c] ?? c;
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 interface EventWithLocation {
@@ -128,6 +146,8 @@ interface EventWithLocation {
   lat: number;
   lng: number;
   label: string;
+  city: string;
+  country: string;
 }
 
 interface CatGroup {
@@ -145,28 +165,40 @@ interface Cluster {
   items: EventWithLocation[];
   cats: CatGroup[];
   mainColor: string;
+  count: number;
 }
 
-const buildClusters = (events: any[]): Cluster[] => {
-  const withLoc: EventWithLocation[] = [];
-  
+// ─── Build helpers ─────────────────────────────────────────────────────────────
+
+const buildEventsWithLocation = (events: any[]): EventWithLocation[] => {
+  const result: EventWithLocation[] = [];
   for (const ev of events) {
     const loc = extractLocation(ev);
     if (loc) {
-      withLoc.push({ event: ev, lat: loc.latitude, lng: loc.longitude, label: loc.label });
+      result.push({
+        event: ev,
+        lat: loc.latitude,
+        lng: loc.longitude,
+        label: loc.label,
+        city: loc.city,
+        country: loc.country,
+      });
     }
   }
+  return result;
+};
 
+const buildClusters = (eventsWithLoc: EventWithLocation[]): Cluster[] => {
   const byCountry = new Map<string, EventWithLocation[]>();
-  for (const item of withLoc) {
-    const country = norm(extractCountry(item.label));
-    if (!byCountry.has(country)) byCountry.set(country, []);
-    byCountry.get(country)!.push(item);
+  for (const item of eventsWithLoc) {
+    const c = item.country || 'Unknown';
+    if (!byCountry.has(c)) byCountry.set(c, []);
+    byCountry.get(c)!.push(item);
   }
 
   const clusters: Cluster[] = [];
-  
   for (const [country, items] of byCountry) {
+    // Cluster center = average of all event coords in that country
     const lat = items.reduce((s, i) => s + i.lat, 0) / items.length;
     const lng = items.reduce((s, i) => s + i.lng, 0) / items.length;
 
@@ -180,7 +212,7 @@ const buildClusters = (events: any[]): Cluster[] => {
     const cats: CatGroup[] = Array.from(byCat.entries())
       .map(([key, evts]) => ({
         key,
-        color: CAT[key]?.color ?? FALLBACK,
+        color: CAT[key]?.color ?? FALLBACK_COLOR,
         emoji: CAT[key]?.emoji ?? '📌',
         labelKey: CAT[key]?.tKey ?? key,
         events: evts.sort((a, b) => (b.event.impactScore ?? 0) - (a.event.impactScore ?? 0)),
@@ -193,15 +225,16 @@ const buildClusters = (events: any[]): Cluster[] => {
       lng,
       items,
       cats,
-      mainColor: cats[0]?.color ?? FALLBACK,
+      mainColor: cats[0]?.color ?? FALLBACK_COLOR,
+      count: items.length,
     });
   }
 
-  return clusters.sort((a, b) => b.items.length - a.items.length);
+  return clusters.sort((a, b) => b.count - a.count);
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Preview Card Component
+// Preview Card
 // ═══════════════════════════════════════════════════════════════════════════════
 const PreviewCard = ({
   item,
@@ -239,13 +272,19 @@ const PreviewCard = ({
 
   const catKey = getCat(item.event);
   const catInfo = CAT[catKey];
-  const color = catInfo?.color ?? FALLBACK;
+  const color = catInfo?.color ?? FALLBACK_COLOR;
   const emoji = catInfo?.emoji ?? '📌';
-  
-  const title = item.event.titleTranslations?.[language] ?? item.event.titleTranslations?.en ?? 'Untitled';
-  const summary = item.event.summaryTranslations?.[language] ?? item.event.summaryTranslations?.en ?? '';
+
+  const title =
+    item.event.titleTranslations?.[language] ??
+    item.event.titleTranslations?.en ??
+    'Untitled';
+  const summary =
+    item.event.summaryTranslations?.[language] ??
+    item.event.summaryTranslations?.en ??
+    '';
   const year = getYear(item.event);
-  const location = item.label.split(',')[0]?.trim() ?? item.label;
+  const locationLabel = item.city || item.label.split(',')[0]?.trim() || item.label;
 
   const cardBg = isDark ? '#1C1917' : '#FFFFFF';
   const borderCol = isDark ? '#292524' : '#E5E5E5';
@@ -254,18 +293,12 @@ const PreviewCard = ({
   return (
     <Animated.View style={[styles.previewOverlay, { opacity: opacityAnim }]}>
       <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={close} />
-      
       <Animated.View
         style={[
           styles.previewCard,
-          {
-            backgroundColor: cardBg,
-            borderColor: borderCol,
-            transform: [{ scale: scaleAnim }],
-          },
+          { backgroundColor: cardBg, borderColor: borderCol, transform: [{ scale: scaleAnim }] },
         ]}
       >
-        {/* Header with category */}
         <View style={[styles.previewHeader, { borderBottomColor: borderCol }]}>
           <View style={[styles.previewBadge, { backgroundColor: color + '15' }]}>
             <Text style={styles.previewEmoji}>{emoji}</Text>
@@ -273,25 +306,23 @@ const PreviewCard = ({
               {tm(catInfo?.tKey ?? catKey)}
             </Text>
           </View>
-          
-          <TouchableOpacity onPress={close} style={[styles.previewClose, { backgroundColor: isDark ? '#292524' : '#F5F5F5' }]}>
+          <TouchableOpacity
+            onPress={close}
+            style={[styles.previewClose, { backgroundColor: isDark ? '#292524' : '#F5F5F5' }]}
+          >
             <X size={18} color={subtextCol} strokeWidth={2} />
           </TouchableOpacity>
         </View>
 
-        {/* Content */}
         <View style={styles.previewBody}>
           <Text style={[styles.previewTitle, { color: theme.text }]} numberOfLines={3}>
             {title}
           </Text>
-          
           {summary !== '' && (
             <Text style={[styles.previewSummary, { color: subtextCol }]} numberOfLines={3}>
               {summary}
             </Text>
           )}
-
-          {/* Meta row */}
           <View style={styles.previewMeta}>
             {year !== '' && (
               <View style={[styles.previewMetaItem, { backgroundColor: isDark ? '#292524' : '#F5F5F5' }]}>
@@ -302,13 +333,12 @@ const PreviewCard = ({
             <View style={[styles.previewMetaItem, { backgroundColor: isDark ? '#292524' : '#F5F5F5' }]}>
               <MapPin size={12} color={color} strokeWidth={2.5} />
               <Text style={[styles.previewMetaText, { color: theme.text }]} numberOfLines={1}>
-                {location}
+                {locationLabel}
               </Text>
             </View>
           </View>
         </View>
 
-        {/* Action button */}
         <TouchableOpacity
           onPress={onReadMore}
           activeOpacity={0.8}
@@ -324,50 +354,55 @@ const PreviewCard = ({
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Event Row Component
+// Event Row
 // ═══════════════════════════════════════════════════════════════════════════════
-const EventRow = React.memo(({
-  item,
-  language,
-  theme,
-  isDark,
-  color,
-  onPress,
-}: {
-  item: EventWithLocation;
-  language: string;
-  theme: any;
-  isDark: boolean;
-  color: string;
-  onPress: () => void;
-}) => {
-  const title = item.event.titleTranslations?.[language] ?? item.event.titleTranslations?.en ?? '';
-  const year = getYear(item.event);
-  const city = item.label.includes(',') ? item.label.split(',')[0].trim() : '';
+const EventRow = React.memo(
+  ({
+    item,
+    language,
+    theme,
+    isDark,
+    color,
+    onPress,
+  }: {
+    item: EventWithLocation;
+    language: string;
+    theme: any;
+    isDark: boolean;
+    color: string;
+    onPress: () => void;
+  }) => {
+    const title =
+      item.event.titleTranslations?.[language] ??
+      item.event.titleTranslations?.en ??
+      '';
+    const year = getYear(item.event);
+    const cityLabel = item.city || (item.label.includes(',') ? item.label.split(',')[0].trim() : '');
 
-  return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.6} style={styles.eventRow}>
-      <View style={[styles.eventYear, { backgroundColor: color + '12', borderColor: color + '25' }]}>
-        <Text style={[styles.eventYearText, { color }]}>{year || '—'}</Text>
-      </View>
-      
-      <View style={styles.eventContent}>
-        <Text style={[styles.eventTitle, { color: theme.text }]} numberOfLines={2}>{title}</Text>
-        {city !== '' && (
-          <View style={styles.eventLoc}>
-            <MapPin size={10} color={theme.subtext} strokeWidth={2} style={{ opacity: 0.5 }} />
-            <Text style={[styles.eventLocText, { color: theme.subtext }]}>{city}</Text>
-          </View>
-        )}
-      </View>
-      
-      <ChevronRight size={16} color={theme.subtext} strokeWidth={2} style={{ opacity: 0.4 }} />
-    </TouchableOpacity>
-  );
-});
+    return (
+      <TouchableOpacity onPress={onPress} activeOpacity={0.6} style={styles.eventRow}>
+        <View style={[styles.eventYear, { backgroundColor: color + '12', borderColor: color + '25' }]}>
+          <Text style={[styles.eventYearText, { color }]}>{year || '—'}</Text>
+        </View>
+        <View style={styles.eventContent}>
+          <Text style={[styles.eventTitle, { color: theme.text }]} numberOfLines={2}>
+            {title}
+          </Text>
+          {cityLabel !== '' && (
+            <View style={styles.eventLoc}>
+              <MapPin size={10} color={theme.subtext} strokeWidth={2} style={{ opacity: 0.5 }} />
+              <Text style={[styles.eventLocText, { color: theme.subtext }]}>{cityLabel}</Text>
+            </View>
+          )}
+        </View>
+        <ChevronRight size={16} color={theme.subtext} strokeWidth={2} style={{ opacity: 0.4 }} />
+      </TouchableOpacity>
+    );
+  },
+);
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Category Section Component
+// Category Section
 // ═══════════════════════════════════════════════════════════════════════════════
 const CategorySection = ({
   cat,
@@ -389,12 +424,16 @@ const CategorySection = ({
   const toggle = () => {
     haptic('light');
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setExpanded(v => !v);
+    setExpanded((v) => !v);
   };
 
   return (
     <View>
-      <TouchableOpacity onPress={toggle} activeOpacity={0.7} style={[styles.catHeader, { backgroundColor: cat.color + '08' }]}>
+      <TouchableOpacity
+        onPress={toggle}
+        activeOpacity={0.7}
+        style={[styles.catHeader, { backgroundColor: cat.color + '08' }]}
+      >
         <View style={styles.catLeft}>
           <Text style={styles.catEmoji}>{cat.emoji}</Text>
           <Text style={[styles.catLabel, { color: cat.color }]}>{tm(cat.labelKey)}</Text>
@@ -409,22 +448,24 @@ const CategorySection = ({
           style={{ transform: [{ rotate: expanded ? '0deg' : '-90deg' }], opacity: 0.5 }}
         />
       </TouchableOpacity>
-      
-      {expanded && cat.events.map((item, i) => (
-        <View key={`${getYear(item.event)}-${item.label}-${i}`}>
-          <EventRow
-            item={item}
-            language={language}
-            theme={theme}
-            isDark={isDark}
-            color={cat.color}
-            onPress={() => onEventPress(item)}
-          />
-          {i < cat.events.length - 1 && (
-            <View style={[styles.divider, { backgroundColor: isDark ? '#292524' : '#F0F0F0' }]} />
-          )}
-        </View>
-      ))}
+      {expanded &&
+        cat.events.map((item, i) => (
+          <View key={`${getYear(item.event)}-${item.label}-${i}`}>
+            <EventRow
+              item={item}
+              language={language}
+              theme={theme}
+              isDark={isDark}
+              color={cat.color}
+              onPress={() => onEventPress(item)}
+            />
+            {i < cat.events.length - 1 && (
+              <View
+                style={[styles.divider, { backgroundColor: isDark ? '#292524' : '#F0F0F0' }]}
+              />
+            )}
+          </View>
+        ))}
     </View>
   );
 };
@@ -438,15 +479,22 @@ export default function MapScreen() {
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
 
-  const tm = useCallback((k: string) => (T[language] ?? T.en)[k] ?? T.en[k] ?? k, [language]);
+  const tm = useCallback(
+    (k: string) => (T[language] ?? T.en)[k] ?? T.en[k] ?? k,
+    [language],
+  );
 
   const [allEvents, setAllEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // isZoomedIn: true when latitudeDelta < ZOOM_CLUSTER_THRESHOLD
+  const [isZoomedIn, setIsZoomedIn] = useState(false);
+
+  // Active country for bottom sheet (null = no sheet)
   const [activeCountry, setActiveCountry] = useState<string | null>(null);
   const activeCountryRef = useRef<string | null>(null);
-  const [renderKey, setRenderKey] = useState(0);
 
-  // Preview state
+  // Preview card
   const [previewItem, setPreviewItem] = useState<EventWithLocation | null>(null);
 
   // Story modal
@@ -455,49 +503,68 @@ export default function MapScreen() {
   const storyVisibleRef = useRef(false);
   const justClosedStory = useRef(false);
 
-  useEffect(() => { storyVisibleRef.current = storyVisible; }, [storyVisible]);
+  useEffect(() => {
+    storyVisibleRef.current = storyVisible;
+  }, [storyVisible]);
 
   // Sheet animation
   const sheetY = useRef(new Animated.Value(SHEET_CLOSED)).current;
   const backdropOp = useRef(new Animated.Value(0)).current;
   const dragStart = useRef(0);
 
-  const snapSheet = useCallback((to: number) => {
-    Animated.parallel([
-      Animated.spring(sheetY, { toValue: to, tension: 200, friction: 25, useNativeDriver: false }),
-      Animated.timing(backdropOp, { toValue: to > 0 ? 0.3 : 0, duration: 200, useNativeDriver: false }),
-    ]).start();
-  }, [sheetY, backdropOp]);
+  const snapSheet = useCallback(
+    (to: number) => {
+      Animated.parallel([
+        Animated.spring(sheetY, { toValue: to, tension: 200, friction: 25, useNativeDriver: false }),
+        Animated.timing(backdropOp, {
+          toValue: to > 0 ? 0.3 : 0,
+          duration: 200,
+          useNativeDriver: false,
+        }),
+      ]).start();
+    },
+    [sheetY, backdropOp],
+  );
 
   const closeSheet = useCallback(() => {
     snapSheet(SHEET_CLOSED);
     setTimeout(() => {
       setActiveCountry(null);
       activeCountryRef.current = null;
-      setRenderKey(k => k + 1);
     }, 250);
   }, [snapSheet]);
 
-  const pan = useRef(PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 8,
-    onPanResponderGrant: () => { dragStart.current = (sheetY as any)._value; },
-    onPanResponderMove: (_, g) => {
-      const val = Math.max(0, Math.min(SHEET_FULL, dragStart.current - g.dy));
-      sheetY.setValue(val);
-    },
-    onPanResponderRelease: (_, g) => {
-      const cur = (sheetY as any)._value;
-      if (g.vy > 1.2) { closeSheet(); return; }
-      if (-g.vy > 1.2) { snapSheet(SHEET_FULL); return; }
-      
-      const snaps = [SHEET_CLOSED, SHEET_HALF, SHEET_FULL];
-      const nearest = snaps.reduce((p, s) => Math.abs(s - cur) < Math.abs(p - cur) ? s : p);
-      nearest === SHEET_CLOSED ? closeSheet() : snapSheet(nearest);
-    },
-  })).current;
+  const pan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 8,
+      onPanResponderGrant: () => {
+        dragStart.current = (sheetY as any)._value;
+      },
+      onPanResponderMove: (_, g) => {
+        const val = Math.max(0, Math.min(SHEET_FULL, dragStart.current - g.dy));
+        sheetY.setValue(val);
+      },
+      onPanResponderRelease: (_, g) => {
+        const cur = (sheetY as any)._value;
+        if (g.vy > 1.2) {
+          closeSheet();
+          return;
+        }
+        if (-g.vy > 1.2) {
+          snapSheet(SHEET_FULL);
+          return;
+        }
+        const snaps = [SHEET_CLOSED, SHEET_HALF, SHEET_FULL];
+        const nearest = snaps.reduce((p, s) =>
+          Math.abs(s - cur) < Math.abs(p - cur) ? s : p,
+        );
+        nearest === SHEET_CLOSED ? closeSheet() : snapSheet(nearest);
+      },
+    }),
+  ).current;
 
-  // Fetch events
+  // ── Fetch events ──────────────────────────────────────────────────────────────
   useEffect(() => {
     (async () => {
       try {
@@ -505,11 +572,14 @@ export default function MapScreen() {
         const promises = Array.from({ length: 60 }, (_, i) => {
           const d = new Date();
           d.setDate(d.getDate() - i);
-          return api.get('/daily-content/by-date', { params: { date: d.toISOString().split('T')[0] } })
-            .then(r => r.data?.events ?? [])
+          return api
+            .get('/daily-content/by-date', {
+              params: { date: d.toISOString().split('T')[0] },
+            })
+            .then((r) => r.data?.events ?? [])
             .catch(() => []);
         });
-        
+
         const all = (await Promise.all(promises)).flat();
         const seen = new Set<string>();
         const unique = all.filter((e: any) => {
@@ -525,38 +595,92 @@ export default function MapScreen() {
     })();
   }, []);
 
-  const clusters = useMemo(() => buildClusters(allEvents), [allEvents]);
-  const total = useMemo(() => clusters.reduce((s, c) => s + c.items.length, 0), [clusters]);
-  const activeCluster = useMemo(() => clusters.find(c => c.country === activeCountry) ?? null, [clusters, activeCountry]);
+  // ── Derived data ──────────────────────────────────────────────────────────────
+  const eventsWithLocation = useMemo(
+    () => buildEventsWithLocation(allEvents),
+    [allEvents],
+  );
 
-  const zoomToCluster = useCallback((cluster: Cluster) => {
-    haptic('medium');
-    setActiveCountry(cluster.country);
-    activeCountryRef.current = cluster.country;
+  const clusters = useMemo(
+    () => buildClusters(eventsWithLocation),
+    [eventsWithLocation],
+  );
 
-    if (cluster.items.length === 1) {
-      mapRef.current?.animateToRegion({
-        latitude: cluster.items[0].lat,
-        longitude: cluster.items[0].lng,
-        latitudeDelta: 8,
-        longitudeDelta: 8,
-      }, 700);
-    } else {
-      const lats = cluster.items.map(i => i.lat);
-      const lngs = cluster.items.map(i => i.lng);
-      const minLat = Math.min(...lats), maxLat = Math.max(...lats);
-      const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
-      
-      mapRef.current?.animateToRegion({
-        latitude: (minLat + maxLat) / 2,
-        longitude: (minLng + maxLng) / 2,
-        latitudeDelta: Math.max((maxLat - minLat) * 1.8, 5),
-        longitudeDelta: Math.max((maxLng - minLng) * 1.8, 5),
-      }, 700);
+  const total = useMemo(
+    () => eventsWithLocation.length,
+    [eventsWithLocation],
+  );
+
+  // When zoomed in + active country: show only that country's events
+  // When zoomed in + no active country: show all individual events
+  const visibleCityEvents = useMemo(() => {
+    if (!isZoomedIn) return [];
+    if (activeCountry) {
+      return eventsWithLocation.filter((e) => e.country === activeCountry);
     }
-    
-    snapSheet(SHEET_HALF);
-  }, [snapSheet]);
+    return eventsWithLocation;
+  }, [isZoomedIn, activeCountry, eventsWithLocation]);
+
+  const activeCluster = useMemo(
+    () => clusters.find((c) => c.country === activeCountry) ?? null,
+    [clusters, activeCountry],
+  );
+
+  // ── Region change — detect zoom level ────────────────────────────────────────
+  const onRegionChangeComplete = useCallback(
+    (region: Region) => {
+      const zoomed = region.latitudeDelta < ZOOM_CLUSTER_THRESHOLD;
+      setIsZoomedIn(zoomed);
+
+      // If user zoomed out manually, close country sheet
+      if (!zoomed && activeCountryRef.current) {
+        closeSheet();
+      }
+    },
+    [closeSheet],
+  );
+
+  // ── Interactions ──────────────────────────────────────────────────────────────
+  const onClusterPress = useCallback(
+    (cluster: Cluster) => {
+      haptic('medium');
+      setActiveCountry(cluster.country);
+      activeCountryRef.current = cluster.country;
+
+      // Zoom into the country
+      if (cluster.items.length === 1) {
+        mapRef.current?.animateToRegion(
+          {
+            latitude: cluster.items[0].lat,
+            longitude: cluster.items[0].lng,
+            latitudeDelta: 8,
+            longitudeDelta: 8,
+          },
+          700,
+        );
+      } else {
+        const lats = cluster.items.map((i) => i.lat);
+        const lngs = cluster.items.map((i) => i.lng);
+        const minLat = Math.min(...lats);
+        const maxLat = Math.max(...lats);
+        const minLng = Math.min(...lngs);
+        const maxLng = Math.max(...lngs);
+
+        mapRef.current?.animateToRegion(
+          {
+            latitude: (minLat + maxLat) / 2,
+            longitude: (minLng + maxLng) / 2,
+            latitudeDelta: Math.max((maxLat - minLat) * 1.8, 5),
+            longitudeDelta: Math.max((maxLng - minLng) * 1.8, 5),
+          },
+          700,
+        );
+      }
+
+      snapSheet(SHEET_HALF);
+    },
+    [snapSheet],
+  );
 
   const zoomOut = useCallback(() => {
     haptic('light');
@@ -583,27 +707,66 @@ export default function MapScreen() {
   const closeStory = useCallback(() => {
     setStoryVisible(false);
     justClosedStory.current = true;
-    setTimeout(() => { justClosedStory.current = false; }, 500);
+    setTimeout(() => {
+      justClosedStory.current = false;
+    }, 500);
   }, []);
 
   const onMapPress = useCallback(() => {
     if (storyVisibleRef.current || justClosedStory.current) return;
-    if (previewItem) { setPreviewItem(null); return; }
-    if (activeCountryRef.current) zoomOut();
-  }, [previewItem, zoomOut]);
+    if (previewItem) {
+      setPreviewItem(null);
+      return;
+    }
+  }, [previewItem]);
 
   const onMapReady = useCallback(() => {
     mapRef.current?.animateCamera(INIT_CAM, { duration: 1000 });
   }, []);
 
-  // Colors
+  // ── Colors ────────────────────────────────────────────────────────────────────
   const accent = isDark ? '#F59E0B' : '#2563EB';
   const cardBg = isDark ? '#1C1917' : '#FFFFFF';
   const borderCol = isDark ? '#292524' : '#E5E5E5';
 
+  // ── Sheet content: show active country events, or all zoomed events ───────────
+  const sheetCluster: Cluster | null = useMemo(() => {
+    if (activeCluster) return activeCluster;
+    if (isZoomedIn && !activeCountry && eventsWithLocation.length > 0) {
+      // Build a virtual cluster from all visible events
+      const byCat = new Map<string, EventWithLocation[]>();
+      for (const item of eventsWithLocation) {
+        const cat = getCat(item.event);
+        if (!byCat.has(cat)) byCat.set(cat, []);
+        byCat.get(cat)!.push(item);
+      }
+      const cats: CatGroup[] = Array.from(byCat.entries())
+        .map(([key, evts]) => ({
+          key,
+          color: CAT[key]?.color ?? FALLBACK_COLOR,
+          emoji: CAT[key]?.emoji ?? '📌',
+          labelKey: CAT[key]?.tKey ?? key,
+          events: evts.sort((a, b) => (b.event.impactScore ?? 0) - (a.event.impactScore ?? 0)),
+        }))
+        .sort((a, b) => b.events.length - a.events.length);
+      return {
+        country: 'Area',
+        lat: 0,
+        lng: 0,
+        items: eventsWithLocation,
+        cats,
+        mainColor: cats[0]?.color ?? FALLBACK_COLOR,
+        count: eventsWithLocation.length,
+      };
+    }
+    return null;
+  }, [activeCluster, isZoomedIn, activeCountry, eventsWithLocation]);
+
+  const sheetOpen = (sheetY as any)._value > 0 || activeCountry !== null;
+
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      {/* Map */}
+      {/* ── Map ── */}
       <MapView
         ref={mapRef}
         style={StyleSheet.absoluteFill}
@@ -617,39 +780,44 @@ export default function MapScreen() {
         rotateEnabled
         onMapReady={onMapReady}
         onPress={onMapPress}
+        onRegionChangeComplete={onRegionChangeComplete}
       >
-        {/* World view - cluster markers */}
-        {!activeCountry && clusters.map(cluster => (
-          <Marker
-            key={`cluster-${renderKey}-${cluster.country}`}
-            coordinate={{ latitude: cluster.lat, longitude: cluster.lng }}
-            pinColor={cluster.mainColor}
-            title={cluster.country}
-            description={`${cluster.items.length} events`}
-            onPress={() => zoomToCluster(cluster)}
-            tracksViewChanges={false}
-          />
-        ))}
-
-        {/* Country view - individual event markers */}
-        {activeCountry && activeCluster && activeCluster.items.map((item, idx) => {
-          const catKey = getCat(item.event);
-          const color = CAT[catKey]?.color ?? FALLBACK;
-          
-          return (
+        {/* World view — one marker per country */}
+        {!isZoomedIn &&
+          clusters.map((cluster) => (
             <Marker
-              key={`event-${activeCountry}-${idx}`}
-              coordinate={{ latitude: item.lat, longitude: item.lng }}
-              pinColor={color}
-              onPress={() => openPreview(item)}
+              key={`cluster-${cluster.country}`}
+              coordinate={{ latitude: cluster.lat, longitude: cluster.lng }}
+              pinColor={cluster.mainColor}
+              title={cluster.country}
+              description={`${cluster.count} event${cluster.count !== 1 ? 's' : ''}`}
+              onPress={() => onClusterPress(cluster)}
               tracksViewChanges={false}
             />
-          );
-        })}
+          ))}
+
+        {/* Zoomed view — individual city markers */}
+        {isZoomedIn &&
+          visibleCityEvents.map((item, idx) => {
+            const catKey = getCat(item.event);
+            const color = CAT[catKey]?.color ?? FALLBACK_COLOR;
+            return (
+              <Marker
+                key={`city-${idx}-${item.lat}-${item.lng}`}
+                coordinate={{ latitude: item.lat, longitude: item.lng }}
+                pinColor={color}
+                onPress={() => openPreview(item)}
+                tracksViewChanges={false}
+              />
+            );
+          })}
       </MapView>
 
-      {/* Top status pill */}
-      <View style={[styles.topBar, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
+      {/* ── Top status pill ── */}
+      <View
+        style={[styles.topBar, { paddingTop: insets.top + 8 }]}
+        pointerEvents="box-none"
+      >
         <View style={[styles.topPill, { backgroundColor: cardBg, borderColor: borderCol }]}>
           {loading ? (
             <>
@@ -661,8 +829,14 @@ export default function MapScreen() {
               <View style={[styles.topDot, { backgroundColor: activeCluster?.mainColor ?? accent }]} />
               <Text style={[styles.topTextBold, { color: theme.text }]}>{activeCountry}</Text>
               <Text style={[styles.topText, { color: theme.subtext }]}>
-                · {activeCluster?.items.length ?? 0} {tm('events')}
+                · {activeCluster?.count ?? 0} {tm('events')}
               </Text>
+            </>
+          ) : isZoomedIn ? (
+            <>
+              <MapPin size={14} color={accent} strokeWidth={2} />
+              <Text style={[styles.topTextBold, { color: theme.text }]}>{visibleCityEvents.length}</Text>
+              <Text style={[styles.topText, { color: theme.subtext }]}>{tm('events')}</Text>
             </>
           ) : (
             <>
@@ -676,22 +850,28 @@ export default function MapScreen() {
         </View>
       </View>
 
-      {/* Back button */}
-      {activeCountry && (
+      {/* ── Back to world button ── */}
+      {(activeCountry || isZoomedIn) && (
         <TouchableOpacity
           onPress={zoomOut}
           activeOpacity={0.8}
-          style={[styles.backBtn, { top: insets.top + 60, backgroundColor: cardBg, borderColor: borderCol }]}
+          style={[
+            styles.backBtn,
+            { top: insets.top + 60, backgroundColor: cardBg, borderColor: borderCol },
+          ]}
         >
           <Globe2 size={14} color={accent} strokeWidth={2.5} />
           <Text style={[styles.backText, { color: accent }]}>{tm('back_to_world')}</Text>
         </TouchableOpacity>
       )}
 
-      {/* Backdrop */}
-      <Animated.View style={[styles.backdrop, { opacity: backdropOp }]} pointerEvents="none" />
+      {/* ── Backdrop ── */}
+      <Animated.View
+        style={[styles.backdrop, { opacity: backdropOp }]}
+        pointerEvents="none"
+      />
 
-      {/* Bottom sheet */}
+      {/* ── Bottom sheet ── */}
       <Animated.View
         style={[
           styles.sheet,
@@ -704,28 +884,36 @@ export default function MapScreen() {
       >
         <View style={styles.sheetHandle} {...pan.panHandlers}>
           <View style={[styles.sheetBar, { backgroundColor: isDark ? '#404040' : '#D4D4D4' }]} />
-          
-          {activeCluster && (
+          {sheetCluster && (
             <View style={styles.sheetHeader}>
               <View style={styles.sheetHeaderLeft}>
-                <View style={[styles.sheetDot, { backgroundColor: activeCluster.mainColor }]} />
+                <View style={[styles.sheetDot, { backgroundColor: sheetCluster.mainColor }]} />
                 <View>
-                  <Text style={[styles.sheetTitle, { color: theme.text }]}>{activeCluster.country}</Text>
+                  <Text style={[styles.sheetTitle, { color: theme.text }]}>
+                    {sheetCluster.country}
+                  </Text>
                   <Text style={[styles.sheetSub, { color: theme.subtext }]}>
-                    {activeCluster.items.length} {tm('events')} · {activeCluster.cats.length} {tm('categories')}
+                    {sheetCluster.count} {tm('events')} · {sheetCluster.cats.length}{' '}
+                    {tm('categories')}
                   </Text>
                 </View>
               </View>
-              <TouchableOpacity onPress={zoomOut} style={[styles.sheetClose, { backgroundColor: isDark ? '#292524' : '#F5F5F5' }]}>
+              <TouchableOpacity
+                onPress={closeSheet}
+                style={[styles.sheetClose, { backgroundColor: isDark ? '#292524' : '#F5F5F5' }]}
+              >
                 <X size={16} color={theme.subtext} strokeWidth={2} />
               </TouchableOpacity>
             </View>
           )}
         </View>
 
-        {activeCluster ? (
-          <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 20 }} showsVerticalScrollIndicator={false}>
-            {activeCluster.cats.map((cat, i) => (
+        {sheetCluster ? (
+          <ScrollView
+            contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
+            showsVerticalScrollIndicator={false}
+          >
+            {sheetCluster.cats.map((cat, i) => (
               <React.Fragment key={cat.key}>
                 <CategorySection
                   cat={cat}
@@ -735,8 +923,13 @@ export default function MapScreen() {
                   tm={tm}
                   onEventPress={openPreview}
                 />
-                {i < activeCluster.cats.length - 1 && (
-                  <View style={[styles.catDivider, { backgroundColor: isDark ? '#292524' : '#E5E5E5' }]} />
+                {i < sheetCluster.cats.length - 1 && (
+                  <View
+                    style={[
+                      styles.catDivider,
+                      { backgroundColor: isDark ? '#292524' : '#E5E5E5' },
+                    ]}
+                  />
                 )}
               </React.Fragment>
             ))}
@@ -744,14 +937,23 @@ export default function MapScreen() {
         ) : (
           <View style={styles.sheetEmpty}>
             <MapPin size={32} color={theme.subtext + '30'} strokeWidth={1.5} />
-            <Text style={[styles.sheetEmptyText, { color: theme.subtext }]}>{tm('tap_to_explore')}</Text>
+            <Text style={[styles.sheetEmptyText, { color: theme.subtext }]}>
+              {tm('tap_to_explore')}
+            </Text>
           </View>
         )}
       </Animated.View>
 
-      {/* Loading overlay */}
+      {/* ── Loading overlay ── */}
       {loading && (
-        <View style={[styles.loadingOverlay, { backgroundColor: isDark ? 'rgba(15,14,13,0.9)' : 'rgba(255,255,255,0.9)' }]}>
+        <View
+          style={[
+            styles.loadingOverlay,
+            {
+              backgroundColor: isDark ? 'rgba(15,14,13,0.9)' : 'rgba(255,255,255,0.9)',
+            },
+          ]}
+        >
           <View style={[styles.loadingCard, { backgroundColor: cardBg, borderColor: borderCol }]}>
             <Globe2 size={36} color={accent} strokeWidth={1.5} />
             <ActivityIndicator size="large" color={accent} style={{ marginTop: 16 }} />
@@ -760,7 +962,7 @@ export default function MapScreen() {
         </View>
       )}
 
-      {/* Preview card */}
+      {/* ── Preview card ── */}
       {previewItem && (
         <PreviewCard
           item={previewItem}
@@ -773,8 +975,13 @@ export default function MapScreen() {
         />
       )}
 
-      {/* Story modal */}
-      <StoryModal visible={storyVisible} event={storyEvent} onClose={closeStory} theme={theme} />
+      {/* ── Story modal ── */}
+      <StoryModal
+        visible={storyVisible}
+        event={storyEvent}
+        onClose={closeStory}
+        theme={theme}
+      />
     </View>
   );
 }
@@ -785,8 +992,14 @@ export default function MapScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
 
-  // Top bar
-  topBar: { position: 'absolute', top: 0, left: 0, right: 0, alignItems: 'center', paddingHorizontal: 16 },
+  topBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
   topPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -804,7 +1017,6 @@ const styles = StyleSheet.create({
   topText: { fontSize: 13, fontWeight: '500' },
   topTextBold: { fontSize: 14, fontWeight: '700' },
 
-  // Back button
   backBtn: {
     position: 'absolute',
     left: 16,
@@ -822,10 +1034,8 @@ const styles = StyleSheet.create({
   },
   backText: { fontSize: 13, fontWeight: '600' },
 
-  // Backdrop
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: '#000' },
 
-  // Sheet
   sheet: {
     position: 'absolute',
     bottom: 0,
@@ -842,17 +1052,32 @@ const styles = StyleSheet.create({
   },
   sheetHandle: { paddingTop: 12, paddingHorizontal: 20, paddingBottom: 8 },
   sheetBar: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
-  sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   sheetHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
   sheetDot: { width: 12, height: 12, borderRadius: 6 },
   sheetTitle: { fontSize: 18, fontWeight: '700' },
   sheetSub: { fontSize: 12, fontWeight: '500', marginTop: 2, opacity: 0.6 },
-  sheetClose: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  sheetClose: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   sheetEmpty: { alignItems: 'center', paddingVertical: 50, gap: 12 },
   sheetEmptyText: { fontSize: 14, fontWeight: '500', opacity: 0.5 },
 
-  // Category
-  catHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 12 },
+  catHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
   catLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   catEmoji: { fontSize: 16 },
   catLabel: { fontSize: 12, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase' },
@@ -860,9 +1085,20 @@ const styles = StyleSheet.create({
   catCount: { fontSize: 11, fontWeight: '800' },
   catDivider: { height: 1, marginHorizontal: 20, marginVertical: 8 },
 
-  // Event row
-  eventRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, gap: 12 },
-  eventYear: { width: 52, paddingVertical: 6, borderRadius: 8, alignItems: 'center', borderWidth: 1 },
+  eventRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    gap: 12,
+  },
+  eventYear: {
+    width: 52,
+    paddingVertical: 6,
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+  },
   eventYearText: { fontSize: 11, fontWeight: '800' },
   eventContent: { flex: 1, gap: 4 },
   eventTitle: { fontSize: 14, fontWeight: '600', lineHeight: 20 },
@@ -870,8 +1106,11 @@ const styles = StyleSheet.create({
   eventLocText: { fontSize: 11, fontWeight: '500', opacity: 0.5 },
   divider: { height: StyleSheet.hairlineWidth, marginLeft: 84 },
 
-  // Loading
-  loadingOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   loadingCard: {
     alignItems: 'center',
     paddingHorizontal: 40,
@@ -885,7 +1124,6 @@ const styles = StyleSheet.create({
   },
   loadingText: { fontSize: 14, fontWeight: '600', marginTop: 8 },
 
-  // Preview
   previewOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -905,17 +1143,57 @@ const styles = StyleSheet.create({
       android: { elevation: 12 },
     }),
   },
-  previewHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1 },
-  previewBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
+  previewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderBottomWidth: 1,
+  },
+  previewBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
   previewEmoji: { fontSize: 16 },
-  previewCatText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase' },
-  previewClose: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  previewCatText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  previewClose: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   previewBody: { padding: 16, gap: 12 },
   previewTitle: { fontSize: 17, fontWeight: '700', lineHeight: 24 },
   previewSummary: { fontSize: 14, lineHeight: 21, opacity: 0.7 },
   previewMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
-  previewMetaItem: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
+  previewMetaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
   previewMetaText: { fontSize: 12, fontWeight: '600' },
-  previewButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginHorizontal: 16, marginBottom: 16, paddingVertical: 14, borderRadius: 12 },
+  previewButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    paddingVertical: 14,
+    borderRadius: 12,
+  },
   previewButtonText: { color: '#FFF', fontSize: 14, fontWeight: '700' },
 });

@@ -212,8 +212,15 @@ const HistoryCardComponent = ({ event, allEvents = [] }: { event: any; allEvents
               colors={isPremium ? ['rgba(10,8,21,0.05)', 'rgba(10,8,21,0.35)', 'rgba(5,4,10,0.97)'] : ['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.38)', 'rgba(0,0,0,0.97)']}
               locations={[0, 0.38, 0.82]} style={styles.gradient}>
               <View style={styles.top}>
-                <View style={[styles.catBadge, { backgroundColor: isPremium ? 'rgba(10,8,21,0.7)' : 'rgba(0,0,0,0.6)', borderColor: isPremium ? '#D4A84350' : 'rgba(255,215,0,0.3)' }]}>
-                  <Text style={[styles.catText, { color: goldColor }]}>{t(category).replace(/_/g, ' ').toUpperCase()}</Text>
+                <View style={styles.topLeft}>
+                  <View style={[styles.catBadge, { backgroundColor: isPremium ? 'rgba(10,8,21,0.7)' : 'rgba(0,0,0,0.6)', borderColor: isPremium ? '#D4A84350' : 'rgba(255,215,0,0.3)' }]}>
+                    <Text style={[styles.catText, { color: goldColor }]}>{t(category).replace(/_/g, ' ').toUpperCase()}</Text>
+                  </View>
+                  {(event.isPro || event.pro) && (
+                    <View style={styles.proBadge}>
+                      <Text style={styles.proBadgeT}>PRO</Text>
+                    </View>
+                  )}
                 </View>
                 <TouchableWithoutFeedback onPress={() => setSharePickerVisible(true)}>
                   <View style={[styles.shareBtn, { backgroundColor: isPremium ? 'rgba(212,168,67,0.12)' : 'rgba(255,255,255,0.15)', borderWidth: isPremium ? 1 : 0, borderColor: isPremium ? '#D4A84330' : 'transparent' }]}>
@@ -261,8 +268,11 @@ const styles = StyleSheet.create({
   image: { ...StyleSheet.absoluteFillObject },
   gradient: { ...StyleSheet.absoluteFillObject, padding: 24, justifyContent: 'space-between' },
   top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  topLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   catBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, borderWidth: 1 },
   catText: { fontWeight: '800', fontSize: 10, letterSpacing: 2 },
+  proBadge: { paddingHorizontal: 8, paddingVertical: 5, borderRadius: 10, backgroundColor: '#D4A843' },
+  proBadgeT: { fontSize: 9, fontWeight: '900', color: '#000', letterSpacing: 1.8 },
   shareBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   yearRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   yearText: { fontSize: 22, fontWeight: '900', letterSpacing: 1 },
