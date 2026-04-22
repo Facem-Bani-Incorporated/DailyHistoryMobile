@@ -1,4 +1,5 @@
 // app/(main)/saved.tsx
+import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Bookmark, Trash2 } from 'lucide-react-native';
@@ -20,10 +21,11 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useTheme } from '../../context/ThemeContext';
 import { getEventId, useSavedStore, useUserSavedEvents } from '../../store/useSavedStore';
 
-const { width: W } = Dimensions.get('window');
+const { width: W, height: H } = Dimensions.get('window');
 const SWIPE_THRESHOLD = W * 0.28;
 const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
-const CARD_IMG_H = 196;
+const SANS = Platform.OS === 'ios' ? 'System' : 'sans-serif';
+const CARD_IMG_H = 220;
 
 /* ─── Translations ─── */
 const T: Record<string, Record<string, string>> = {
@@ -32,6 +34,11 @@ const T: Record<string, Record<string, string>> = {
   fr: { saved: 'Enregistrés', event_saved: 'histoire collectée', events_saved: 'histoires collectées', recent: 'Récents', by_year: 'Par Année', nothing_saved: 'Votre collection est vide', save_hint: 'Appuyez sur le favori pour commencer votre archive personnelle.', swipe_remove: 'Supprimer', end_of_list: 'Fin de la collection', categories: 'catégories', swipe_hint: 'glisser à gauche pour supprimer', no_filter: 'Aucune histoire dans cette catégorie' },
   de: { saved: 'Gespeichert', event_saved: 'Geschichte gesammelt', events_saved: 'Geschichten gesammelt', recent: 'Neueste', by_year: 'Nach Jahr', nothing_saved: 'Ihre Sammlung ist leer', save_hint: 'Tippe auf das Lesezeichen, um dein Archiv aufzubauen.', swipe_remove: 'Entfernen', end_of_list: 'Ende der Sammlung', categories: 'Kategorien', swipe_hint: 'nach links wischen zum Entfernen', no_filter: 'Keine Geschichten in dieser Kategorie' },
   es: { saved: 'Guardados', event_saved: 'historia coleccionada', events_saved: 'historias coleccionadas', recent: 'Recientes', by_year: 'Por Año', nothing_saved: 'Tu colección está vacía', save_hint: 'Toca el marcador en cualquier historia para construir tu archivo personal.', swipe_remove: 'Eliminar', end_of_list: 'Fin de la colección', categories: 'categorías', swipe_hint: 'desliza a la izquierda para eliminar', no_filter: 'No hay historias en esta categoría' },
+};
+
+const toRoman = (n: number) => {
+  const romans = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
+  return romans[n] || "";
 };
 
 /* ─── Category data ─── */
@@ -187,45 +194,42 @@ export default function SavedScreen() {
 
   const handleDelete = useCallback((id: string) => removeEvent(id), [removeEvent]);
 
-  /* ── HEADER ── */
+  /* ── EDITORIAL HEADER ── */
   const renderHeader = () => (
-    <View style={[st.header, { paddingTop: insets.top + 12, backgroundColor: theme.background }]}>
-      {/* Gold accent line at very top */}
-      <View style={[st.headerAccentLine, { backgroundColor: theme.gold }]} />
+    <View style={[st.header, { paddingTop: insets.top + 10, backgroundColor: theme.background }]}>
+      <View style={st.masthead}>
+        <View style={[st.mastheadLine, { backgroundColor: theme.gold + '30' }]} />
+        <Text style={[st.mastheadLabel, { color: theme.text }]}>THE ARCHIVE</Text>
+        <Text style={[st.mastheadIssue, { color: theme.gold }]}>N° {toRoman(new Date().getMonth())}</Text>
+        <View style={[st.mastheadLine, { backgroundColor: theme.gold + '30' }]} />
+      </View>
 
       <View style={st.headerInner}>
-        {/* Left: title block */}
         <View style={st.headerLeft}>
-          <Text style={[st.headerLabel, { color: theme.gold }]}>MY LIBRARY</Text>
-          <Text style={[st.headerTitle, { color: theme.text }]}>The Archive</Text>
+          <Text style={[st.headerTitle, { color: theme.text }]}>{ts('saved')}</Text>
           {savedEvents.length > 0 ? (
             <Text style={[st.headerMeta, { color: theme.subtext }]}>
               {savedEvents.length} {savedEvents.length === 1 ? ts('event_saved') : ts('events_saved')}
-              {yearRange !== '' ? `  ·  ${yearRange}` : ''}
             </Text>
           ) : (
             <Text style={[st.headerMeta, { color: theme.subtext }]}>Empty collection</Text>
           )}
         </View>
-
-        {/* Right: bookmark icon, minimal */}
-        <Bookmark size={20} color={theme.gold} fill={theme.gold} strokeWidth={1.5} style={{ opacity: 0.7 }} />
       </View>
 
-      {/* Sort tabs — editorial underline style */}
       {savedEvents.length > 1 && (
-        <View style={[st.sortTabs, { borderTopColor: theme.border }]}>
+        <View style={st.sortTabs}>
           <TouchableOpacity onPress={() => setSortMode('recent')} activeOpacity={0.6} style={st.sortTab}>
-            <Text style={[st.sortTabLabel, { color: sortMode === 'recent' ? theme.text : theme.subtext, fontWeight: sortMode === 'recent' ? '700' : '400' }]}>
-              {ts('recent')}
+            <Text style={[st.sortTabLabel, { color: sortMode === 'recent' ? theme.text : theme.subtext, fontWeight: sortMode === 'recent' ? '800' : '500' }]}>
+              {ts('recent').toUpperCase()}
             </Text>
-            {sortMode === 'recent' && <View style={[st.sortTabUnderline, { backgroundColor: theme.gold }]} />}
+            {sortMode === 'recent' && <View style={[st.sortTabDot, { backgroundColor: theme.gold }]} />}
           </TouchableOpacity>
           <TouchableOpacity onPress={() => setSortMode('year')} activeOpacity={0.6} style={st.sortTab}>
-            <Text style={[st.sortTabLabel, { color: sortMode === 'year' ? theme.text : theme.subtext, fontWeight: sortMode === 'year' ? '700' : '400' }]}>
-              {ts('by_year')}
+            <Text style={[st.sortTabLabel, { color: sortMode === 'year' ? theme.text : theme.subtext, fontWeight: sortMode === 'year' ? '800' : '500' }]}>
+              {ts('by_year').toUpperCase()}
             </Text>
-            {sortMode === 'year' && <View style={[st.sortTabUnderline, { backgroundColor: theme.gold }]} />}
+            {sortMode === 'year' && <View style={[st.sortTabDot, { backgroundColor: theme.gold }]} />}
           </TouchableOpacity>
           <View style={{ flex: 1 }} />
         </View>
@@ -233,11 +237,11 @@ export default function SavedScreen() {
     </View>
   );
 
-  /* ── CATEGORY FILTER ── */
+  /* ── DISCRETE CATEGORY FILTER ── */
   const renderCategoryFilter = () => {
     if (categories.length < 2) return null;
     return (
-      <View style={[st.filterBar, { backgroundColor: theme.background, borderBottomColor: theme.border }]}>
+      <View style={[st.filterBar, { backgroundColor: theme.background }]}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.filterScroll}>
           <TouchableOpacity
             onPress={() => setActiveCategory(null)}
@@ -274,7 +278,7 @@ export default function SavedScreen() {
     );
   };
 
-  /* ── CARD ── */
+  /* ── ASYMMETRICAL EDITORIAL CARD ── */
   const renderCard = (event: any, index: number) => {
     const title = event.titleTranslations?.[language] ?? event.titleTranslations?.en ?? '';
     const narrative = event.narrativeTranslations?.[language] ?? event.narrativeTranslations?.en ?? '';
@@ -294,48 +298,50 @@ export default function SavedScreen() {
         onPress={() => setSelectedEvent(event)}
         removeLabel={ts('swipe_remove')}
       >
-        <View style={[st.card, { backgroundColor: theme.card }]}>
+        <View style={[st.card, { backgroundColor: theme.card, borderColor: theme.border + '50' }]}>
+          <View style={[st.innerFrame, { borderColor: theme.gold + '15' }]} pointerEvents="none" />
 
           {/* Image section */}
           <View style={st.cardImgWrap}>
             {imageUri ? (
               <Image source={{ uri: imageUri }} style={StyleSheet.absoluteFill} contentFit="cover" transition={350} />
             ) : (
-              <View style={[StyleSheet.absoluteFill, { backgroundColor: catColor + '14', alignItems: 'center', justifyContent: 'center' }]}>
+              <View style={[StyleSheet.absoluteFill, { backgroundColor: catColor + '10', alignItems: 'center', justifyContent: 'center' }]}>
                 <Bookmark size={44} color={catColor + '28'} strokeWidth={1} />
               </View>
             )}
 
-            {/* Gradient overlay */}
             <LinearGradient
-              colors={['rgba(0,0,0,0.02)', 'rgba(0,0,0,0.08)', 'rgba(0,0,0,0.65)', 'rgba(0,0,0,0.93)']}
-              locations={[0, 0.35, 0.72, 1]}
+              colors={['rgba(0,0,0,0.3)', 'transparent', 'rgba(0,0,0,0.85)']}
+              locations={[0, 0.3, 1]}
               style={StyleSheet.absoluteFill}
             />
 
-            {/* Category badge – top right */}
-            <View style={[st.catBadge, { backgroundColor: catColor }]}>
+            <View style={[st.catBadge, { backgroundColor: catColor + 'dd' }]}>
+              <View style={st.proPillDot} />
               <Text style={st.catBadgeText}>{catLabel}</Text>
             </View>
 
-            {/* Text over image – bottom */}
             <View style={st.cardImgOverlay}>
               {year !== '' && (
-                <Text style={st.cardYear}>{year}</Text>
+                <View style={st.yearRow}>
+                  <Text style={[st.cardYear, { color: theme.gold }]}>{year}</Text>
+                  <View style={[st.yearLine, { backgroundColor: theme.gold + '40' }]} />
+                </View>
               )}
               <Text style={[st.cardTitle, { fontFamily: SERIF }]} numberOfLines={2}>{title}</Text>
             </View>
           </View>
 
-          {/* Colored accent strip */}
-          <View style={[st.accentStrip, { backgroundColor: catColor }]} />
-
-          {/* Text body */}
           <View style={st.cardBody}>
-            <Text style={[st.cardExcerpt, { color: theme.subtext }]} numberOfLines={2}>{narrative}</Text>
+            <Text style={[st.cardExcerpt, { color: theme.subtext, fontFamily: SERIF }]} numberOfLines={2}>
+              {narrative}
+            </Text>
+            
             {impact > 0 && (
               <View style={st.impactRow}>
-                <Text style={[st.impactLabel, { color: theme.subtext }]}>SIGNIFICANCE</Text>
+                <Ionicons name="analytics" size={10} color={catColor} style={{ opacity: 0.7 }} />
+                <Text style={[st.impactLabel, { color: theme.subtext }]}>AI IMPACT</Text>
                 <View style={[st.impactTrack, { backgroundColor: theme.border }]}>
                   <View style={[st.impactFill, { backgroundColor: catColor, width: `${Math.min(impact, 100)}%` as any }]} />
                 </View>
@@ -364,18 +370,6 @@ export default function SavedScreen() {
     </View>
   );
 
-  /* ── NO FILTER RESULTS ── */
-  const renderNoFilter = () => (
-    <View style={[st.emptyRoot, { paddingTop: 60 }]}>
-      <Text style={[st.emptyTitle, { color: theme.text, fontFamily: SERIF, fontSize: 17 }]}>
-        {ts('no_filter')}
-      </Text>
-      <TouchableOpacity onPress={() => setActiveCategory(null)} style={[st.clearFilterBtn, { borderColor: theme.gold + '50', backgroundColor: theme.gold + '0C' }]}>
-        <Text style={[st.clearFilterText, { color: theme.gold }]}>SHOW ALL</Text>
-      </TouchableOpacity>
-    </View>
-  );
-
   /* ── ROOT ── */
   return (
     <View style={[st.root, { backgroundColor: theme.background }]}>
@@ -385,7 +379,14 @@ export default function SavedScreen() {
       {savedEvents.length === 0 ? (
         renderEmpty()
       ) : displayEvents.length === 0 ? (
-        renderNoFilter()
+        <View style={[st.emptyRoot, { paddingTop: 60 }]}>
+          <Text style={[st.emptyTitle, { color: theme.text, fontFamily: SERIF, fontSize: 17 }]}>
+            {ts('no_filter')}
+          </Text>
+          <TouchableOpacity onPress={() => setActiveCategory(null)} style={[st.clearFilterBtn, { borderColor: theme.gold + '50', backgroundColor: theme.gold + '0C' }]}>
+            <Text style={[st.clearFilterText, { color: theme.gold }]}>SHOW ALL</Text>
+          </TouchableOpacity>
+        </View>
       ) : (
         <Animated.ScrollView
           style={{ opacity: fadeIn, transform: [{ translateY: slideUp }] }}
@@ -393,19 +394,13 @@ export default function SavedScreen() {
           contentContainerStyle={[st.list, { paddingBottom: insets.bottom + 32 }]}
         >
           {/* Swipe hint */}
-          <View style={st.swipeHintRow}>
-            <View style={[st.swipeHintLine, { backgroundColor: theme.border }]} />
-            <Text style={[st.swipeHintText, { color: theme.subtext }]}>← {ts('swipe_hint')}</Text>
-            <View style={[st.swipeHintLine, { backgroundColor: theme.border }]} />
-          </View>
-
           {displayEvents.map((event, i) => renderCard(event, i))}
 
           {/* Footer */}
           <View style={st.listFooter}>
-            <View style={[st.footerLine, { backgroundColor: theme.border }]} />
+            <View style={[st.footerLine, { backgroundColor: theme.gold + '25' }]} />
             <Text style={[st.footerGlyph, { color: theme.gold }]}>✦</Text>
-            <View style={[st.footerLine, { backgroundColor: theme.border }]} />
+            <View style={[st.footerLine, { backgroundColor: theme.gold + '25' }]} />
           </View>
           <Text style={[st.footerText, { color: theme.subtext }]}>{ts('end_of_list')}</Text>
         </Animated.ScrollView>
@@ -428,42 +423,65 @@ const st = StyleSheet.create({
   root: { flex: 1 },
 
   // Header
-  header: { paddingHorizontal: 22, paddingBottom: 0 },
-  headerAccentLine: { height: 2, width: 36, borderRadius: 1, marginBottom: 18 },
-  headerInner: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 6 },
+  header: { paddingHorizontal: 20, paddingBottom: 10 },
+  masthead: {
+    height: 32, flexDirection: 'row', alignItems: 'center',
+    gap: 12, marginBottom: 20,
+  },
+  mastheadLine: { flex: 1, height: StyleSheet.hairlineWidth },
+  mastheadLabel: {
+    fontSize: 10, fontWeight: '800', letterSpacing: 4, fontFamily: SANS,
+  },
+  mastheadIssue: {
+    fontSize: 10, fontWeight: '700', letterSpacing: 1.5,
+    fontFamily: SERIF, fontStyle: 'italic',
+  },
+  headerInner: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 16 },
   headerLeft: { flex: 1 },
-  headerLabel: { fontSize: 9, fontWeight: '800', letterSpacing: 3.5, marginBottom: 5 },
-  headerTitle: { fontSize: 30, fontWeight: '800', fontFamily: SERIF, letterSpacing: -0.5, lineHeight: 34, marginBottom: 6 },
-  headerMeta: { fontSize: 12, fontWeight: '400', opacity: 0.55, letterSpacing: 0.2 },
-  sortTabs: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth, marginTop: 14, paddingTop: 2 },
-  sortTab: { paddingVertical: 10, paddingRight: 24, position: 'relative' },
-  sortTabLabel: { fontSize: 13, letterSpacing: 0.2 },
-  sortTabUnderline: { position: 'absolute', bottom: 0, left: 0, right: 24, height: 2, borderRadius: 1 },
+  headerTitle: { fontSize: 36, fontWeight: '900', fontFamily: SERIF, letterSpacing: -1, lineHeight: 38, marginBottom: 4 },
+  headerMeta: { fontSize: 11, fontWeight: '700', opacity: 0.45, letterSpacing: 1, textTransform: 'uppercase' },
+  sortTabs: { flexDirection: 'row', gap: 20, marginTop: 4 },
+  sortTab: { paddingVertical: 6, alignItems: 'center', gap: 4 },
+  sortTabLabel: { fontSize: 10, letterSpacing: 1.5 },
+  sortTabDot: { width: 4, height: 4, borderRadius: 2 },
 
   // Category filter
-  filterBar: { borderBottomWidth: StyleSheet.hairlineWidth, paddingVertical: 10 },
+  filterBar: { paddingVertical: 12 },
   filterScroll: { paddingHorizontal: 16, gap: 8, flexDirection: 'row', alignItems: 'center' },
-  filterPill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 13, paddingVertical: 7, borderRadius: 16, borderWidth: 1 },
+  filterPill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
   filterDot: { width: 5, height: 5, borderRadius: 3 },
-  filterPillLabel: { fontSize: 9, fontWeight: '800', letterSpacing: 1.6 },
+  filterPillLabel: { fontSize: 8.5, fontWeight: '800', letterSpacing: 1.2 },
 
   // Cards list
-  list: { paddingHorizontal: 16, paddingTop: 14, gap: 14 },
-  swipeHintRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 },
-  swipeHintLine: { flex: 1, height: StyleSheet.hairlineWidth },
-  swipeHintText: { fontSize: 9, fontWeight: '500', opacity: 0.3, letterSpacing: 0.4 },
+  list: { paddingHorizontal: 20, paddingTop: 10, gap: 20 },
 
   // Card
-  card: { borderRadius: 22, overflow: 'hidden' },
-  cardImgWrap: { width: '100%', height: CARD_IMG_H, position: 'relative' },
-  catBadge: { position: 'absolute', top: 14, right: 14, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
+  card: { borderRadius: 24, overflow: 'hidden', borderWidth: 1 },
+  innerFrame: {
+    position: 'absolute',
+    top: 10, left: 10, right: 10, bottom: 10,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    zIndex: 5,
+  },
+  cardImgWrap: { width: '100%', height: CARD_IMG_H, position: 'relative', overflow: 'hidden' },
+  catBadge: {
+    position: 'absolute', top: 20, right: 20,
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6,
+    zIndex: 10,
+  },
+  proPillDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#fff' },
   catBadgeText: { color: '#fff', fontSize: 8, fontWeight: '800', letterSpacing: 1.6 },
-  cardImgOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 16, paddingBottom: 16, paddingTop: 40 },
-  cardYear: { color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: '700', letterSpacing: 3, marginBottom: 5 },
-  cardTitle: { color: '#fff', fontSize: 21, fontWeight: '800', lineHeight: 27, letterSpacing: -0.2 },
-  accentStrip: { height: 3, width: '100%' },
-  cardBody: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 14 },
-  cardExcerpt: { fontSize: 13, lineHeight: 20, opacity: 0.65 },
+  cardImgOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 20, paddingBottom: 20, paddingTop: 60 },
+  yearRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 },
+  cardYear: { fontSize: 28, fontWeight: '900', letterSpacing: 1, fontFamily: SERIF, fontStyle: 'italic' },
+  yearLine: { flex: 1, height: 1 },
+  cardTitle: { color: '#fff', fontSize: 22, fontWeight: '800', lineHeight: 26, letterSpacing: -0.5 },
+  
+  cardBody: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 18, gap: 12 },
+  cardExcerpt: { fontSize: 14, lineHeight: 22, opacity: 0.7, fontStyle: 'italic' },
+  
   impactRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
   impactLabel: { fontSize: 7, fontWeight: '700', letterSpacing: 1.5, opacity: 0.5 },
   impactTrack: { flex: 1, height: 2, borderRadius: 1, overflow: 'hidden' },
@@ -471,15 +489,15 @@ const st = StyleSheet.create({
   impactScore: { fontSize: 10, fontWeight: '800', letterSpacing: 0.3 },
 
   // Footer
-  listFooter: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 16, marginBottom: 6, opacity: 0.3 },
+  listFooter: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 30, marginBottom: 6, opacity: 0.4 },
   footerLine: { flex: 1, height: StyleSheet.hairlineWidth },
   footerGlyph: { fontSize: 10 },
-  footerText: { textAlign: 'center', fontSize: 11, fontWeight: '500', opacity: 0.25, marginBottom: 4 },
+  footerText: { textAlign: 'center', fontSize: 10, fontWeight: '700', opacity: 0.25, marginBottom: 4, letterSpacing: 2 },
 
   // Empty state
   emptyRoot: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 44, gap: 12 },
-  emptyGlowRing: { width: 100, height: 100, borderRadius: 50, borderWidth: 1, borderColor: 'rgba(255,215,0,0.2)', backgroundColor: 'rgba(255,215,0,0.04)', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
-  emptyGlowInner: { width: 72, height: 72, borderRadius: 36, backgroundColor: 'rgba(255,215,0,0.08)', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,215,0,0.25)', alignItems: 'center', justifyContent: 'center' },
+  emptyGlowRing: { width: 110, height: 110, borderRadius: 55, borderWidth: 1, borderColor: 'rgba(212,168,67,0.2)', backgroundColor: 'rgba(212,168,67,0.04)', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  emptyGlowInner: { width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(212,168,67,0.08)', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(212,168,67,0.25)', alignItems: 'center', justifyContent: 'center' },
   emptyTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.2, textAlign: 'center' },
   emptyDesc: { fontSize: 14, textAlign: 'center', lineHeight: 22, opacity: 0.45 },
   emptyHintPill: { marginTop: 8, paddingHorizontal: 18, paddingVertical: 10, borderRadius: 14, borderWidth: 1 },
