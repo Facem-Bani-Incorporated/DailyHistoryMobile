@@ -2,16 +2,16 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Animated,
-    Dimensions,
-    Easing,
-    Modal,
-    Platform,
-    Pressable,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Animated,
+  Dimensions,
+  Easing,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLanguage } from '../context/LanguageContext';
@@ -19,6 +19,7 @@ import { useTheme } from '../context/ThemeContext';
 
 const { width: W, height: H } = Dimensions.get('window');
 const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
+const SANS = Platform.OS === 'ios' ? 'System' : 'sans-serif'; // Adăugat: Definiția SANS
 const CELL_SIZE = Math.floor((W - 64) / 7);
 
 interface CalendarModalProps {
@@ -27,6 +28,7 @@ interface CalendarModalProps {
   onSelectDate: (date: Date) => void;
   selectedDate: Date;
   maxFutureOffset?: number;
+  events?: any[];
 }
 
 const WEEKDAYS: Record<string, string[]> = {
@@ -57,12 +59,12 @@ function getFirstDayOfMonth(year: number, month: number): number {
   return new Date(year, month, 1).getDay();
 }
 
-/* ── Day Cell ── */
+/* ── Editorial Day Cell ── */
 const DayCell = React.memo(({
-  day, isToday, isSelected, isDisabled, isFuture, isPast, theme, isDark, gold, onPress,
+  day, isToday, isSelected, isDisabled, hasEvents, impactLevel, theme, isDark, gold, onPress,
 }: {
-  day: number; isToday: boolean; isSelected: boolean; isDisabled: boolean;
-  isFuture: boolean; isPast: boolean; theme: any; isDark: boolean; gold: string;
+  day: number; isToday: boolean; isSelected: boolean; isDisabled: boolean; 
+  hasEvents: boolean; impactLevel: number; theme: any; isDark: boolean; gold: string;
   onPress: () => void;
 }) => {
   const scale = useRef(new Animated.Value(1)).current;
@@ -75,59 +77,64 @@ const DayCell = React.memo(({
     Animated.spring(scale, { toValue: 1, tension: 200, friction: 12, useNativeDriver: true }).start();
   };
 
-  const bgColor = isSelected
-    ? gold
-    : isToday
-      ? `${gold}18`
-      : 'transparent';
+  // Color logic based on AI Impact Score
+  // 3: High Impact (>80), 2: Med (40-80), 1: Low (<40), 0: No Events
+  const getImpactColor = () => {
+    if (isSelected) return gold;
+    if (impactLevel === 3) return gold;
+    if (impactLevel === 2) return isDark ? '#A88B4D' : '#8B7355';
+    if (impactLevel === 1) return isDark ? '#4A463F' : '#D1CDC7';
+    return 'transparent';
+  };
 
-  const textColor = isSelected
-    ? '#000'
-    : isDisabled
-      ? theme.subtext + '30'
-      : isToday
-        ? gold
-        : theme.text;
+  const impactColor = getImpactColor();
+  
+  // If no events, we show a very subtle indicator or nothing (per user request)
+  if (!hasEvents && !isToday) {
+    return (
+      <View style={cs.cellWrap}>
+        <View style={[cs.emptyDot, { backgroundColor: theme.border + '40' }]} />
+      </View>
+    );
+  }
 
   return (
     <Pressable
       onPress={isDisabled ? undefined : onPress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
-      style={cs.cellWrap}
+      style={[cs.cellWrap, isDisabled && { opacity: 0.3 }]}
     >
       <Animated.View style={[
         cs.cell,
         {
-          backgroundColor: bgColor,
+          backgroundColor: isSelected ? gold : 'transparent',
           transform: [{ scale }],
+          borderColor: isToday ? gold : 'transparent',
+          borderWidth: isToday && !isSelected ? 1 : 0,
         },
         isSelected && {
           shadowColor: gold,
-          shadowOffset: { width: 0, height: 0 },
-          shadowOpacity: 0.4,
-          shadowRadius: 10,
-          elevation: 6,
-        },
-        isToday && !isSelected && {
-          borderWidth: 1.5,
-          borderColor: `${gold}50`,
+          shadowOpacity: 0.3,
+          shadowRadius: 8,
+          elevation: 4,
         },
       ]}>
         <Text style={[
           cs.cellText,
           {
-            color: textColor,
-            fontWeight: isSelected || isToday ? '800' : '500',
-            opacity: isDisabled ? 0.2 : 1,
+            color: isSelected ? '#000' : (impactLevel > 0 ? impactColor : theme.text),
+            fontFamily: SERIF,
+            fontWeight: impactLevel === 3 || isSelected ? '800' : '500',
+            fontSize: impactLevel === 3 ? 18 : 15,
           },
         ]}>
           {day}
         </Text>
+        {impactLevel === 3 && !isSelected && (
+          <View style={[cs.impactLine, { backgroundColor: gold }]} />
+        )}
       </Animated.View>
-      {isToday && !isSelected && (
-        <View style={[cs.todayDot, { backgroundColor: gold }]} />
-      )}
     </Pressable>
   );
 });
@@ -139,13 +146,21 @@ const cs = StyleSheet.create({
     borderRadius: (CELL_SIZE - 6) / 2,
     alignItems: 'center', justifyContent: 'center',
   },
-  cellText: { fontSize: 15, letterSpacing: -0.3 },
-  todayDot: { width: 4, height: 4, borderRadius: 2, marginTop: 1 },
+  cellText: { letterSpacing: -0.3 },
+  emptyDot: { width: 3, height: 3, borderRadius: 1.5 },
+  impactLine: {
+    position: 'absolute', bottom: 6, width: 10, height: 1.5, borderRadius: 1,
+  },
 });
 
 /* ── Main Calendar ── */
+const toRoman = (n: number) => {
+  const romans = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
+  return romans[n] || "";
+};
+
 export default function CalendarModal({
-  visible, onClose, onSelectDate, selectedDate, maxFutureOffset = 1,
+  visible, onClose, onSelectDate, selectedDate, maxFutureOffset = 1, events = [],
 }: CalendarModalProps) {
   const { theme, isDark } = useTheme();
   const { language } = useLanguage();
@@ -164,6 +179,34 @@ export default function CalendarModal({
 
   const [viewYear, setViewYear] = useState(selectedDate.getFullYear());
   const [viewMonth, setViewMonth] = useState(selectedDate.getMonth());
+
+  // Map events to a day-impact object for quick lookup
+  const dayMetadata = useMemo(() => {
+    const map: Record<number, { hasEvents: boolean, maxImpact: number }> = {};
+    events.forEach(ev => {
+      const dateStr = ev.eventDate || ev.event_date;
+      if (!dateStr) return;
+      
+      const d = new Date(dateStr);
+      // Only care about events in the current viewing month/year
+      if (d.getMonth() === viewMonth) {
+        const day = d.getDate();
+        const impact = ev.impactScore || 0;
+        
+        if (!map[day]) map[day] = { hasEvents: true, maxImpact: 0 };
+        if (impact > map[day].maxImpact) map[day].maxImpact = impact;
+      }
+    });
+    return map;
+  }, [events, viewMonth, viewYear]);
+
+  const getImpactLevel = (day: number) => {
+    const score = dayMetadata[day]?.maxImpact || 0;
+    if (score > 80) return 3;
+    if (score > 40) return 2;
+    if (score > 0) return 1;
+    return 0;
+  };
 
   // Reset view when modal opens
   useEffect(() => {
@@ -302,25 +345,24 @@ export default function CalendarModal({
 
         {/* Month header */}
         <View style={ms.monthHeader}>
+          <View style={[ms.mastheadLine, { backgroundColor: theme.gold + '25' }]} />
           <TouchableOpacity onPress={prevMonth} activeOpacity={0.6} style={ms.monthArrow} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <Ionicons name="chevron-back" size={20} color={theme.text} />
+            <Ionicons name="chevron-back" size={18} color={theme.gold} />
           </TouchableOpacity>
 
           <Animated.View style={[ms.monthCenter, { opacity: monthFade }]}>
-            <Text style={[ms.monthName, { color: theme.text }]}>
-              {monthNames[viewMonth]}
-            </Text>
-            <Text style={[ms.yearLabel, { color: gold }]}>{viewYear}</Text>
+            <Text style={[ms.mastheadLabel, { color: theme.text }]}>{monthNames[viewMonth].toUpperCase()}</Text>
+            <Text style={[ms.mastheadIssue, { color: theme.gold }]}>N° {toRoman(viewMonth)}</Text>
           </Animated.View>
 
           <TouchableOpacity
             onPress={nextMonth} activeOpacity={0.6}
             disabled={!canGoForward}
             style={[ms.monthArrow, !canGoForward && { opacity: 0.2 }]}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          >
-            <Ionicons name="chevron-forward" size={20} color={theme.text} />
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+            <Ionicons name="chevron-forward" size={18} color={theme.gold} />
           </TouchableOpacity>
+          <View style={[ms.mastheadLine, { backgroundColor: theme.gold + '25' }]} />
         </View>
 
         {/* Today shortcut */}
@@ -346,7 +388,7 @@ export default function CalendarModal({
         </View>
 
         {/* Separator */}
-        <View style={[ms.sep, { backgroundColor: theme.border }]} />
+        <View style={[ms.sep, { backgroundColor: theme.gold + '20' }]} />
 
         {/* Calendar grid */}
         <Animated.View style={{ opacity: monthFade }}>
@@ -359,7 +401,7 @@ export default function CalendarModal({
                 date.setHours(0, 0, 0, 0);
                 const isT = isSameDay(date, today);
                 const isSel = isSameDay(date, selectedDate);
-                const isFut = date > maxDate;
+                const metadata = dayMetadata[day];
 
                 return (
                   <DayCell
@@ -367,9 +409,9 @@ export default function CalendarModal({
                     day={day}
                     isToday={isT}
                     isSelected={isSel}
-                    isDisabled={isFut}
-                    isFuture={date > today}
-                    isPast={date < today}
+                    isDisabled={date > maxDate}
+                    hasEvents={!!metadata}
+                    impactLevel={getImpactLevel(day)}
                     theme={theme}
                     isDark={isDark}
                     gold={gold}
@@ -382,12 +424,20 @@ export default function CalendarModal({
         </Animated.View>
 
         {/* Footer hint */}
-        <View style={ms.footer}>
-          <View style={[ms.footerLine, { backgroundColor: theme.border }]} />
-          <Text style={[ms.footerText, { color: theme.subtext }]}>
-            Select a date to explore its history
-          </Text>
-          <View style={[ms.footerLine, { backgroundColor: theme.border }]} />
+        <View style={ms.footerWrap}>
+          {!isCurrentMonth && (
+            <TouchableOpacity onPress={goToToday} activeOpacity={0.65} style={[ms.todayChip, { backgroundColor: `${gold}12` }]}>
+              <Text style={[ms.todayChipText, { color: gold }]}>BACK TO TODAY</Text>
+            </TouchableOpacity>
+          )}
+          
+          <View style={ms.footer}>
+            <View style={[ms.footerLine, { backgroundColor: theme.gold + '30' }]} />
+            <Text style={[ms.footerText, { color: theme.subtext }]}>
+              ✦ AI SCORING ACTIVE ✦
+            </Text>
+            <View style={[ms.footerLine, { backgroundColor: theme.gold + '30' }]} />
+          </View>
         </View>
       </Animated.View>
     </Modal>
@@ -401,34 +451,35 @@ const ms = StyleSheet.create({
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingHorizontal: 20,
-    // shadow
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 24,
-    elevation: 20,
   },
   handleRow: { alignItems: 'center', paddingTop: 12, paddingBottom: 6 },
   handle: { width: 36, height: 4, borderRadius: 2 },
 
   monthHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: 14, paddingHorizontal: 4,
+    paddingVertical: 20, gap: 10,
   },
+  mastheadLine: { flex: 1, height: StyleSheet.hairlineWidth },
+  monthCenter: { alignItems: 'center', gap: 2 },
+  mastheadLabel: {
+    fontSize: 13, fontWeight: '800', letterSpacing: 4, fontFamily: SANS,
+  },
+  mastheadIssue: {
+    fontSize: 11, fontWeight: '700', letterSpacing: 1.5,
+    fontFamily: SERIF, fontStyle: 'italic',
+  },
+
   monthArrow: {
-    width: 36, height: 36, borderRadius: 18,
+    width: 32, height: 32, borderRadius: 16,
     alignItems: 'center', justifyContent: 'center',
   },
-  monthCenter: { flex: 1, alignItems: 'center' },
-  monthName: { fontSize: 22, fontWeight: '800', letterSpacing: -0.3, fontFamily: SERIF },
-  yearLabel: { fontSize: 12, fontWeight: '700', letterSpacing: 2, marginTop: 2, textTransform: 'uppercase' },
 
+  footerWrap: { marginTop: 16, gap: 16 },
   todayChip: {
     alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1,
-    marginBottom: 10,
+    paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8,
   },
-  todayChipText: { fontSize: 12, fontWeight: '700', letterSpacing: 0.3 },
+  todayChipText: { fontSize: 10, fontWeight: '800', letterSpacing: 2 },
 
   weekdayRow: { flexDirection: 'row', justifyContent: 'center', paddingBottom: 8, paddingTop: 4 },
   weekdayCell: { alignItems: 'center' },

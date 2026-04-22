@@ -48,4 +48,32 @@ export const authService = {
       throw error;
     }
   },
+
+  async loginWithApple(identityToken: string, firstName?: string | null, lastName?: string | null) {
+    try {
+      const fullName = [firstName, lastName].filter(Boolean).join(' ') || undefined;
+      const res = await api.post('/auth/apple', {
+        idToken: identityToken,
+        fullName,
+      });
+
+      const { token, ...userFromBackend } = res.data;
+
+      if (!token) {
+        throw new Error('Token lipsă de la server');
+      }
+
+      const userData = {
+        ...userFromBackend,
+        avatar_url: userFromBackend.avatarUrl || userFromBackend.avatar_url,
+        provider: 'apple',
+      };
+
+      useAuthStore.getState().setAuth(token, userData);
+      return res.data;
+    } catch (error: any) {
+      console.error('APPLE LOGIN ERROR:', error.response?.data || error.message);
+      throw error;
+    }
+  },
 };

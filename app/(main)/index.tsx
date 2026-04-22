@@ -27,7 +27,6 @@ import AchievementToast from '../../components/AchievementToast';
 import AdCard from '../../components/AdCard';
 import CalendarModal from '../../components/CalendarModal';
 import { DiscoverSection } from '../../components/DiscoverSection';
-import GetProButton from '../../components/GetProButton';
 import { HistoryCard } from '../../components/HistoryCard';
 import LeaderboardModal from '../../components/LeaderboardModal';
 import LockedTomorrowCard from '../../components/LockedTomorrowCard';
@@ -144,28 +143,344 @@ const PremiumAccentLine = () => {
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
-// PROFILE WITH XP — Ring around avatar + level badge corner
-// Visualizes XP progress around the profile pic; level in badge.
-//
-// NOTE: Adjust the XP formula in computeProgress() below to match your store's
-// level system if it's not linear (level N = N*100 XP).
+// PRO PEEK HINT — Placed BETWEEN the free card and the PRO card.
+// Big animated downward arrow with a golden glow trail. The arrow bobs up-down
+// gently while 3 accent rings pulse outward from behind it. This is the
+// "hey, there's a PRO event below!" moment. Symmetric and impossible to miss.
 // ═════════════════════════════════════════════════════════════════════════════
-const AVATAR_SLOT = 44;
+const ProPeekHint = ({ gold, onPress }: { gold: string; onPress: () => void }) => {
+  const bob = useRef(new Animated.Value(0)).current;
+  const ring1 = useRef(new Animated.Value(0)).current;
+  const ring2 = useRef(new Animated.Value(0)).current;
+  const ring3 = useRef(new Animated.Value(0)).current;
+  const shimmer = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    // Arrow bobs up and down continuously
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(bob, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(bob, { toValue: 0, duration: 900, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      ]),
+    ).start();
+
+    // Three rings pulse outward — staggered so one is always expanding
+    const pulse = (val: Animated.Value, delay: number) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(val, { toValue: 1, duration: 2100, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+          Animated.timing(val, { toValue: 0, duration: 0, useNativeDriver: true }),
+        ]),
+      );
+    pulse(ring1, 0).start();
+    pulse(ring2, 700).start();
+    pulse(ring3, 1400).start();
+
+    // Soft shimmer for the gold accent lines
+    Animated.loop(
+      Animated.timing(shimmer, { toValue: 1, duration: 2400, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+    ).start();
+  }, []);
+
+  const arrowY = bob.interpolate({ inputRange: [0, 1], outputRange: [-4, 8] });
+  const arrowScale = bob.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 1.08, 1] });
+  const lineOp = shimmer.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.25, 0.75, 0.25] });
+
+  const ringStyle = (val: Animated.Value) => ({
+    transform: [{
+      scale: val.interpolate({ inputRange: [0, 1], outputRange: [0.4, 2.2] }),
+    }],
+    opacity: val.interpolate({ inputRange: [0, 0.1, 1], outputRange: [0, 0.55, 0] }),
+  });
+
+  return (
+    <TouchableOpacity activeOpacity={0.8} onPress={onPress} style={_peek.wrap}>
+      {/* Left shimmering gold line */}
+      <Animated.View style={[_peek.sideLine, { backgroundColor: gold, opacity: lineOp }]} />
+
+      {/* Center arrow area with expanding rings */}
+      <View style={_peek.centerBox}>
+        {/* Pulsing concentric rings */}
+        <Animated.View style={[_peek.ring, { borderColor: gold }, ringStyle(ring1)]} />
+        <Animated.View style={[_peek.ring, { borderColor: gold }, ringStyle(ring2)]} />
+        <Animated.View style={[_peek.ring, { borderColor: gold }, ringStyle(ring3)]} />
+
+        {/* Static gold-glow disc behind arrow */}
+        <View style={[_peek.disc, { backgroundColor: gold + '18', borderColor: gold + '40' }]} />
+
+        {/* Bobbing arrow */}
+        <Animated.View style={[_peek.arrow, {
+          transform: [{ translateY: arrowY }, { scale: arrowScale }],
+        }]}>
+          <Ionicons name="chevron-down" size={28} color={gold} />
+        </Animated.View>
+      </View>
+
+      {/* Right shimmering gold line */}
+      <Animated.View style={[_peek.sideLine, { backgroundColor: gold, opacity: lineOp }]} />
+    </TouchableOpacity>
+  );
+};
+
+const _peek = StyleSheet.create({
+  wrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 14,
+    paddingHorizontal: 24,
+    paddingVertical: 18,
+    height: 80,
+  },
+  sideLine: {
+    flex: 1,
+    height: 1,
+    borderRadius: 0.5,
+    maxWidth: 80,
+  },
+  centerBox: {
+    width: 52,
+    height: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ring: {
+    position: 'absolute',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1.5,
+  },
+  disc: {
+    position: 'absolute',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  arrow: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// PRO CARD SECTION — Magazine-style editorial PRO card
+// Same height as the free card above for perfect symmetry
+// For non-pro users: an editorial unlock overlay with serif hairline design
+// ═════════════════════════════════════════════════════════════════════════════
+const PRO_CARD_H = H * 0.65;
+const SERIF_FONT = Platform.OS === 'ios' ? 'Georgia' : 'serif';
+
+const ProCardSection = ({ event, allEvents, gold, isPro, onPaywall }: {
+  event: any; allEvents: any[]; gold: string; isPro: boolean; onPaywall: () => void;
+}) => {
+  const shimmer = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!isPro) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(shimmer, { toValue: 1, duration: 2400, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+          Animated.timing(shimmer, { toValue: 0, duration: 2600, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        ]),
+      ).start();
+    }
+  }, [isPro]);
+
+  const ruleOp = shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.85] });
+
+  return (
+    <View style={[_proSec.cardWrap, { height: PRO_CARD_H }]}>
+      <HistoryCard event={event} allEvents={allEvents} />
+      {!isPro && (
+        <TouchableOpacity activeOpacity={0.92} onPress={onPaywall}
+          style={[StyleSheet.absoluteFill, _proSec.locked]}>
+          <LinearGradient
+            colors={['rgba(5,4,10,0.55)', 'rgba(5,4,10,0.92)', 'rgba(5,4,10,0.98)']}
+            locations={[0, 0.5, 1]}
+            style={StyleSheet.absoluteFill}
+          />
+
+          {/* Editorial hairline frame */}
+          <View style={[_proSec.frame, { borderColor: gold + '30' }]} pointerEvents="none" />
+
+          {/* Kicker row */}
+          <View style={_proSec.kickerRow}>
+            <Animated.View style={[_proSec.kickerRule, { backgroundColor: gold, opacity: ruleOp }]} />
+            <Text style={[_proSec.kicker, { color: gold }]}>✦  PRO EDITION</Text>
+            <Animated.View style={[_proSec.kickerRule, { backgroundColor: gold, opacity: ruleOp }]} />
+          </View>
+
+          {/* Serif headline */}
+          <Text style={[_proSec.headline, { color: '#F5ECD7' }]}>The Archive</Text>
+          <Text style={[_proSec.subhead, { color: gold }]}>—  Unlocked  —</Text>
+
+          {/* Description */}
+          <Text style={_proSec.desc}>
+            Exclusive editorial stories, curated daily for the history devoted.
+          </Text>
+
+          {/* CTA */}
+          <View style={[_proSec.cta, { borderColor: gold, backgroundColor: gold + '12' }]}>
+            <Ionicons name="lock-open" size={14} color={gold} />
+            <Text style={[_proSec.ctaT, { color: gold }]}>UNLOCK THE ARCHIVE</Text>
+            <Ionicons name="arrow-forward" size={14} color={gold} />
+          </View>
+
+          {/* Footer meta */}
+          <Text style={_proSec.footer}>CURATED · HISTORICAL · EDITORIAL</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+};
+
+const _proSec = StyleSheet.create({
+  cardWrap: { position: 'relative' },
+  locked: {
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 40,
+    overflow: 'hidden',
+  },
+  frame: {
+    position: 'absolute',
+    top: 18, left: 18, right: 18, bottom: 18,
+    borderRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  kickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 22,
+  },
+  kickerRule: { width: 26, height: 1, borderRadius: 0.5 },
+  kicker: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 3.2,
+  },
+  headline: {
+    fontSize: 44,
+    fontWeight: '800',
+    letterSpacing: -0.8,
+    fontFamily: SERIF_FONT,
+    textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 10,
+  },
+  subhead: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 3,
+    marginTop: 6,
+    marginBottom: 18,
+    textTransform: 'uppercase',
+  },
+  desc: {
+    color: 'rgba(245,236,215,0.65)',
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'center',
+    fontStyle: 'italic',
+    fontFamily: SERIF_FONT,
+    maxWidth: 280,
+    marginBottom: 28,
+  },
+  cta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 2,
+    borderWidth: 1,
+  },
+  ctaT: {
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 2.2,
+  },
+  footer: {
+    position: 'absolute',
+    bottom: 34,
+    color: 'rgba(245,236,215,0.32)',
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 3,
+  },
+});
+
+
+// ═════════════════════════════════════════════════════════════════════════════
+// PRO STAR BUTTON — Compact gold star button for the header.
+// Replaces the wide "GET PRO" button. Just a star icon with subtle pulse
+// animation to draw attention without taking horizontal space.
+// ═════════════════════════════════════════════════════════════════════════════
+const ProStarButton = ({ gold, onPress }: { gold: string; onPress: () => void }) => {
+  const pulse = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 1400, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 1400, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ]),
+    ).start();
+  }, []);
+
+  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.12] });
+  const glow = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.7] });
+
+  return (
+    <TouchableOpacity activeOpacity={0.7} onPress={onPress} style={_proStar.btn}>
+      {/* Glow backdrop */}
+      <Animated.View style={[_proStar.glow, {
+        backgroundColor: gold + '25',
+        opacity: glow,
+        transform: [{ scale }],
+      }]} />
+      {/* Star icon */}
+      <Ionicons name="star" size={19} color={gold} />
+    </TouchableOpacity>
+  );
+};
+
+const _proStar = StyleSheet.create({
+  btn: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  glow: {
+    position: 'absolute',
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+  },
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// PROFILE WITH XP — Ring around avatar + level badge corner
+// ═════════════════════════════════════════════════════════════════════════════
+const AVATAR_SLOT = 38;
 const RING_STROKE = 2;
 const RING_R = (AVATAR_SLOT - RING_STROKE) / 2;
 const RING_C = 2 * Math.PI * RING_R;
 
 const ProfileWithXP = ({ gold, theme, isDark }: { gold: string; theme: any; isDark: boolean }) => {
-  // Read gamification state — graceful fallbacks if field names differ
   const level = useGamificationStore((s: any) => s.level ?? 1);
   const xp    = useGamificationStore((s: any) => s.xp ?? s.totalXP ?? 0);
-
-  // Animate the ring fill on mount and when XP changes
   const fillAnim = useRef(new Animated.Value(0)).current;
 
   const progress = useMemo(() => {
-    // Linear formula: each level needs `level * 100` cumulative XP.
-    // If your store uses a different curve, change this.
     const curBase = (level - 1) * 100;
     const nextBase = level * 100;
     const span = Math.max(1, nextBase - curBase);
@@ -174,59 +489,30 @@ const ProfileWithXP = ({ gold, theme, isDark }: { gold: string; theme: any; isDa
 
   useEffect(() => {
     Animated.timing(fillAnim, {
-      toValue: progress,
-      duration: 900,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: false,
+      toValue: progress, duration: 900,
+      easing: Easing.out(Easing.cubic), useNativeDriver: false,
     }).start();
   }, [progress]);
 
   const dashOffset = fillAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [RING_C, 0],
+    inputRange: [0, 1], outputRange: [RING_C, 0],
   });
 
   const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
   return (
     <View style={pwx.wrap}>
-      {/* Progress ring */}
       <Svg width={AVATAR_SLOT} height={AVATAR_SLOT} style={StyleSheet.absoluteFill}>
-        {/* Background track */}
-        <Circle
-          cx={AVATAR_SLOT / 2}
-          cy={AVATAR_SLOT / 2}
-          r={RING_R}
-          stroke={gold + '25'}
-          strokeWidth={RING_STROKE}
-          fill="none"
-        />
-        {/* Progress arc */}
-        <AnimatedCircle
-          cx={AVATAR_SLOT / 2}
-          cy={AVATAR_SLOT / 2}
-          r={RING_R}
-          stroke={gold}
-          strokeWidth={RING_STROKE}
-          fill="none"
-          strokeDasharray={RING_C}
-          strokeDashoffset={dashOffset}
-          strokeLinecap="round"
-          rotation="-90"
-          origin={`${AVATAR_SLOT / 2}, ${AVATAR_SLOT / 2}`}
-        />
+        <Circle cx={AVATAR_SLOT / 2} cy={AVATAR_SLOT / 2} r={RING_R}
+          stroke={gold + '25'} strokeWidth={RING_STROKE} fill="none" />
+        <AnimatedCircle cx={AVATAR_SLOT / 2} cy={AVATAR_SLOT / 2} r={RING_R}
+          stroke={gold} strokeWidth={RING_STROKE} fill="none"
+          strokeDasharray={RING_C} strokeDashoffset={dashOffset}
+          strokeLinecap="round" rotation="-90"
+          origin={`${AVATAR_SLOT / 2}, ${AVATAR_SLOT / 2}`} />
       </Svg>
-
-      {/* Avatar — centered inside the ring */}
-      <View style={pwx.avatarHolder}>
-        <ProfileAvatar />
-      </View>
-
-      {/* Level badge — floating on bottom-right */}
-      <View style={[pwx.levelBadge, {
-        backgroundColor: gold,
-        borderColor: theme.background,
-      }]}>
+      <View style={pwx.avatarHolder}><ProfileAvatar /></View>
+      <View style={[pwx.levelBadge, { backgroundColor: gold, borderColor: theme.background }]}>
         <Text style={pwx.levelText}>{level}</Text>
       </View>
     </View>
@@ -234,48 +520,19 @@ const ProfileWithXP = ({ gold, theme, isDark }: { gold: string; theme: any; isDa
 };
 
 const pwx = StyleSheet.create({
-  wrap: {
-    width: AVATAR_SLOT,
-    height: AVATAR_SLOT,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarHolder: {
-    width: AVATAR_SLOT - 8,
-    height: AVATAR_SLOT - 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  wrap: { width: AVATAR_SLOT, height: AVATAR_SLOT, alignItems: 'center', justifyContent: 'center' },
+  avatarHolder: { width: AVATAR_SLOT - 8, height: AVATAR_SLOT - 8, alignItems: 'center', justifyContent: 'center' },
   levelBadge: {
-    position: 'absolute',
-    bottom: -4,
-    right: -4,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    paddingHorizontal: 4,
-    borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 4,
+    position: 'absolute', bottom: -3, right: -3, minWidth: 16, height: 16,
+    borderRadius: 8, paddingHorizontal: 3, borderWidth: 2,
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 3, elevation: 4,
   },
-  levelText: {
-    fontSize: 9,
-    fontWeight: '900',
-    color: '#000',
-    letterSpacing: -0.3,
-    lineHeight: 11,
-  },
+  levelText: { fontSize: 8, fontWeight: '900', color: '#000', letterSpacing: -0.3, lineHeight: 10 },
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
 // PAGE WRAPPER — animated card that reacts to scroll position
-// Creates a subtle depth effect: center page full-opacity/scale, neighbors
-// smaller, dimmer, and pushed down slightly. All native-driven for 60fps.
 // ═════════════════════════════════════════════════════════════════════════════
 const AnimatedPage = ({
   dayOff, scrollX, children,
@@ -283,73 +540,19 @@ const AnimatedPage = ({
   const idx = dayOff + PAST_DAYS;
   const inputRange = [(idx - 1) * W, idx * W, (idx + 1) * W];
 
-  const scale = scrollX.interpolate({
-    inputRange,
-    outputRange: [0.92, 1, 0.92],
-    extrapolate: 'clamp',
-  });
-  const opacity = scrollX.interpolate({
-    inputRange,
-    outputRange: [0.4, 1, 0.4],
-    extrapolate: 'clamp',
-  });
-  const translateY = scrollX.interpolate({
-    inputRange,
-    outputRange: [14, 0, 14],
-    extrapolate: 'clamp',
-  });
+  const scale = scrollX.interpolate({ inputRange, outputRange: [0.92, 1, 0.92], extrapolate: 'clamp' });
+  const opacity = scrollX.interpolate({ inputRange, outputRange: [0.4, 1, 0.4], extrapolate: 'clamp' });
+  const translateY = scrollX.interpolate({ inputRange, outputRange: [14, 0, 14], extrapolate: 'clamp' });
 
   return (
     <Animated.View style={{
-      width: W,
-      paddingHorizontal: 16,
-      paddingTop: 12,
-      flex: 1,
-      transform: [{ scale }, { translateY }],
-      opacity,
+      width: W, paddingHorizontal: 16, paddingTop: 12, flex: 1,
+      transform: [{ scale }, { translateY }], opacity,
     }}>
       {children}
     </Animated.View>
   );
 };
-
-// ═════════════════════════════════════════════════════════════════════════════
-// PRO DIVIDER — animated gold separator hinting at pro content below
-// ═════════════════════════════════════════════════════════════════════════════
-const ProDivider = ({ gold }: { gold: string }) => {
-  const bounce = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(bounce, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(bounce, { toValue: 0, duration: 900, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-      ]),
-    ).start();
-  }, []);
-  const ty = bounce.interpolate({ inputRange: [0, 1], outputRange: [0, 5] });
-  return (
-    <View style={_pd.wrap}>
-      <View style={_pd.row}>
-        <View style={[_pd.line, { backgroundColor: gold + '30' }]} />
-        <View style={[_pd.pill, { backgroundColor: gold + '15' }]}>
-          <Ionicons name="sparkles" size={10} color={gold} />
-          <Text style={[_pd.pillT, { color: gold }]}>PRO</Text>
-        </View>
-        <View style={[_pd.line, { backgroundColor: gold + '30' }]} />
-      </View>
-      <Animated.View style={{ transform: [{ translateY: ty }] }}>
-        <Ionicons name="chevron-down" size={16} color={gold + '60'} />
-      </Animated.View>
-    </View>
-  );
-};
-const _pd = StyleSheet.create({
-  wrap: { alignItems: 'center', paddingVertical: 14, gap: 6 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, width: '100%' },
-  line: { flex: 1, height: 1 },
-  pill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  pillT: { fontWeight: '800', fontSize: 10, letterSpacing: 1.5 },
-});
 
 // ═════════════════════════════════════════════════════════════════════════════
 // LOCKED PRO OVERLAY — shown on top of pro cards for non-pro users
@@ -486,7 +689,6 @@ export default function HomeScreen() {
       setLoading(false);
       setTick(t => t + 1);
       fetchAll();
-      // Prefetch pro data + older free days
       fetchOne(0, 'pro').catch(() => {}); fetchOne(-1, 'pro').catch(() => {}); fetchOne(1, 'pro').catch(() => {});
       for (let i = 2; i <= 7; i++) { fetchOne(-i).catch(() => { }); fetchOne(-i, 'pro').catch(() => {}); }
       const notifPref = await AsyncStorage.getItem('notifications_enabled');
@@ -519,7 +721,6 @@ export default function HomeScreen() {
       const key2 = mk('free', isoFor(newOff + 1));
       if (!mem.current[key1]) fetchOne(newOff - 1).then(() => setTick(t => t + 1)).catch(() => { });
       if (!mem.current[key2]) fetchOne(newOff + 1).then(() => setTick(t => t + 1)).catch(() => { });
-      // Prefetch pro data for current ± 1
       fetchOne(newOff, 'pro').catch(() => {});
       fetchOne(newOff - 1, 'pro').catch(() => {});
       fetchOne(newOff + 1, 'pro').catch(() => {});
@@ -563,7 +764,7 @@ export default function HomeScreen() {
 
   const goldColor = isPremium ? '#D4A843' : theme.gold;
 
-  // ── Item renderer — wrapped in AnimatedPage for depth effect ──
+  // ── Item renderer ──
   const sortByImpact = (a: any, b: any) => (b.impactScore ?? 0) - (a.impactScore ?? 0);
 
   const renderItem = useCallback(({ item: dayOff }: { item: number }) => {
@@ -595,51 +796,71 @@ export default function HomeScreen() {
         if (freePg.empty || !freeMain) {
           content = <EmptyDay isToday={pi.isToday} theme={theme} t={t} />;
         } else if (proMain) {
-          // Free card + scrollable PRO card below
+          // ── Symmetric layout: Free card + animated arrow between + PRO card ──
           content = (
-            <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} nestedScrollEnabled>
-              <View style={{ height: CARD_H }}>
+            <ScrollView
+              style={{ flex: 1 }}
+              showsVerticalScrollIndicator={false}
+              nestedScrollEnabled
+              bounces={false}
+            >
+              {/* Free main event — same size as PRO below */}
+              <View style={{ height: H * 0.65 }}>
                 <HistoryCard event={freeMain} allEvents={allEvents} />
               </View>
-              <ProDivider gold={goldColor} />
-              <View style={{ height: CARD_H, position: 'relative' }}>
-                {isPro ? (
-                  <HistoryCard event={proMain} allEvents={allEvents} />
-                ) : (
-                  <>
-                    <HistoryCard event={proMain} allEvents={allEvents} />
-                    <LockedProOverlay gold={goldColor} onPress={() => presentPaywall()} />
-                  </>
-                )}
-              </View>
-              <View style={{ height: 20 }} />
+
+              {/* Animated arrow between the two cards */}
+              <ProPeekHint gold={goldColor} onPress={() => {
+                if (!isPro) presentPaywall();
+              }} />
+
+              {/* PRO card — exact same height as free card for symmetry */}
+              <ProCardSection
+                event={proMain}
+                allEvents={allEvents}
+                gold={goldColor}
+                isPro={isPro}
+                onPaywall={() => presentPaywall()}
+              />
+              <View style={{ height: 40 }} />
             </ScrollView>
           );
         } else {
+          // No PRO content — full screen card, no scroll needed
           content = <HistoryCard event={freeMain} allEvents={allEvents} />;
         }
       } else {
         // Discover tab
         if (proSorted.length > 0) {
           content = (
-            <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} nestedScrollEnabled>
-              <View style={{ height: H * 0.58 }}>
+            <ScrollView
+              style={{ flex: 1 }}
+              showsVerticalScrollIndicator={false}
+              nestedScrollEnabled
+              bounces={false}
+            >
+              {/* Discover section — same size as PRO cards below */}
+              <View style={{ height: H * 0.65 }}>
                 <DiscoverSection events={freeSorted} theme={theme} t={t} />
               </View>
-              <ProDivider gold={goldColor} />
+
+              {/* Animated arrow between sections */}
+              <ProPeekHint gold={goldColor} onPress={() => {
+                if (!isPro) presentPaywall();
+              }} />
+
+              {/* PRO events — each same height as discover */}
               {proSorted.map((event: any, i: number) => (
-                <View key={event.id ?? i} style={{ height: CARD_H * 0.7, marginBottom: 10, position: 'relative' }}>
-                  {isPro ? (
-                    <HistoryCard event={event} allEvents={allEvents} />
-                  ) : (
-                    <>
-                      <HistoryCard event={event} allEvents={allEvents} />
-                      <LockedProOverlay gold={goldColor} onPress={() => presentPaywall()} />
-                    </>
-                  )}
-                </View>
+                <ProCardSection
+                  key={event.id ?? i}
+                  event={event}
+                  allEvents={allEvents}
+                  gold={goldColor}
+                  isPro={isPro}
+                  onPaywall={() => presentPaywall()}
+                />
               ))}
-              <View style={{ height: 20 }} />
+              <View style={{ height: 40 }} />
             </ScrollView>
           );
         } else {
@@ -709,16 +930,17 @@ export default function HomeScreen() {
               </View>
 
               <View style={ms.headerRight}>
-                {!isPro && <GetProButton variant="header" gold={goldColor} />}
+                {/* Compact PRO star button — replaces the wide Get Pro button */}
+                {!isPro && <ProStarButton gold={goldColor} onPress={() => presentPaywall()} />}
 
                 <TouchableOpacity onPress={() => { haptic('light'); setLeadVis(true); }}
                   activeOpacity={0.6} style={ms.iconBtn}>
-                  <Trophy size={19} color={theme.subtext} strokeWidth={1.8} />
+                  <Trophy size={18} color={theme.subtext} strokeWidth={1.8} />
                 </TouchableOpacity>
 
                 <TouchableOpacity onPress={() => switchTab('search')} activeOpacity={0.6}
                   style={[ms.iconBtn, { backgroundColor: tab === 'search' ? goldColor + '18' : 'transparent' }]}>
-                  <Search size={19} color={tab === 'search' ? goldColor : theme.subtext} strokeWidth={1.8} />
+                  <Search size={18} color={tab === 'search' ? goldColor : theme.subtext} strokeWidth={1.8} />
                 </TouchableOpacity>
 
                 <TouchableOpacity onPress={() => { haptic('light'); setAchVis(true); }}
@@ -728,7 +950,7 @@ export default function HomeScreen() {
                     borderColor: badgeCnt > 0 ? goldColor + '40' : isPremium ? '#2A2230' : 'transparent',
                     borderWidth: badgeCnt > 0 || isPremium ? 1 : 0,
                   }]}>
-                  <Award size={19} color={badgeCnt > 0 ? goldColor : theme.subtext} strokeWidth={1.8} />
+                  <Award size={18} color={badgeCnt > 0 ? goldColor : theme.subtext} strokeWidth={1.8} />
                   {badgeCnt > 0 && (
                     <View style={[ms.achBadge, { backgroundColor: isPremium ? '#C17B2A' : '#FF6D00' }]}>
                       <Text style={ms.achBadgeT}>{badgeCnt}</Text>
@@ -737,8 +959,6 @@ export default function HomeScreen() {
                 </TouchableOpacity>
 
                 <StreakIcon />
-
-                {/* Profile with XP ring + level badge */}
                 <ProfileWithXP gold={goldColor} theme={theme} isDark={isDark} />
               </View>
             </View>
@@ -760,11 +980,8 @@ export default function HomeScreen() {
                       backgroundColor: info.isToday ? goldColor : 'transparent',
                       borderColor: info.isToday ? goldColor : isPremium ? '#2A2230' : theme.border,
                       ...(isPremium && info.isToday && {
-                        shadowColor: '#D4A843',
-                        shadowOffset: { width: 0, height: 0 },
-                        shadowOpacity: 0.4,
-                        shadowRadius: 8,
-                        elevation: 6,
+                        shadowColor: '#D4A843', shadowOffset: { width: 0, height: 0 },
+                        shadowOpacity: 0.4, shadowRadius: 8, elevation: 6,
                       }),
                     }]}>
                       <Text style={[ms.dayNum, {
@@ -863,13 +1080,7 @@ export default function HomeScreen() {
                 setBannerError(false);
               }}
               onAdFailedToLoad={(err: any) => {
-                console.warn(
-                  '[Ads][Banner-bottom] FAILED',
-                  '\n  code   :', err?.code ?? '(none)',
-                  '\n  message:', err?.message ?? '(none)',
-                  '\n  raw    :', JSON.stringify(err, Object.getOwnPropertyNames(err ?? {})),
-                  '\n  unitId :', AD_UNIT_IDS.BANNER,
-                );
+                console.warn('[Ads][Banner-bottom] FAILED', err?.message);
                 setBannerError(true);
               }}
               onAdOpened={() => console.log('[Ads][Banner-bottom] OPENED')}
@@ -889,6 +1100,7 @@ export default function HomeScreen() {
           onSelectDate={(d: Date) => jump(d2o(d))}
           selectedDate={offDate(off)}
           maxFutureOffset={MAX_FWD}
+          events={allEvents}
         />
         <StoryModal
           visible={!!notifEvent}
@@ -908,69 +1120,35 @@ export default function HomeScreen() {
 const makeStyles = (theme: any, isDark: boolean, isPremium: boolean) => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.background },
 
-  // Chrome
   chrome: {
     backgroundColor: isPremium ? 'transparent' : theme.background,
     paddingHorizontal: 20,
     overflow: 'hidden',
   },
   brandRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: 10,
-    paddingBottom: 14,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingTop: 10, paddingBottom: 14,
   },
   brandLeft: { gap: 1 },
   brandLabel: {
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 4,
+    fontSize: 9, fontWeight: '700', letterSpacing: 4,
     opacity: isPremium ? 0.8 : 0.6,
   },
   brandTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    letterSpacing: 0.5,
+    fontSize: 22, fontWeight: '800', letterSpacing: 0.5,
     fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
   },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  iconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  iconBtn: { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   achBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 3,
+    position: 'absolute', top: -4, right: -4, minWidth: 16, height: 16,
+    borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3,
   },
   achBadgeT: { fontSize: 9, fontWeight: '900', color: '#FFF' },
 
-  // Date nav
   dateNav: { flexDirection: 'row', alignItems: 'center', paddingBottom: 14 },
-  navArrow: {
-    width: 32, height: 32, borderRadius: 16,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  navArrowIcon: {
-    fontSize: 28,
-    fontWeight: '300',
-    lineHeight: 30,
-    marginTop: -1,
-  },
+  navArrow: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  navArrowIcon: { fontSize: 28, fontWeight: '300', lineHeight: 30, marginTop: -1 },
   dateCenter: { flex: 1, alignItems: 'center' },
   datePrimary: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   dayCircle: {
@@ -987,19 +1165,14 @@ const makeStyles = (theme: any, isDark: boolean, isPremium: boolean) => StyleShe
     alignItems: 'center', justifyContent: 'center', borderWidth: 1,
   },
 
-  // Loading
   loadW: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   loadP: {
     width: 56, height: 56, borderRadius: 28, borderWidth: 2,
     alignItems: 'center', justifyContent: 'center',
   },
 
-  // Banner
   bannerWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 4,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    minHeight: 58,
+    alignItems: 'center', justifyContent: 'center', paddingVertical: 4,
+    borderTopWidth: StyleSheet.hairlineWidth, minHeight: 58,
   },
 });

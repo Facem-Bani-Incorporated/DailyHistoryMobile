@@ -1,23 +1,25 @@
+import { Ionicons } from '@expo/vector-icons';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ArrowLeft, Eye, EyeOff } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Animated,
-    Dimensions,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Animated,
+  Dimensions,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
@@ -116,6 +118,34 @@ export default function RegisterScreen() {
         'Eroare Server',
         error.response?.data?.message || 'Validarea Google a eșuat.'
       );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAppleSignIn = async () => {
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+
+      if (credential.identityToken) {
+        setIsLoading(true);
+        await authService.loginWithApple(
+          credential.identityToken,
+          credential.fullName?.givenName,
+          credential.fullName?.familyName
+        );
+      }
+    } catch (e: any) {
+      if (e.code === 'ERR_CANCELED') {
+        // Utilizatorul a închis fereastra
+      } else {
+        Alert.alert('Eroare Apple', 'Nu s-a putut efectua autentificarea cu Apple.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -236,6 +266,25 @@ export default function RegisterScreen() {
 
         {/* Form */}
         <Animated.View style={[styles.form, { opacity: formFadeAnim, transform: [{ translateY: formSlideAnim }] }]}>
+
+          {/* Apple Button (Only show on iOS) */}
+          {Platform.OS === 'ios' && (
+            <TouchableOpacity
+              style={[styles.googleButton, { backgroundColor: '#000', marginBottom: 12 }]}
+              onPress={handleAppleSignIn}
+              disabled={isLoading}
+              activeOpacity={0.7}
+            >
+              {isLoading ? (
+                <ActivityIndicator color="#FFF" />
+              ) : (
+                <>
+                  <Ionicons name="logo-apple" size={20} color="#FFF" />
+                  <Text style={[styles.googleButtonText, { color: '#FFF' }]}>Continue with Apple</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
 
           {/* Google Button */}
           <TouchableOpacity

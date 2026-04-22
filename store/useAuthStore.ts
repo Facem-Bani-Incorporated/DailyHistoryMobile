@@ -9,7 +9,7 @@ export interface User {
   username?: string;
   avatar_url?: string | null;
   picture?: string | null;
-  provider: 'google' | 'standard';
+  provider: 'google' | 'apple' | 'standard';
   roles?: string[];
 
   // permite orice alt câmp din backend
