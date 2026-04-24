@@ -502,33 +502,35 @@ const ProfileWithXP = ({ gold, theme, isDark }: { gold: string; theme: any; isDa
 
   return (
     <View style={pwx.wrap}>
-      <Svg width={AVATAR_SLOT} height={AVATAR_SLOT} style={StyleSheet.absoluteFill}>
-        <Circle cx={AVATAR_SLOT / 2} cy={AVATAR_SLOT / 2} r={RING_R}
-          stroke={gold + '25'} strokeWidth={RING_STROKE} fill="none" />
-        <AnimatedCircle cx={AVATAR_SLOT / 2} cy={AVATAR_SLOT / 2} r={RING_R}
-          stroke={gold} strokeWidth={RING_STROKE} fill="none"
-          strokeDasharray={RING_C} strokeDashoffset={dashOffset}
-          strokeLinecap="round" rotation="-90"
-          origin={`${AVATAR_SLOT / 2}, ${AVATAR_SLOT / 2}`} />
-      </Svg>
-      <View style={pwx.avatarHolder}><ProfileAvatar /></View>
-      <View style={[pwx.levelBadge, { backgroundColor: gold, borderColor: theme.background }]}>
-        <Text style={pwx.levelText}>{level}</Text>
+      <View style={pwx.avatarArea}>
+        <Svg width={AVATAR_SLOT} height={AVATAR_SLOT} style={StyleSheet.absoluteFill}>
+          <Circle cx={AVATAR_SLOT / 2} cy={AVATAR_SLOT / 2} r={RING_R}
+            stroke={gold + '25'} strokeWidth={RING_STROKE} fill="none" />
+          <AnimatedCircle cx={AVATAR_SLOT / 2} cy={AVATAR_SLOT / 2} r={RING_R}
+            stroke={gold} strokeWidth={RING_STROKE} fill="none"
+            strokeDasharray={RING_C} strokeDashoffset={dashOffset}
+            strokeLinecap="round" rotation="-90"
+            origin={`${AVATAR_SLOT / 2}, ${AVATAR_SLOT / 2}`} />
+        </Svg>
+        <View style={pwx.avatarHolder}><ProfileAvatar /></View>
       </View>
+      <Text style={[pwx.levelText, { color: gold }]} numberOfLines={1}>
+        LVL {level}
+      </Text>
     </View>
   );
 };
 
 const pwx = StyleSheet.create({
-  wrap: { width: AVATAR_SLOT, height: AVATAR_SLOT, alignItems: 'center', justifyContent: 'center' },
+  wrap: { alignItems: 'center', justifyContent: 'center' },
+  avatarArea: { width: AVATAR_SLOT, height: AVATAR_SLOT, alignItems: 'center', justifyContent: 'center' },
   avatarHolder: { width: AVATAR_SLOT - 8, height: AVATAR_SLOT - 8, alignItems: 'center', justifyContent: 'center' },
-  levelBadge: {
-    position: 'absolute', bottom: -3, right: -3, minWidth: 16, height: 16,
-    borderRadius: 8, paddingHorizontal: 3, borderWidth: 2,
-    alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 3, elevation: 4,
+  levelText: {
+    fontSize: 8,
+    fontWeight: '900',
+    letterSpacing: 1.2,
+    marginTop: 3,
   },
-  levelText: { fontSize: 8, fontWeight: '900', color: '#000', letterSpacing: -0.3, lineHeight: 10 },
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -830,42 +832,21 @@ export default function HomeScreen() {
           content = <HistoryCard event={freeMain} allEvents={allEvents} />;
         }
       } else {
-        // Discover tab
-        if (proSorted.length > 0) {
-          content = (
-            <ScrollView
-              style={{ flex: 1 }}
-              showsVerticalScrollIndicator={false}
-              nestedScrollEnabled
-              bounces={false}
-            >
-              {/* Discover section — same size as PRO cards below */}
-              <View style={{ height: H * 0.65 }}>
-                <DiscoverSection events={freeSorted} theme={theme} t={t} />
-              </View>
-
-              {/* Animated arrow between sections */}
-              <ProPeekHint gold={goldColor} onPress={() => {
-                if (!isPro) presentPaywall();
-              }} />
-
-              {/* PRO events — each same height as discover */}
-              {proSorted.map((event: any, i: number) => (
-                <ProCardSection
-                  key={event.id ?? i}
-                  event={event}
-                  allEvents={allEvents}
-                  gold={goldColor}
-                  isPro={isPro}
-                  onPaywall={() => presentPaywall()}
-                />
-              ))}
-              <View style={{ height: 40 }} />
-            </ScrollView>
-          );
-        } else {
-          content = <DiscoverSection events={freeSorted} theme={theme} t={t} />;
-        }
+        // Discover tab — merge pro + free into one editorial grid.
+        // PRO events keep the gold star badge and route to paywall on tap when not subscribed.
+        const combinedSorted = [
+          ...freeSorted,
+          ...proSorted.map((e: any) => ({ ...e, isPro: true })),
+        ].sort(sortByImpact);
+        content = (
+          <DiscoverSection
+            events={combinedSorted}
+            theme={theme}
+            t={t}
+            isPro={isPro}
+            onPaywall={() => presentPaywall()}
+          />
+        );
       }
     }
 

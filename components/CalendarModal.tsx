@@ -1,5 +1,6 @@
 // components/CalendarModal.tsx
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
@@ -19,8 +20,8 @@ import { useTheme } from '../context/ThemeContext';
 
 const { width: W, height: H } = Dimensions.get('window');
 const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
-const SANS = Platform.OS === 'ios' ? 'System' : 'sans-serif'; // Adăugat: Definiția SANS
-const CELL_SIZE = Math.floor((W - 64) / 7);
+const SANS = Platform.OS === 'ios' ? 'System' : 'sans-serif';
+const CELL_SIZE = Math.floor((W - 56) / 7);
 
 interface CalendarModalProps {
   visible: boolean;
@@ -32,11 +33,11 @@ interface CalendarModalProps {
 }
 
 const WEEKDAYS: Record<string, string[]> = {
-  en: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
-  ro: ['Dum', 'Lun', 'Mar', 'Mie', 'Joi', 'Vin', 'Sâm'],
-  fr: ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'],
-  de: ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'],
-  es: ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'],
+  en: ['S', 'M', 'T', 'W', 'T', 'F', 'S'],
+  ro: ['D', 'L', 'M', 'M', 'J', 'V', 'S'],
+  fr: ['D', 'L', 'M', 'M', 'J', 'V', 'S'],
+  de: ['S', 'M', 'D', 'M', 'D', 'F', 'S'],
+  es: ['D', 'L', 'M', 'M', 'J', 'V', 'S'],
 };
 
 const MONTHS: Record<string, string[]> = {
@@ -63,76 +64,111 @@ function getFirstDayOfMonth(year: number, month: number): number {
 const DayCell = React.memo(({
   day, isToday, isSelected, isDisabled, hasEvents, impactLevel, theme, isDark, gold, onPress,
 }: {
-  day: number; isToday: boolean; isSelected: boolean; isDisabled: boolean; 
+  day: number; isToday: boolean; isSelected: boolean; isDisabled: boolean;
   hasEvents: boolean; impactLevel: number; theme: any; isDark: boolean; gold: string;
   onPress: () => void;
 }) => {
   const scale = useRef(new Animated.Value(1)).current;
+  const pulse = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (isSelected) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulse, { toValue: 1, duration: 1600, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+          Animated.timing(pulse, { toValue: 0, duration: 1600, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        ]),
+      ).start();
+    } else {
+      pulse.setValue(0);
+    }
+  }, [isSelected]);
 
   const handlePressIn = () => {
     if (isDisabled) return;
-    Animated.spring(scale, { toValue: 0.85, tension: 300, friction: 15, useNativeDriver: true }).start();
+    Animated.spring(scale, { toValue: 0.88, tension: 300, friction: 15, useNativeDriver: true }).start();
   };
   const handlePressOut = () => {
     Animated.spring(scale, { toValue: 1, tension: 200, friction: 12, useNativeDriver: true }).start();
   };
 
-  // Color logic based on AI Impact Score
-  // 3: High Impact (>80), 2: Med (40-80), 1: Low (<40), 0: No Events
-  const getImpactColor = () => {
-    if (isSelected) return gold;
+  const haloScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.35] });
+  const haloOp = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0] });
+
+  const dotColor = () => {
     if (impactLevel === 3) return gold;
     if (impactLevel === 2) return isDark ? '#A88B4D' : '#8B7355';
-    if (impactLevel === 1) return isDark ? '#4A463F' : '#D1CDC7';
+    if (impactLevel === 1) return isDark ? '#5A564E' : '#B5B0A8';
     return 'transparent';
   };
 
-  const impactColor = getImpactColor();
-  
-  // If no events, we show a very subtle indicator or nothing (per user request)
-  if (!hasEvents && !isToday) {
-    return (
-      <View style={cs.cellWrap}>
-        <View style={[cs.emptyDot, { backgroundColor: theme.border + '40' }]} />
-      </View>
-    );
-  }
+  const dotSize = impactLevel === 3 ? 4 : impactLevel === 2 ? 3 : 2.5;
 
   return (
     <Pressable
       onPress={isDisabled ? undefined : onPress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
-      style={[cs.cellWrap, isDisabled && { opacity: 0.3 }]}
+      style={[cs.cellWrap, isDisabled && { opacity: 0.25 }]}
     >
+      {isSelected && (
+        <Animated.View style={[
+          cs.halo,
+          {
+            backgroundColor: gold,
+            opacity: haloOp,
+            transform: [{ scale: haloScale }],
+          },
+        ]} />
+      )}
+
       <Animated.View style={[
         cs.cell,
         {
-          backgroundColor: isSelected ? gold : 'transparent',
           transform: [{ scale }],
-          borderColor: isToday ? gold : 'transparent',
-          borderWidth: isToday && !isSelected ? 1 : 0,
+          backgroundColor: isSelected
+            ? gold
+            : isToday
+              ? (isDark ? '#2A251C' : '#F5EFE3')
+              : 'transparent',
         },
         isSelected && {
           shadowColor: gold,
-          shadowOpacity: 0.3,
-          shadowRadius: 8,
-          elevation: 4,
+          shadowOpacity: 0.5,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: 4 },
+          elevation: 8,
         },
       ]}>
         <Text style={[
           cs.cellText,
           {
-            color: isSelected ? '#000' : (impactLevel > 0 ? impactColor : theme.text),
+            color: isSelected
+              ? '#000'
+              : !hasEvents
+                ? (isDark ? theme.subtext + '70' : theme.subtext + '80')
+                : theme.text,
             fontFamily: SERIF,
-            fontWeight: impactLevel === 3 || isSelected ? '800' : '500',
-            fontSize: impactLevel === 3 ? 18 : 15,
+            fontWeight: isSelected ? '700' : isToday ? '700' : impactLevel === 3 ? '600' : '400',
           },
         ]}>
           {day}
         </Text>
-        {impactLevel === 3 && !isSelected && (
-          <View style={[cs.impactLine, { backgroundColor: gold }]} />
+
+        {hasEvents && !isSelected && (
+          <View style={[
+            cs.dot,
+            {
+              width: dotSize,
+              height: dotSize,
+              borderRadius: dotSize / 2,
+              backgroundColor: dotColor(),
+            },
+          ]} />
+        )}
+
+        {isToday && !isSelected && (
+          <View style={[cs.todayRing, { borderColor: gold }]} />
         )}
       </Animated.View>
     </Pressable>
@@ -140,25 +176,43 @@ const DayCell = React.memo(({
 });
 
 const cs = StyleSheet.create({
-  cellWrap: { width: CELL_SIZE, height: CELL_SIZE + 6, alignItems: 'center', justifyContent: 'center' },
-  cell: {
-    width: CELL_SIZE - 6, height: CELL_SIZE - 6,
-    borderRadius: (CELL_SIZE - 6) / 2,
-    alignItems: 'center', justifyContent: 'center',
+  cellWrap: {
+    width: CELL_SIZE,
+    height: CELL_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  cellText: { letterSpacing: -0.3 },
-  emptyDot: { width: 3, height: 3, borderRadius: 1.5 },
-  impactLine: {
-    position: 'absolute', bottom: 6, width: 10, height: 1.5, borderRadius: 1,
+  cell: {
+    width: CELL_SIZE - 8,
+    height: CELL_SIZE - 8,
+    borderRadius: (CELL_SIZE - 8) / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cellText: {
+    fontSize: 15,
+    letterSpacing: -0.2,
+  },
+  dot: {
+    position: 'absolute',
+    bottom: 5,
+  },
+  halo: {
+    position: 'absolute',
+    width: CELL_SIZE - 8,
+    height: CELL_SIZE - 8,
+    borderRadius: (CELL_SIZE - 8) / 2,
+  },
+  todayRing: {
+    position: 'absolute',
+    width: CELL_SIZE - 4,
+    height: CELL_SIZE - 4,
+    borderRadius: (CELL_SIZE - 4) / 2,
+    borderWidth: 1,
   },
 });
 
 /* ── Main Calendar ── */
-const toRoman = (n: number) => {
-  const romans = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
-  return romans[n] || "";
-};
-
 export default function CalendarModal({
   visible, onClose, onSelectDate, selectedDate, maxFutureOffset = 1, events = [],
 }: CalendarModalProps) {
@@ -180,25 +234,29 @@ export default function CalendarModal({
   const [viewYear, setViewYear] = useState(selectedDate.getFullYear());
   const [viewMonth, setViewMonth] = useState(selectedDate.getMonth());
 
-  // Map events to a day-impact object for quick lookup
   const dayMetadata = useMemo(() => {
-    const map: Record<number, { hasEvents: boolean, maxImpact: number }> = {};
+    const map: Record<number, { hasEvents: boolean, maxImpact: number, count: number }> = {};
     events.forEach(ev => {
       const dateStr = ev.eventDate || ev.event_date;
       if (!dateStr) return;
-      
       const d = new Date(dateStr);
-      // Only care about events in the current viewing month/year
-      if (d.getMonth() === viewMonth) {
+      if (d.getMonth() === viewMonth && d.getFullYear() === viewYear) {
         const day = d.getDate();
         const impact = ev.impactScore || 0;
-        
-        if (!map[day]) map[day] = { hasEvents: true, maxImpact: 0 };
+        if (!map[day]) map[day] = { hasEvents: true, maxImpact: 0, count: 0 };
+        map[day].count += 1;
         if (impact > map[day].maxImpact) map[day].maxImpact = impact;
       }
     });
     return map;
   }, [events, viewMonth, viewYear]);
+
+  const monthStats = useMemo(() => {
+    const days = Object.values(dayMetadata);
+    const totalEvents = days.reduce((sum, d) => sum + d.count, 0);
+    const highImpactDays = days.filter(d => d.maxImpact > 80).length;
+    return { totalEvents, highImpactDays, activeDays: days.length };
+  }, [dayMetadata]);
 
   const getImpactLevel = (day: number) => {
     const score = dayMetadata[day]?.maxImpact || 0;
@@ -208,7 +266,6 @@ export default function CalendarModal({
     return 0;
   };
 
-  // Reset view when modal opens
   useEffect(() => {
     if (visible) {
       setViewYear(selectedDate.getFullYear());
@@ -216,78 +273,82 @@ export default function CalendarModal({
     }
   }, [visible, selectedDate]);
 
-  // Animations
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const sheetY = useRef(new Animated.Value(H)).current;
   const monthFade = useRef(new Animated.Value(1)).current;
+  const monthSlide = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (visible) {
       backdropOpacity.setValue(0);
-      sheetY.setValue(H * 0.5);
+      sheetY.setValue(H);
       Animated.parallel([
-        Animated.timing(backdropOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
-        Animated.spring(sheetY, { toValue: 0, tension: 65, friction: 11, useNativeDriver: true }),
+        Animated.timing(backdropOpacity, { toValue: 1, duration: 280, useNativeDriver: true }),
+        Animated.spring(sheetY, { toValue: 0, tension: 58, friction: 12, useNativeDriver: true }),
       ]).start();
     }
   }, [visible]);
 
   const handleClose = useCallback(() => {
     Animated.parallel([
-      Animated.timing(backdropOpacity, { toValue: 0, duration: 200, useNativeDriver: true }),
-      Animated.timing(sheetY, { toValue: H * 0.5, duration: 250, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(backdropOpacity, { toValue: 0, duration: 220, useNativeDriver: true }),
+      Animated.timing(sheetY, { toValue: H, duration: 280, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
     ]).start(() => onClose());
   }, [onClose]);
 
-  const animateMonthChange = useCallback((cb: () => void) => {
-    Animated.timing(monthFade, { toValue: 0, duration: 120, useNativeDriver: true }).start(() => {
+  const animateMonthChange = useCallback((direction: 'next' | 'prev', cb: () => void) => {
+    const startX = direction === 'next' ? -20 : 20;
+    Animated.parallel([
+      Animated.timing(monthFade, { toValue: 0, duration: 140, useNativeDriver: true }),
+      Animated.timing(monthSlide, { toValue: direction === 'next' ? -14 : 14, duration: 140, useNativeDriver: true }),
+    ]).start(() => {
       cb();
-      Animated.timing(monthFade, { toValue: 1, duration: 180, useNativeDriver: true }).start();
+      monthSlide.setValue(startX);
+      Animated.parallel([
+        Animated.timing(monthFade, { toValue: 1, duration: 220, useNativeDriver: true }),
+        Animated.spring(monthSlide, { toValue: 0, tension: 140, friction: 14, useNativeDriver: true }),
+      ]).start();
     });
   }, []);
 
   const prevMonth = useCallback(() => {
-    animateMonthChange(() => {
+    animateMonthChange('prev', () => {
       if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); }
       else setViewMonth(m => m - 1);
     });
   }, [viewMonth, animateMonthChange]);
 
   const nextMonth = useCallback(() => {
-    // Don't go beyond maxDate month
     const nextM = viewMonth === 11 ? 0 : viewMonth + 1;
     const nextY = viewMonth === 11 ? viewYear + 1 : viewYear;
     if (new Date(nextY, nextM, 1) > new Date(maxDate.getFullYear(), maxDate.getMonth() + 1, 0)) return;
-
-    animateMonthChange(() => {
+    animateMonthChange('next', () => {
       setViewMonth(nextM);
       setViewYear(nextY);
     });
   }, [viewMonth, viewYear, maxDate, animateMonthChange]);
 
   const goToToday = useCallback(() => {
-    animateMonthChange(() => {
+    const dir = today.getTime() > new Date(viewYear, viewMonth, 1).getTime() ? 'next' : 'prev';
+    animateMonthChange(dir, () => {
       setViewMonth(today.getMonth());
       setViewYear(today.getFullYear());
     });
-  }, [today, animateMonthChange]);
+  }, [today, viewMonth, viewYear, animateMonthChange]);
 
   const handleSelectDay = useCallback((day: number) => {
     const date = new Date(viewYear, viewMonth, day);
     date.setHours(0, 0, 0, 0);
     onSelectDate(date);
-    // Small delay so the user sees the selection before closing
-    setTimeout(() => handleClose(), 180);
+    setTimeout(() => handleClose(), 200);
   }, [viewYear, viewMonth, onSelectDate, handleClose]);
 
-  // Build grid
-  const { weeks, daysInMonth, firstDay } = useMemo(() => {
+  const { weeks } = useMemo(() => {
     const daysInMonth = getDaysInMonth(viewYear, viewMonth);
     const firstDay = getFirstDayOfMonth(viewYear, viewMonth);
     const weeks: (number | null)[][] = [];
     let currentWeek: (number | null)[] = [];
 
-    // Leading blanks
     for (let i = 0; i < firstDay; i++) currentWeek.push(null);
 
     for (let d = 1; d <= daysInMonth; d++) {
@@ -298,23 +359,20 @@ export default function CalendarModal({
       }
     }
 
-    // Trailing blanks
     if (currentWeek.length > 0) {
       while (currentWeek.length < 7) currentWeek.push(null);
       weeks.push(currentWeek);
     }
 
-    return { weeks, daysInMonth, firstDay };
+    return { weeks };
   }, [viewYear, viewMonth]);
 
-  // Can go forward?
   const canGoForward = useMemo(() => {
     const nextM = viewMonth === 11 ? 0 : viewMonth + 1;
     const nextY = viewMonth === 11 ? viewYear + 1 : viewYear;
     return new Date(nextY, nextM, 1) <= new Date(maxDate.getFullYear(), maxDate.getMonth() + 1, 0);
   }, [viewMonth, viewYear, maxDate]);
 
-  // Is viewing current month?
   const isCurrentMonth = viewYear === today.getFullYear() && viewMonth === today.getMonth();
 
   const weekdayLabels = WEEKDAYS[language] ?? WEEKDAYS.en;
@@ -322,10 +380,14 @@ export default function CalendarModal({
 
   if (!visible) return null;
 
+  const sheetBg = isDark ? '#0E0B14' : '#FBF8F2';
+  const gradientTop = isDark ? 'rgba(232, 184, 77, 0.08)' : 'rgba(199, 126, 8, 0.06)';
+  const gradientBottom = isDark ? 'rgba(14, 11, 20, 0)' : 'rgba(251, 248, 242, 0)';
+
   return (
     <Modal visible transparent animationType="none" statusBarTranslucent onRequestClose={handleClose}>
       {/* Backdrop */}
-      <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.55)', opacity: backdropOpacity }]}>
+      <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.6)', opacity: backdropOpacity }]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
       </Animated.View>
 
@@ -333,45 +395,94 @@ export default function CalendarModal({
       <Animated.View style={[
         ms.sheet,
         {
-          backgroundColor: theme.background,
-          paddingBottom: insets.bottom + 16,
+          backgroundColor: sheetBg,
+          paddingBottom: insets.bottom + 20,
           transform: [{ translateY: sheetY }],
         },
       ]}>
+        {/* Top radiant gradient */}
+        <LinearGradient
+          colors={[gradientTop, gradientBottom]}
+          style={ms.topGradient}
+          pointerEvents="none"
+        />
+
         {/* Handle */}
         <View style={ms.handleRow}>
-          <View style={[ms.handle, { backgroundColor: theme.border }]} />
+          <View style={[ms.handle, { backgroundColor: isDark ? '#3A3240' : '#D8D2C5' }]} />
         </View>
 
-        {/* Month header */}
-        <View style={ms.monthHeader}>
-          <View style={[ms.mastheadLine, { backgroundColor: theme.gold + '25' }]} />
-          <TouchableOpacity onPress={prevMonth} activeOpacity={0.6} style={ms.monthArrow} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <Ionicons name="chevron-back" size={18} color={theme.gold} />
-          </TouchableOpacity>
-
-          <Animated.View style={[ms.monthCenter, { opacity: monthFade }]}>
-            <Text style={[ms.mastheadLabel, { color: theme.text }]}>{monthNames[viewMonth].toUpperCase()}</Text>
-            <Text style={[ms.mastheadIssue, { color: theme.gold }]}>N° {toRoman(viewMonth)}</Text>
+        {/* Header — Year eyebrow + Large month + stat pill */}
+        <View style={ms.header}>
+          <Animated.View style={[ms.headerCenter, {
+            opacity: monthFade,
+            transform: [{ translateX: monthSlide }],
+          }]}>
+            <Text style={[ms.yearEyebrow, { color: gold }]}>
+              {viewYear}
+            </Text>
+            <Text style={[ms.monthTitle, { color: theme.text }]}>
+              {monthNames[viewMonth]}
+            </Text>
           </Animated.View>
 
-          <TouchableOpacity
-            onPress={nextMonth} activeOpacity={0.6}
-            disabled={!canGoForward}
-            style={[ms.monthArrow, !canGoForward && { opacity: 0.2 }]}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <Ionicons name="chevron-forward" size={18} color={theme.gold} />
-          </TouchableOpacity>
-          <View style={[ms.mastheadLine, { backgroundColor: theme.gold + '25' }]} />
+          {/* Nav arrows row — floating pill */}
+          <View style={[ms.navPill, {
+            backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.035)',
+            borderColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
+          }]}>
+            <TouchableOpacity onPress={prevMonth} activeOpacity={0.6} style={ms.navBtn}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="chevron-back" size={16} color={theme.text} />
+            </TouchableOpacity>
+
+            <View style={[ms.navDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]} />
+
+            <TouchableOpacity
+              onPress={goToToday}
+              activeOpacity={0.6}
+              disabled={isCurrentMonth}
+              style={[ms.navBtn, ms.navTodayBtn, isCurrentMonth && { opacity: 0.3 }]}
+              hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}>
+              <View style={[ms.todayDot, { backgroundColor: gold }]} />
+            </TouchableOpacity>
+
+            <View style={[ms.navDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]} />
+
+            <TouchableOpacity
+              onPress={nextMonth}
+              activeOpacity={0.6}
+              disabled={!canGoForward}
+              style={[ms.navBtn, !canGoForward && { opacity: 0.25 }]}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="chevron-forward" size={16} color={theme.text} />
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* Today shortcut */}
-        {!isCurrentMonth && (
-          <TouchableOpacity onPress={goToToday} activeOpacity={0.65} style={[ms.todayChip, { backgroundColor: `${gold}12`, borderColor: `${gold}30` }]}>
-            <Ionicons name="today-outline" size={13} color={gold} />
-            <Text style={[ms.todayChipText, { color: gold }]}>Today</Text>
-          </TouchableOpacity>
-        )}
+        {/* Stats strip */}
+        <View style={ms.statsRow}>
+          <View style={ms.statCell}>
+            <Text style={[ms.statNum, { color: theme.text, fontFamily: SERIF }]}>
+              {monthStats.activeDays}
+            </Text>
+            <Text style={[ms.statLabel, { color: theme.subtext }]}>active days</Text>
+          </View>
+          <View style={[ms.statDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.07)' }]} />
+          <View style={ms.statCell}>
+            <Text style={[ms.statNum, { color: theme.text, fontFamily: SERIF }]}>
+              {monthStats.totalEvents}
+            </Text>
+            <Text style={[ms.statLabel, { color: theme.subtext }]}>events</Text>
+          </View>
+          <View style={[ms.statDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.07)' }]} />
+          <View style={ms.statCell}>
+            <Text style={[ms.statNum, { color: gold, fontFamily: SERIF }]}>
+              {monthStats.highImpactDays}
+            </Text>
+            <Text style={[ms.statLabel, { color: theme.subtext }]}>landmark</Text>
+          </View>
+        </View>
 
         {/* Weekday headers */}
         <View style={ms.weekdayRow}>
@@ -379,7 +490,12 @@ export default function CalendarModal({
             <View key={i} style={[ms.weekdayCell, { width: CELL_SIZE }]}>
               <Text style={[
                 ms.weekdayText,
-                { color: i === 0 || i === 6 ? `${theme.subtext}60` : theme.subtext },
+                {
+                  color: i === 0 || i === 6
+                    ? (isDark ? theme.subtext + '80' : theme.subtext + '90')
+                    : theme.subtext,
+                  fontFamily: SANS,
+                },
               ]}>
                 {wd}
               </Text>
@@ -387,15 +503,16 @@ export default function CalendarModal({
           ))}
         </View>
 
-        {/* Separator */}
-        <View style={[ms.sep, { backgroundColor: theme.gold + '20' }]} />
-
         {/* Calendar grid */}
-        <Animated.View style={{ opacity: monthFade }}>
+        <Animated.View style={{
+          opacity: monthFade,
+          transform: [{ translateX: monthSlide }],
+          paddingTop: 4,
+        }}>
           {weeks.map((week, wi) => (
             <View key={wi} style={ms.weekRow}>
               {week.map((day, di) => {
-                if (day === null) return <View key={di} style={{ width: CELL_SIZE, height: CELL_SIZE + 6 }} />;
+                if (day === null) return <View key={di} style={{ width: CELL_SIZE, height: CELL_SIZE }} />;
 
                 const date = new Date(viewYear, viewMonth, day);
                 date.setHours(0, 0, 0, 0);
@@ -423,20 +540,27 @@ export default function CalendarModal({
           ))}
         </Animated.View>
 
-        {/* Footer hint */}
-        <View style={ms.footerWrap}>
-          {!isCurrentMonth && (
-            <TouchableOpacity onPress={goToToday} activeOpacity={0.65} style={[ms.todayChip, { backgroundColor: `${gold}12` }]}>
-              <Text style={[ms.todayChipText, { color: gold }]}>BACK TO TODAY</Text>
-            </TouchableOpacity>
-          )}
-          
-          <View style={ms.footer}>
-            <View style={[ms.footerLine, { backgroundColor: theme.gold + '30' }]} />
-            <Text style={[ms.footerText, { color: theme.subtext }]}>
-              ✦ AI SCORING ACTIVE ✦
-            </Text>
-            <View style={[ms.footerLine, { backgroundColor: theme.gold + '30' }]} />
+        {/* Legend */}
+        <View style={[ms.legend, {
+          borderTopColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+        }]}>
+          <View style={ms.legendItem}>
+            <View style={[ms.legendDot, { backgroundColor: gold, width: 4, height: 4, borderRadius: 2 }]} />
+            <Text style={[ms.legendText, { color: theme.subtext }]}>landmark</Text>
+          </View>
+          <View style={ms.legendItem}>
+            <View style={[ms.legendDot, {
+              backgroundColor: isDark ? '#A88B4D' : '#8B7355',
+              width: 3, height: 3, borderRadius: 1.5,
+            }]} />
+            <Text style={[ms.legendText, { color: theme.subtext }]}>notable</Text>
+          </View>
+          <View style={ms.legendItem}>
+            <View style={[ms.legendDot, {
+              backgroundColor: isDark ? '#5A564E' : '#B5B0A8',
+              width: 2.5, height: 2.5, borderRadius: 1.25,
+            }]} />
+            <Text style={[ms.legendText, { color: theme.subtext }]}>minor</Text>
           </View>
         </View>
       </Animated.View>
@@ -448,51 +572,136 @@ const ms = StyleSheet.create({
   sheet: {
     position: 'absolute',
     bottom: 0, left: 0, right: 0,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
     paddingHorizontal: 20,
+    overflow: 'hidden',
   },
-  handleRow: { alignItems: 'center', paddingTop: 12, paddingBottom: 6 },
-  handle: { width: 36, height: 4, borderRadius: 2 },
+  topGradient: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0,
+    height: 200,
+  },
+  handleRow: { alignItems: 'center', paddingTop: 10, paddingBottom: 4 },
+  handle: { width: 40, height: 4, borderRadius: 2 },
 
-  monthHeader: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: 20, gap: 10,
+  header: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    paddingTop: 18,
+    paddingBottom: 16,
   },
-  mastheadLine: { flex: 1, height: StyleSheet.hairlineWidth },
-  monthCenter: { alignItems: 'center', gap: 2 },
-  mastheadLabel: {
-    fontSize: 13, fontWeight: '800', letterSpacing: 4, fontFamily: SANS,
+  headerCenter: {
+    flex: 1,
+    alignItems: 'flex-start',
   },
-  mastheadIssue: {
-    fontSize: 11, fontWeight: '700', letterSpacing: 1.5,
-    fontFamily: SERIF, fontStyle: 'italic',
+  yearEyebrow: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 4,
+    marginBottom: 2,
+  },
+  monthTitle: {
+    fontSize: 34,
+    fontWeight: '700',
+    letterSpacing: -1,
+    fontFamily: SERIF,
+    lineHeight: 40,
   },
 
-  monthArrow: {
-    width: 32, height: 32, borderRadius: 16,
-    alignItems: 'center', justifyContent: 'center',
+  navPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 22,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 4,
+    paddingHorizontal: 2,
+  },
+  navBtn: {
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navTodayBtn: {
+    width: 26,
+  },
+  navDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 18,
+  },
+  todayDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
 
-  footerWrap: { marginTop: 16, gap: 16 },
-  todayChip: {
-    alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8,
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    marginBottom: 10,
   },
-  todayChipText: { fontSize: 10, fontWeight: '800', letterSpacing: 2 },
+  statCell: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 2,
+  },
+  statDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 24,
+  },
+  statNum: {
+    fontSize: 22,
+    fontWeight: '700',
+    letterSpacing: -0.5,
+  },
+  statLabel: {
+    fontSize: 9,
+    fontWeight: '600',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    opacity: 0.7,
+  },
 
-  weekdayRow: { flexDirection: 'row', justifyContent: 'center', paddingBottom: 8, paddingTop: 4 },
+  weekdayRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    paddingBottom: 4,
+    paddingTop: 6,
+  },
   weekdayCell: { alignItems: 'center' },
-  weekdayText: { fontSize: 11, fontWeight: '600', letterSpacing: 0.5, textTransform: 'uppercase' },
-
-  sep: { height: StyleSheet.hairlineWidth, marginBottom: 6 },
-
-  weekRow: { flexDirection: 'row', justifyContent: 'center' },
-
-  footer: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    marginTop: 16, paddingHorizontal: 8,
+  weekdayText: {
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 1,
   },
-  footerLine: { flex: 1, height: StyleSheet.hairlineWidth },
-  footerText: { fontSize: 11, fontWeight: '500', opacity: 0.35, letterSpacing: 0.3, fontFamily: SERIF, fontStyle: 'italic' },
+
+  weekRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+
+  legend: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 20,
+    paddingTop: 18,
+    marginTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  legendDot: {},
+  legendText: {
+    fontSize: 10,
+    fontWeight: '500',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    opacity: 0.75,
+  },
 });

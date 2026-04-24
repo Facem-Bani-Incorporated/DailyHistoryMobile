@@ -24,6 +24,8 @@ interface DiscoverSectionProps {
   events: any[];
   theme: any;
   t: (key: string) => string;
+  isPro?: boolean;
+  onPaywall?: () => void;
 }
 
 /* ── Utilities ────────────────────────────── */
@@ -103,10 +105,10 @@ const AnimatedCard = ({
   );
 };
 
-/* ── PRO pill ─────────────────────────────── */
+/* ── PRO pill — gold star + label ─────────── */
 const ProPill = ({ compact }: { compact?: boolean }) => (
   <View style={[st.proPill, compact && st.proPillCompact]}>
-    <View style={st.proPillDot} />
+    <Ionicons name="star" size={compact ? 9 : 10} color="#1a1208" />
     <Text style={[st.proPillT, compact && st.proPillTCompact]}>PRO</Text>
   </View>
 );
@@ -352,7 +354,7 @@ const CuratedCard = ({
    │   curated       │   curated         │
    └─────────────────┴───────────────────┘
    ═══════════════════════════════════════════ */
-export const DiscoverSection = ({ events, theme, t }: DiscoverSectionProps) => {
+export const DiscoverSection = ({ events, theme, t, isPro = true, onPaywall }: DiscoverSectionProps) => {
   const { language } = useLanguage();
   const [selected, setSelected] = useState<any>(null);
   const [cW, setCW] = useState(0);
@@ -360,6 +362,14 @@ export const DiscoverSection = ({ events, theme, t }: DiscoverSectionProps) => {
 
   const secondary = events.length > 1 ? events.slice(1, 5) : [];
   const issueNumber = new Date().getDate();
+
+  const handleSelect = (event: any) => {
+    if (isProEvent(event) && !isPro) {
+      onPaywall?.();
+      return;
+    }
+    setSelected(event);
+  };
 
   if (secondary.length === 0) {
     return (
@@ -410,7 +420,7 @@ export const DiscoverSection = ({ events, theme, t }: DiscoverSectionProps) => {
               event={hero}
               lang={language}
               number={1}
-              onPress={() => setSelected(hero)}
+              onPress={() => handleSelect(hero)}
               height={heroH}
             />
           </AnimatedCard>
@@ -421,7 +431,7 @@ export const DiscoverSection = ({ events, theme, t }: DiscoverSectionProps) => {
                 event={rest[0]}
                 lang={language}
                 number={2}
-                onPress={() => setSelected(rest[0])}
+                onPress={() => handleSelect(rest[0])}
                 height={editH}
               />
             </AnimatedCard>
@@ -434,7 +444,7 @@ export const DiscoverSection = ({ events, theme, t }: DiscoverSectionProps) => {
                   event={rest[1]}
                   lang={language}
                   number={3}
-                  onPress={() => setSelected(rest[1])}
+                  onPress={() => handleSelect(rest[1])}
                   width={mosaicLeftW}
                   height={mosaicH}
                 />
@@ -444,7 +454,7 @@ export const DiscoverSection = ({ events, theme, t }: DiscoverSectionProps) => {
                   event={rest[2]}
                   lang={language}
                   number={4}
-                  onPress={() => setSelected(rest[2])}
+                  onPress={() => handleSelect(rest[2])}
                   width={mosaicRightW}
                   height={mosaicH}
                 />
@@ -458,7 +468,7 @@ export const DiscoverSection = ({ events, theme, t }: DiscoverSectionProps) => {
                 event={rest[1]}
                 lang={language}
                 number={3}
-                onPress={() => setSelected(rest[1])}
+                onPress={() => handleSelect(rest[1])}
                 width={cW}
                 height={Math.floor(usable * 0.32)}
               />
@@ -632,14 +642,18 @@ const st = StyleSheet.create({
   /* ── Mosaic row ── */
   mosaicRow: { flexDirection: 'row', gap: GAP, flex: 0 },
 
-  /* ── PRO pill ── */
+  /* ── PRO pill — gold star badge ── */
   proPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 5,
-    backgroundColor: '#D4A843',
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6,
+    backgroundColor: '#E8B84D',
+    shadowColor: '#000',
+    shadowOpacity: 0.35,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
   },
-  proPillCompact: { paddingHorizontal: 6, paddingVertical: 3, gap: 4 },
-  proPillDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#000' },
-  proPillT: { fontSize: 9, fontWeight: '900', color: '#000', letterSpacing: 1.8 },
-  proPillTCompact: { fontSize: 8, letterSpacing: 1.5 },
+  proPillCompact: { paddingHorizontal: 7, paddingVertical: 3, gap: 3 },
+  proPillT: { fontSize: 9, fontWeight: '900', color: '#1a1208', letterSpacing: 1.6 },
+  proPillTCompact: { fontSize: 8, letterSpacing: 1.3 },
 });
