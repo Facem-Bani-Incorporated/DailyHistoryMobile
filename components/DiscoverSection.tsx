@@ -7,6 +7,7 @@ import {
   Animated,
   Easing,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -361,6 +362,7 @@ export const DiscoverSection = ({ events, theme, t, isPro = true, onPaywall }: D
   const [cH, setCH] = useState(0);
 
   const secondary = events.length > 1 ? events.slice(1, 5) : [];
+  const extras = events.length > 5 ? events.slice(5) : [];
   const issueNumber = new Date().getDate();
 
   const handleSelect = (event: any) => {
@@ -410,72 +412,115 @@ export const DiscoverSection = ({ events, theme, t, isPro = true, onPaywall }: D
   const mosaicRightW = has4 ? cW - mosaicLeftW - GAP : 0;
 
   return (
-    <View style={{ flex: 1 }} onLayout={onLayout}>
-      {ready && (
-        <>
-          <Masthead issue={issueNumber} count={secondary.length} theme={theme} t={t} />
+    <View style={{ flex: 1 }}>
+      <ScrollView
+        style={{ flex: 1 }}
+        onLayout={onLayout}
+        showsVerticalScrollIndicator={false}
+        nestedScrollEnabled
+        bounces
+        contentContainerStyle={{ paddingBottom: 28 }}
+      >
+        {ready && (
+          <>
+            <Masthead issue={issueNumber} count={secondary.length} theme={theme} t={t} />
 
-          <AnimatedCard delay={40} style={{ marginBottom: GAP }}>
-            <HeroCard
-              event={hero}
-              lang={language}
-              number={1}
-              onPress={() => handleSelect(hero)}
-              height={heroH}
-            />
-          </AnimatedCard>
-
-          {rest.length >= 1 && (
-            <AnimatedCard delay={180} style={{ marginBottom: has4 ? GAP : 0 }}>
-              <EditorialCard
-                event={rest[0]}
+            <AnimatedCard delay={40} style={{ marginBottom: GAP }}>
+              <HeroCard
+                event={hero}
                 lang={language}
-                number={2}
-                onPress={() => handleSelect(rest[0])}
-                height={editH}
+                number={1}
+                onPress={() => handleSelect(hero)}
+                height={heroH}
               />
             </AnimatedCard>
-          )}
 
-          {has4 && (
-            <View style={st.mosaicRow}>
-              <AnimatedCard delay={320} style={{ width: mosaicLeftW }}>
+            {rest.length >= 1 && (
+              <AnimatedCard delay={180} style={{ marginBottom: has4 ? GAP : 0 }}>
+                <EditorialCard
+                  event={rest[0]}
+                  lang={language}
+                  number={2}
+                  onPress={() => handleSelect(rest[0])}
+                  height={editH}
+                />
+              </AnimatedCard>
+            )}
+
+            {has4 && (
+              <View style={st.mosaicRow}>
+                <AnimatedCard delay={320} style={{ width: mosaicLeftW }}>
+                  <CuratedCard
+                    event={rest[1]}
+                    lang={language}
+                    number={3}
+                    onPress={() => handleSelect(rest[1])}
+                    width={mosaicLeftW}
+                    height={mosaicH}
+                  />
+                </AnimatedCard>
+                <AnimatedCard delay={440} style={{ width: mosaicRightW }}>
+                  <CuratedCard
+                    event={rest[2]}
+                    lang={language}
+                    number={4}
+                    onPress={() => handleSelect(rest[2])}
+                    width={mosaicRightW}
+                    height={mosaicH}
+                  />
+                </AnimatedCard>
+              </View>
+            )}
+
+            {rest.length === 2 && (
+              <AnimatedCard delay={320}>
                 <CuratedCard
                   event={rest[1]}
                   lang={language}
                   number={3}
                   onPress={() => handleSelect(rest[1])}
-                  width={mosaicLeftW}
-                  height={mosaicH}
+                  width={cW}
+                  height={Math.floor(usable * 0.32)}
                 />
               </AnimatedCard>
-              <AnimatedCard delay={440} style={{ width: mosaicRightW }}>
-                <CuratedCard
-                  event={rest[2]}
-                  lang={language}
-                  number={4}
-                  onPress={() => handleSelect(rest[2])}
-                  width={mosaicRightW}
-                  height={mosaicH}
-                />
-              </AnimatedCard>
-            </View>
-          )}
+            )}
 
-          {rest.length === 2 && (
-            <AnimatedCard delay={320}>
-              <CuratedCard
-                event={rest[1]}
-                lang={language}
-                number={3}
-                onPress={() => handleSelect(rest[1])}
-                width={cW}
-                height={Math.floor(usable * 0.32)}
-              />
-            </AnimatedCard>
-          )}
-        </>
-      )}
+            {/* ── MORE STORIES — scrollable list of remaining events (includes PRO) ── */}
+            {extras.length > 0 && (
+              <View style={st.extrasSection}>
+                <View style={st.extrasDivider}>
+                  <View style={[st.extrasLine, { backgroundColor: theme.gold + '35' }]} />
+                  <Text style={[st.extrasOrn, { color: theme.gold }]}>✦</Text>
+                  <Text style={[st.extrasLabel, { color: theme.text }]}>
+                    MORE STORIES
+                  </Text>
+                  <Text style={[st.extrasCount, { color: theme.gold }]}>
+                    {extras.length}
+                  </Text>
+                  <Text style={[st.extrasOrn, { color: theme.gold }]}>✦</Text>
+                  <View style={[st.extrasLine, { backgroundColor: theme.gold + '35' }]} />
+                </View>
+
+                {extras.map((event, i) => (
+                  <AnimatedCard
+                    key={event.id ?? `extra-${i}`}
+                    delay={Math.min(60 + i * 50, 400)}
+                    style={{ marginBottom: GAP }}
+                  >
+                    <EditorialCard
+                      event={event}
+                      lang={language}
+                      number={5 + i}
+                      onPress={() => handleSelect(event)}
+                      height={128}
+                    />
+                  </AnimatedCard>
+                ))}
+              </View>
+            )}
+          </>
+        )}
+      </ScrollView>
 
       <StoryModal visible={!!selected} event={selected} onClose={() => setSelected(null)} theme={theme} />
     </View>
@@ -641,6 +686,34 @@ const st = StyleSheet.create({
 
   /* ── Mosaic row ── */
   mosaicRow: { flexDirection: 'row', gap: GAP, flex: 0 },
+
+  /* ── Extras "MORE STORIES" section ── */
+  extrasSection: {
+    marginTop: 22,
+    paddingTop: 2,
+  },
+  extrasDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 16,
+    marginBottom: 6,
+  },
+  extrasLine: { flex: 1, height: StyleSheet.hairlineWidth },
+  extrasOrn: { fontSize: 10, opacity: 0.85 },
+  extrasLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 2.8,
+    fontFamily: SANS,
+  },
+  extrasCount: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    fontFamily: SERIF,
+    fontStyle: 'italic',
+  },
 
   /* ── PRO pill — gold star badge ── */
   proPill: {

@@ -143,13 +143,16 @@ const DayCell = React.memo(({
         <Text style={[
           cs.cellText,
           {
-            color: isSelected
-              ? '#000'
-              : !hasEvents
-                ? (isDark ? theme.subtext + '70' : theme.subtext + '80')
-                : theme.text,
+            color: isSelected ? '#000' : theme.text,
             fontFamily: SERIF,
-            fontWeight: isSelected ? '700' : isToday ? '700' : impactLevel === 3 ? '600' : '400',
+            fontWeight: isSelected || isToday
+              ? '700'
+              : impactLevel === 3
+                ? '600'
+                : hasEvents
+                  ? '500'
+                  : '400',
+            opacity: isSelected ? 1 : hasEvents || isToday ? 1 : isDark ? 0.72 : 0.65,
           },
         ]}>
           {day}
@@ -460,29 +463,39 @@ export default function CalendarModal({
           </View>
         </View>
 
-        {/* Stats strip */}
-        <View style={ms.statsRow}>
-          <View style={ms.statCell}>
-            <Text style={[ms.statNum, { color: theme.text, fontFamily: SERIF }]}>
-              {monthStats.activeDays}
-            </Text>
-            <Text style={[ms.statLabel, { color: theme.subtext }]}>active days</Text>
+        {/* Stats strip — only shown when we actually have data for this month */}
+        {monthStats.totalEvents > 0 ? (
+          <View style={ms.statsRow}>
+            <View style={ms.statCell}>
+              <Text style={[ms.statNum, { color: theme.text, fontFamily: SERIF }]}>
+                {monthStats.activeDays}
+              </Text>
+              <Text style={[ms.statLabel, { color: theme.subtext }]}>active days</Text>
+            </View>
+            <View style={[ms.statDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.07)' }]} />
+            <View style={ms.statCell}>
+              <Text style={[ms.statNum, { color: theme.text, fontFamily: SERIF }]}>
+                {monthStats.totalEvents}
+              </Text>
+              <Text style={[ms.statLabel, { color: theme.subtext }]}>events</Text>
+            </View>
+            <View style={[ms.statDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.07)' }]} />
+            <View style={ms.statCell}>
+              <Text style={[ms.statNum, { color: gold, fontFamily: SERIF }]}>
+                {monthStats.highImpactDays}
+              </Text>
+              <Text style={[ms.statLabel, { color: theme.subtext }]}>landmark</Text>
+            </View>
           </View>
-          <View style={[ms.statDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.07)' }]} />
-          <View style={ms.statCell}>
-            <Text style={[ms.statNum, { color: theme.text, fontFamily: SERIF }]}>
-              {monthStats.totalEvents}
+        ) : (
+          <View style={ms.simpleTagline}>
+            <View style={[ms.simpleLine, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]} />
+            <Text style={[ms.simpleText, { color: theme.subtext, fontFamily: SERIF }]}>
+              select a date
             </Text>
-            <Text style={[ms.statLabel, { color: theme.subtext }]}>events</Text>
+            <View style={[ms.simpleLine, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]} />
           </View>
-          <View style={[ms.statDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.07)' }]} />
-          <View style={ms.statCell}>
-            <Text style={[ms.statNum, { color: gold, fontFamily: SERIF }]}>
-              {monthStats.highImpactDays}
-            </Text>
-            <Text style={[ms.statLabel, { color: theme.subtext }]}>landmark</Text>
-          </View>
-        </View>
+        )}
 
         {/* Weekday headers */}
         <View style={ms.weekdayRow}>
@@ -540,29 +553,31 @@ export default function CalendarModal({
           ))}
         </Animated.View>
 
-        {/* Legend */}
-        <View style={[ms.legend, {
-          borderTopColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
-        }]}>
-          <View style={ms.legendItem}>
-            <View style={[ms.legendDot, { backgroundColor: gold, width: 4, height: 4, borderRadius: 2 }]} />
-            <Text style={[ms.legendText, { color: theme.subtext }]}>landmark</Text>
+        {/* Legend — only shown when we have event data to legend */}
+        {monthStats.totalEvents > 0 && (
+          <View style={[ms.legend, {
+            borderTopColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+          }]}>
+            <View style={ms.legendItem}>
+              <View style={[ms.legendDot, { backgroundColor: gold, width: 4, height: 4, borderRadius: 2 }]} />
+              <Text style={[ms.legendText, { color: theme.subtext }]}>landmark</Text>
+            </View>
+            <View style={ms.legendItem}>
+              <View style={[ms.legendDot, {
+                backgroundColor: isDark ? '#A88B4D' : '#8B7355',
+                width: 3, height: 3, borderRadius: 1.5,
+              }]} />
+              <Text style={[ms.legendText, { color: theme.subtext }]}>notable</Text>
+            </View>
+            <View style={ms.legendItem}>
+              <View style={[ms.legendDot, {
+                backgroundColor: isDark ? '#5A564E' : '#B5B0A8',
+                width: 2.5, height: 2.5, borderRadius: 1.25,
+              }]} />
+              <Text style={[ms.legendText, { color: theme.subtext }]}>minor</Text>
+            </View>
           </View>
-          <View style={ms.legendItem}>
-            <View style={[ms.legendDot, {
-              backgroundColor: isDark ? '#A88B4D' : '#8B7355',
-              width: 3, height: 3, borderRadius: 1.5,
-            }]} />
-            <Text style={[ms.legendText, { color: theme.subtext }]}>notable</Text>
-          </View>
-          <View style={ms.legendItem}>
-            <View style={[ms.legendDot, {
-              backgroundColor: isDark ? '#5A564E' : '#B5B0A8',
-              width: 2.5, height: 2.5, borderRadius: 1.25,
-            }]} />
-            <Text style={[ms.legendText, { color: theme.subtext }]}>minor</Text>
-          </View>
-        </View>
+        )}
       </Animated.View>
     </Modal>
   );
@@ -663,6 +678,23 @@ const ms = StyleSheet.create({
     letterSpacing: 1.5,
     textTransform: 'uppercase',
     opacity: 0.7,
+  },
+
+  simpleTagline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 18,
+    marginBottom: 6,
+    paddingHorizontal: 12,
+  },
+  simpleLine: { flex: 1, height: StyleSheet.hairlineWidth },
+  simpleText: {
+    fontSize: 11,
+    fontStyle: 'italic',
+    letterSpacing: 2,
+    textTransform: 'lowercase',
+    opacity: 0.6,
   },
 
   weekdayRow: {
