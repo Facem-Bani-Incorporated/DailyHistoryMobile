@@ -30,7 +30,7 @@ export const PRO_ENTITLEMENT = 'Daily History Pro';
 
 const API_KEYS = {
   ios: 'test_NPEErcNAGTbTJeYrsKYqcefxldU',
-  android: 'test_NPEErcNAGTbTJeYrsKYqcefxldU',
+  android: 'goog_taZgFRPRaDbDwkjWiPxSOvFylGh',
 } as const;
 
 export type PaywallOutcome = 'PURCHASED' | 'RESTORED' | 'CANCELLED' | 'ERROR' | 'NOT_PRESENTED';

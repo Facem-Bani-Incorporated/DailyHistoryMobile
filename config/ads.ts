@@ -6,10 +6,18 @@ import { TestIds } from 'react-native-google-mobile-ads';
 const USE_TEST_IDS = true;
 
 // ── Real Ad Unit IDs from AdMob ──
+import { Platform } from 'react-native';
+
 const PRODUCTION_IDS = {
-  BANNER: 'ca-app-pub-2338557822432313/1375182105',
-  INTERSTITIAL: 'ca-app-pub-2338557822432313/3442955557',
-  REWARDED: 'ca-app-pub-2338557822432313/4532675945',
+  BANNER: Platform.OS === 'ios'
+    ? 'ca-app-pub-2338557822432313/3671068145'
+    : 'ca-app-pub-2338557822432313/1375182105',
+  INTERSTITIAL: Platform.OS === 'ios'
+    ? 'ca-app-pub-2338557822432313/6825424108'
+    : 'ca-app-pub-2338557822432313/3442955557',
+  REWARDED: Platform.OS === 'ios'
+    ? 'ca-app-pub-2338557822432313/8053685806'
+    : 'ca-app-pub-2338557822432313/4532675945',
 };
 
 // ── Export: uses test IDs in dev, real in prod ──
