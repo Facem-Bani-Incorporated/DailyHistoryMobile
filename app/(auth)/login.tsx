@@ -67,10 +67,13 @@ export default function LoginScreen() {
       ]),
     ]).start();
 
-    GoogleSignin.configure({
+    const cfg = {
       webClientId: '49902921378-4k5mjec67t0pnu0jrfti1bejpi1e5u3h.apps.googleusercontent.com',
+      iosClientId: '49902921378-bicgq9s907d0qegfjkvk8a3mqlhsmrt7.apps.googleusercontent.com',
       offlineAccess: true,
-    });
+    };
+    console.log('[GoogleSignin] configure with:', JSON.stringify(cfg));
+    GoogleSignin.configure(cfg);
   }, []);
 
   const handleGoogleSignIn = async () => {

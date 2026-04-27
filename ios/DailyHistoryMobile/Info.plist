@@ -37,6 +37,12 @@
           <string>exp+dailyhistorymobile</string>
         </array>
       </dict>
+      <dict>
+        <key>CFBundleURLSchemes</key>
+        <array>
+          <string>com.googleusercontent.apps.49902921378-bicgq9s907d0qegfjkvk8a3mqlhsmrt7</string>
+        </array>
+      </dict>
     </array>
     <key>CFBundleVersion</key>
     <string>1</string>

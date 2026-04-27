@@ -1,4 +1,5 @@
 import Expo
+import GoogleSignIn
 import React
 import ReactAppDependencyProvider
 
@@ -29,6 +30,10 @@ public class AppDelegate: ExpoAppDelegate {
       launchOptions: launchOptions)
 #endif
 
+    GIDSignIn.sharedInstance.configuration = GIDConfiguration(
+      clientID: "49902921378-bicgq9s907d0qegfjkvk8a3mqlhsmrt7.apps.googleusercontent.com"
+    )
+
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
@@ -38,7 +43,9 @@ public class AppDelegate: ExpoAppDelegate {
     open url: URL,
     options: [UIApplication.OpenURLOptionsKey: Any] = [:]
   ) -> Bool {
-    return super.application(app, open: url, options: options) || RCTLinkingManager.application(app, open: url, options: options)
+    return super.application(app, open: url, options: options)
+      || GIDSignIn.sharedInstance.handle(url)
+      || RCTLinkingManager.application(app, open: url, options: options)
   }
 
   // Universal Links

@@ -74,6 +74,7 @@ export default function RegisterScreen() {
 
     GoogleSignin.configure({
       webClientId: '49902921378-4k5mjec67t0pnu0jrfti1bejpi1e5u3h.apps.googleusercontent.com',
+      iosClientId: '49902921378-bicgq9s907d0qegfjkvk8a3mqlhsmrt7.apps.googleusercontent.com',
       offlineAccess: true,
     });
   }, []);

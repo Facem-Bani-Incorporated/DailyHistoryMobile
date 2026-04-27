@@ -50,7 +50,8 @@ function AppContent() {
 
   useEffect(() => {
     GoogleSignin.configure({
-      webClientId: '937397754645-8m819hke8eul773o681lre9960787p98.apps.googleusercontent.com',
+      webClientId: '49902921378-4k5mjec67t0pnu0jrfti1bejpi1e5u3h.apps.googleusercontent.com',
+      iosClientId: '49902921378-bicgq9s907d0qegfjkvk8a3mqlhsmrt7.apps.googleusercontent.com',
       offlineAccess: true,
     });
 
