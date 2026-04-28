@@ -92,10 +92,11 @@ function AppContent() {
 
     const inAuthGroup = segments[0] === '(auth)';
     const isNotificationPrompt = segments[0] === 'notification-prompt';
+    const isPreview = segments[0] === 'preview';
 
     const timeout = setTimeout(() => {
-      if (!token && !inAuthGroup && !isNotificationPrompt) {
-        router.replace('/(auth)/welcome');
+      if (!token && !inAuthGroup && !isNotificationPrompt && !isPreview) {
+        router.replace('/preview');
       } else if (token && inAuthGroup) {
         router.replace('/(main)');
       }
@@ -126,6 +127,7 @@ function AppContent() {
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="preview" />
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(main)" />
       <Stack.Screen

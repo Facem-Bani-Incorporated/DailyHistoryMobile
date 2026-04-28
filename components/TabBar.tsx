@@ -1,5 +1,4 @@
 // components/TabBar.tsx
-import { BlurView } from 'expo-blur';
 import { Bookmark, CalendarDays, Clock, Compass, Map } from 'lucide-react-native';
 import { useEffect, useRef } from 'react';
 import {
@@ -166,9 +165,6 @@ export default function TabBar({ active, onSwitch, unseenSaved = 0, t }: TabBarP
   const { theme, isDark, isPremium } = useTheme();
   const insets = useSafeAreaInsets();
 
-  const blurTint      = isDark ? 'dark' : 'light';
-  const blurIntensity = isPremium ? 45 : isDark ? 38 : 72;
-
   const overlayBg = isPremium
     ? 'rgba(5,4,10,0.72)'
     : isDark
@@ -198,8 +194,8 @@ export default function TabBar({ active, onSwitch, unseenSaved = 0, t }: TabBarP
           }),
         },
       ]}>
-        {/* Blur fills the pill */}
-        <BlurView intensity={blurIntensity} tint={blurTint} style={StyleSheet.absoluteFill} />
+        {/* Background fill */}
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: overlayBg }]} />
 
         {/* Tinted overlay on top of blur */}
         <View style={[StyleSheet.absoluteFill, { backgroundColor: overlayBg }]} />
