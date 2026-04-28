@@ -1103,14 +1103,14 @@ const makeStyles = (theme: any, isDark: boolean, isPremium: boolean) => StyleShe
 
   chrome: {
     backgroundColor: isPremium ? 'transparent' : theme.background,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     overflow: 'hidden',
   },
   brandRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingTop: 10, paddingBottom: 14,
   },
-  brandLeft: { gap: 1 },
+  brandLeft: { gap: 1, flexShrink: 1, minWidth: 0 },
   brandLabel: {
     fontSize: 9, fontWeight: '700', letterSpacing: 4,
     opacity: isPremium ? 0.8 : 0.6,
@@ -1119,8 +1119,8 @@ const makeStyles = (theme: any, isDark: boolean, isPremium: boolean) => StyleShe
     fontSize: 22, fontWeight: '800', letterSpacing: 0.5,
     fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
   },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  iconBtn: { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 2, flexShrink: 0 },
+  iconBtn: { width: 32, height: 32, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   achBadge: {
     position: 'absolute', top: -4, right: -4, minWidth: 16, height: 16,
     borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3,
