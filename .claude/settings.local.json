@@ -4,7 +4,11 @@
       "Bash(xargs grep:*)",
       "Bash(npx tsc *)",
       "Read(//usr/local/bin/**)",
-      "Read(//opt/homebrew/bin/**)"
+      "Read(//opt/homebrew/bin/**)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(eas build *)",
+      "Bash(NODE_TLS_REJECT_UNAUTHORIZED=0 eas build --profile development --platform all --non-interactive)"
     ]
   }
 }

@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "DailyHistoryMobile",
-    "slug": "DailyHistoryMobile",
+    "slug": "dailyhistorymobile",
     "version": "1.0.0",
     "icon": "./assets/icon.svg",
     "orientation": "portrait",
@@ -55,16 +55,16 @@
     "experiments": {
       "typedRoutes": true
     },
+    "owner": "dailyhistory",
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "40d2f71e-3f11-4574-b212-a7f3cd044377"
+        "projectId": "3353636b-95c7-4b0d-955a-e24541d5c5c4"
       }
     },
-    "owner": "rexinus",
     "runtimeVersion": "1.0.0",
     "updates": {
-      "url": "https://u.expo.dev/40d2f71e-3f11-4574-b212-a7f3cd044377"
+      "url": "https://u.expo.dev/3353636b-95c7-4b0d-955a-e24541d5c5c4"
     }
   },
   "react-native-google-mobile-ads": {
