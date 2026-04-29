@@ -8,7 +8,15 @@
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
       "Bash(eas build *)",
-      "Bash(NODE_TLS_REJECT_UNAUTHORIZED=0 eas build --profile development --platform all --non-interactive)"
+      "Bash(NODE_TLS_REJECT_UNAUTHORIZED=0 eas build --profile development --platform all --non-interactive)",
+      "Read(//Users/dolaru/Library/Android/**)",
+      "Read(//usr/local/share/**)",
+      "Read(//Users/dolaru/Android/**)",
+      "Read(//Applications/**)",
+      "Bash(npx expo *)",
+      "Bash(node_modules/.bin/expo install *)",
+      "Bash(awk 'NR>=842 && NR<=950 && /\\\\}, \\\\[/ {print NR\": \"$0}' /Users/dolaru/DailyHistoryMobile/app/\\\\\\(main\\\\\\)/index.tsx)",
+      "Bash(export PATH=\"/opt/homebrew/bin:$PATH\")"
     ]
   }
 }

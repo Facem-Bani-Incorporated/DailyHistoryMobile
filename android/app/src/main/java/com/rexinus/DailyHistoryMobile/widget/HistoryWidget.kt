@@ -90,7 +90,7 @@ class HistoryWidget : AppWidgetProvider() {
             executor.execute {
                 try {
                     val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
-                    val url = URL("PUNE_URL_API_AICI/daily-content/by-date?date=$today")
+                    val url = URL("https://daily-history-server-dev-development.up.railway.app/api/v1/daily-content/by-date?date=$today")
                     val conn = url.openConnection() as HttpURLConnection
                     conn.requestMethod = "GET"
                     conn.connectTimeout = 8000

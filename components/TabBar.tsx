@@ -16,6 +16,11 @@ import { haptic } from '../utils/haptics';
 
 export type Tab = 'today' | 'discover' | 'timeline' | 'map' | 'saved' | 'search';
 
+// Approximate height of the floating glass island (without bottom inset).
+// Banner row (when shown) + pill height. Used by parents to pad scroll content.
+export const TABBAR_PILL_HEIGHT = 70; // outerWrap paddingTop(6) + pill (~64)
+export const TABBAR_BANNER_HEIGHT = 66; // banner area when banner is loaded
+
 interface TabBarProps {
   active: Tab;
   onSwitch: (tab: Tab) => void;
@@ -94,20 +99,14 @@ const TabItem = ({
     onPress();
   };
 
-  const activeColor   = isPremium ? '#D4A843' : theme.gold;
-  const inactiveColor = isDark ? 'rgba(255,255,255,0.36)' : 'rgba(0,0,0,0.32)';
+  // Active state: black glyph on a frosted-white liquid glass pill (like iOS Control Center toggles)
+  const activeColor   = '#0B0D11';
+  const inactiveColor = isDark ? 'rgba(255,255,255,0.46)' : 'rgba(0,0,0,0.42)';
 
-  const indicatorBg = isPremium
-    ? 'rgba(212,168,67,0.18)'
-    : isDark
-      ? 'rgba(255,255,255,0.14)'
-      : 'rgba(0,0,0,0.065)';
-
-  const indicatorBorder = isPremium
-    ? 'rgba(212,168,67,0.35)'
-    : isDark
-      ? 'rgba(255,255,255,0.22)'
-      : 'rgba(255,255,255,0.95)';
+  // Indicator pill — much whiter / more frosted than the bar itself, so it reads as a separate glass layer.
+  const indicatorBg = 'rgba(255,255,255,0.94)';
+  const indicatorBorder = 'rgba(255,255,255,1)';
+  const indicatorShineColor = 'rgba(255,255,255,0.85)';
 
   const glowOp = glowPulse.interpolate({ inputRange: [0, 1], outputRange: [0, 0.28] });
 
@@ -118,14 +117,24 @@ const TabItem = ({
         {/* Liquid glass active indicator pill */}
         <Animated.View style={[
           s.indicator,
-          { backgroundColor: indicatorBg, borderColor: indicatorBorder, opacity: activeFade },
-        ]} />
+          {
+            backgroundColor: indicatorBg,
+            borderColor: indicatorBorder,
+            opacity: activeFade,
+          },
+        ]}>
+          {/* Inner specular highlight on top half of the pill */}
+          <View
+            style={[s.indicatorShine, { backgroundColor: indicatorShineColor }]}
+            pointerEvents="none"
+          />
+        </Animated.View>
 
         {/* Premium: gold glow ring */}
         {isPremium && (
           <Animated.View style={{
             position: 'absolute',
-            width: 46, height: 46, borderRadius: 23,
+            width: 48, height: 48, borderRadius: 24,
             borderWidth: 1.5, borderColor: '#D4A843',
             opacity: glowOp,
           }} />
@@ -136,7 +145,7 @@ const TabItem = ({
           <Icon
             size={22}
             color={isActive ? activeColor : inactiveColor}
-            strokeWidth={isActive ? 2.2 : 1.6}
+            strokeWidth={isActive ? 2.4 : 1.7}
           />
           {badge !== undefined && badge > 0 && (
             <View style={[s.badge, { backgroundColor: activeColor }]}>
@@ -163,22 +172,23 @@ const TabItem = ({
 // ─────────────────────────────────────────────────────────────────────────────
 export default function TabBar({ active, onSwitch, unseenSaved = 0, t }: TabBarProps) {
   const { theme, isDark, isPremium } = useTheme();
-  const insets = useSafeAreaInsets();
 
-  const overlayBg = isPremium
-    ? 'rgba(5,4,10,0.72)'
+  // Heavier translucent fill — content underneath barely peeks through, giving a strong
+  // "frosted glass with something behind it" impression without a native blur module.
+  const fillBg = isPremium
+    ? 'rgba(8,6,14,0.86)'
     : isDark
-      ? 'rgba(10,9,16,0.62)'
-      : 'rgba(255,255,255,0.42)';
+      ? 'rgba(14,14,22,0.84)'
+      : 'rgba(255,255,255,0.86)';
 
   const pillBorder = isPremium
-    ? 'rgba(212,168,67,0.22)'
+    ? 'rgba(212,168,67,0.34)'
     : isDark
-      ? 'rgba(255,255,255,0.13)'
-      : 'rgba(255,255,255,0.85)';
+      ? 'rgba(255,255,255,0.16)'
+      : 'rgba(255,255,255,0.75)';
 
   return (
-    <View style={[s.outerWrap, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+    <View style={s.outerWrap}>
       <View style={[
         s.pill,
         {
@@ -186,28 +196,36 @@ export default function TabBar({ active, onSwitch, unseenSaved = 0, t }: TabBarP
           ...Platform.select({
             ios: {
               shadowColor: isPremium ? '#D4A843' : '#000',
-              shadowOffset: { width: 0, height: -3 },
-              shadowOpacity: isPremium ? 0.12 : isDark ? 0.45 : 0.1,
-              shadowRadius: 24,
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: isPremium ? 0.30 : isDark ? 0.55 : 0.22,
+              shadowRadius: 26,
             },
-            android: { elevation: 18 },
+            android: { elevation: 22 },
           }),
         },
       ]}>
-        {/* Background fill */}
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: overlayBg }]} />
+        {/* Frosted base — heavy alpha so the bar reads clearly */}
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: fillBg }]} pointerEvents="none" />
 
-        {/* Tinted overlay on top of blur */}
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: overlayBg }]} />
+        {/* Top sheen — bright inner highlight for a wet-glass feel */}
+        <View style={[s.topSheen, {
+          backgroundColor: isDark || isPremium
+            ? 'rgba(255,255,255,0.06)'
+            : 'rgba(255,255,255,0.45)',
+        }]} pointerEvents="none" />
 
-        {/* Glass surface highlight — 1px bright line across the top */}
-        <View style={s.topHighlight} />
+        {/* 1px crisp top highlight line */}
+        <View style={[s.topHighlight, {
+          backgroundColor: isDark || isPremium
+            ? 'rgba(255,255,255,0.22)'
+            : 'rgba(255,255,255,0.75)',
+        }]} pointerEvents="none" />
 
         {/* Subtle inner bottom shadow line */}
         <View style={[
           s.bottomEdge,
-          { backgroundColor: isDark ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.04)' },
-        ]} />
+          { backgroundColor: isDark ? 'rgba(0,0,0,0.32)' : 'rgba(0,0,0,0.07)' },
+        ]} pointerEvents="none" />
 
         {/* Tabs */}
         <View style={s.tabsRow}>
@@ -235,19 +253,24 @@ export default function TabBar({ active, onSwitch, unseenSaved = 0, t }: TabBarP
 // ─────────────────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   outerWrap: {
-    paddingHorizontal: 18,
-    paddingTop: 6,
+    paddingHorizontal: 14,
+    paddingTop: 4,
   },
   pill: {
-    borderRadius: 32,
+    borderRadius: 30,
     borderWidth: 1,
     overflow: 'hidden',
+  },
+  topSheen: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0,
+    height: 18,
+    zIndex: 5,
   },
   topHighlight: {
     position: 'absolute',
     top: 0, left: 0, right: 0,
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.32)',
     zIndex: 10,
   },
   bottomEdge: {
@@ -259,19 +282,38 @@ const s = StyleSheet.create({
   tabsRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    paddingTop: 10,
-    paddingBottom: 10,
+    paddingTop: 9,
+    paddingBottom: 9,
   },
   tabItem:  { flex: 1, alignItems: 'center' },
-  tabInner: { alignItems: 'center', justifyContent: 'center', minHeight: 44, gap: 3 },
+  tabInner: { alignItems: 'center', justifyContent: 'center', minHeight: 46, gap: 4 },
 
-  // Glass pill behind active icon
+  // Frosted-white liquid glass pill behind the active icon —
+  // reads as a separate, more-blurred layer above the bar.
   indicator: {
     position: 'absolute',
-    width: 56,
-    height: 36,
-    borderRadius: 18,
+    width: 58,
+    height: 38,
+    borderRadius: 19,
     borderWidth: 1,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.18,
+        shadowRadius: 8,
+      },
+      android: { elevation: 6 },
+    }),
+  },
+  // Inner specular shine — sits along the top of the active pill, child of `indicator`
+  indicatorShine: {
+    position: 'absolute',
+    top: 1,
+    left: 4,
+    right: 4,
+    height: 16,
+    borderRadius: 8,
   },
 
   label: { fontSize: 10, fontWeight: '700', letterSpacing: 0.2 },

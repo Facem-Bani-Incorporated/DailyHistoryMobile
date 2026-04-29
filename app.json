@@ -35,10 +35,7 @@
         "android.permission.RECEIVE_BOOT_COMPLETED"
       ]
     },
-    "web": {
-      "bundler": "metro",
-      "output": "static"
-    },
+
     "plugins": [
       "expo-router",
       "expo-notifications",

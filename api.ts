@@ -9,8 +9,8 @@ const api = axios.create({
 
 // ── Request interceptor — attach JWT token ──
 api.interceptors.request.use(async (config) => {
-  // Auth endpoints — no token needed
-  if (config.url?.includes('/auth')) {
+  // Auth + guest endpoints — no token needed
+  if (config.url?.includes('/auth') || config.url?.includes('/guest')) {
     return config;
   }
 
@@ -50,7 +50,8 @@ api.interceptors.response.use(
 
     // If backend returns 401 on a protected route, token is expired/invalid
     // Auto-logout so user gets redirected to login screen cleanly
-    if (status === 401 && !url?.includes('/auth')) {
+    const hadToken = !!error.config?.headers?.Authorization;
+    if (status === 401 && hadToken && !url?.includes('/auth') && !url?.includes('/guest')) {
       if (__DEV__) console.log('[API] Token expired — logging out');
       useAuthStore.getState().logout();
     }

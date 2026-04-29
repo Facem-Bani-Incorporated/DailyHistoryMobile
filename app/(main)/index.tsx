@@ -36,7 +36,7 @@ import SearchScreen from '../../components/SearchScreen';
 import { StoryModal } from '../../components/StoryModal';
 import StreakIcon from '../../components/StreakIcon';
 import type { Tab } from '../../components/TabBar';
-import TabBar from '../../components/TabBar';
+import TabBar, { TABBAR_PILL_HEIGHT } from '../../components/TabBar';
 import TimelineScreen from '../../components/TimelineScreen';
 import WeeklyRecapModal from '../../components/WeeklyRecapModal';
 import { AD_UNIT_IDS } from '../../config/ads';
@@ -266,71 +266,112 @@ const _peek = StyleSheet.create({
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
-// PRO CARD SECTION — Magazine-style editorial PRO card
-// Same height as the free card above for perfect symmetry
-// For non-pro users: an editorial unlock overlay with serif hairline design
+// PRO CARD SECTION — Event visible at top, fades into lock CTA at bottom
+// The user sees enough to be intrigued but can't read the full story.
 // ═════════════════════════════════════════════════════════════════════════════
-const PRO_CARD_H = H * 0.65;
+const PRO_CARD_H = Math.max(280, H * 0.5);
 const SERIF_FONT = Platform.OS === 'ios' ? 'Georgia' : 'serif';
 
 const ProCardSection = ({ event, allEvents, gold, isPro, onPaywall }: {
   event: any; allEvents: any[]; gold: string; isPro: boolean; onPaywall: () => void;
 }) => {
-  const shimmer = useRef(new Animated.Value(0)).current;
+  const pulse = useRef(new Animated.Value(0)).current;
+  const ctaScale = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    if (!isPro) {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(shimmer, { toValue: 1, duration: 2400, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-          Animated.timing(shimmer, { toValue: 0, duration: 2600, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        ]),
-      ).start();
-    }
+    if (isPro) return;
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 2200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 2200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ]),
+    ).start();
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(ctaScale, { toValue: 1.03, duration: 1400, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(ctaScale, { toValue: 1, duration: 1400, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      ]),
+    ).start();
   }, [isPro]);
 
-  const ruleOp = shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.85] });
+  const glowOp = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.18, 0.55] });
+  const ruleOp = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.9] });
+
+  const title =
+    event?.titleTranslations?.en ??
+    event?.titleTranslations?.ro ??
+    'Historical Event';
+  const category = (event?.category ?? 'HISTORY').replace(/_/g, ' ');
+  const rawDate = event?.eventDate ?? event?.event_date ?? '';
+  const year = rawDate ? String(rawDate).slice(0, 4) : '';
 
   return (
     <View style={[_proSec.cardWrap, { height: PRO_CARD_H }]}>
-      <HistoryCard event={event} allEvents={allEvents} />
-      {!isPro && (
-        <TouchableOpacity activeOpacity={0.92} onPress={onPaywall}
-          style={[StyleSheet.absoluteFill, _proSec.locked]}>
+      {/* Full event card — fully visible, no dim */}
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <HistoryCard event={event} allEvents={allEvents} />
+      </View>
+
+      {isPro ? null : (
+        <TouchableOpacity
+          activeOpacity={0.93}
+          onPress={onPaywall}
+          style={StyleSheet.absoluteFill}
+        >
+          {/* Gradient: transparent top → opaque bottom — event peeks through */}
           <LinearGradient
-            colors={['rgba(5,4,10,0.55)', 'rgba(5,4,10,0.92)', 'rgba(5,4,10,0.98)']}
-            locations={[0, 0.5, 1]}
+            colors={[
+              'transparent',
+              'transparent',
+              'rgba(5,4,10,0.6)',
+              'rgba(5,4,10,0.93)',
+              'rgba(5,4,10,0.99)',
+            ]}
+            locations={[0, 0.28, 0.52, 0.72, 1]}
             style={StyleSheet.absoluteFill}
           />
 
-          {/* Editorial hairline frame */}
-          <View style={[_proSec.frame, { borderColor: gold + '30' }]} pointerEvents="none" />
-
-          {/* Kicker row */}
-          <View style={_proSec.kickerRow}>
-            <Animated.View style={[_proSec.kickerRule, { backgroundColor: gold, opacity: ruleOp }]} />
-            <Text style={[_proSec.kicker, { color: gold }]}>✦  PRO EDITION</Text>
-            <Animated.View style={[_proSec.kickerRule, { backgroundColor: gold, opacity: ruleOp }]} />
+          {/* Top PRO badge — floats over the visible event area */}
+          <View style={_proSec.topBadgeRow} pointerEvents="none">
+            <Animated.View style={[_proSec.proBadge, { backgroundColor: gold + '22', borderColor: gold + '60', opacity: glowOp.interpolate({ inputRange: [0.18, 0.55], outputRange: [0.7, 1] }) }]}>
+              <Ionicons name="star" size={10} color={gold} />
+              <Text style={[_proSec.proBadgeText, { color: gold }]}>PRO</Text>
+            </Animated.View>
           </View>
 
-          {/* Serif headline */}
-          <Text style={[_proSec.headline, { color: '#F5ECD7' }]}>The Archive</Text>
-          <Text style={[_proSec.subhead, { color: gold }]}>—  Unlocked  —</Text>
+          {/* Bottom lock section */}
+          <View style={_proSec.bottomSection}>
+            {/* Shimmer rule */}
+            <View style={_proSec.ruleRow}>
+              <Animated.View style={[_proSec.rule, { backgroundColor: gold, opacity: ruleOp }]} />
+              <Text style={[_proSec.kicker, { color: gold }]}>✦  EXCLUSIVE STORY</Text>
+              <Animated.View style={[_proSec.rule, { backgroundColor: gold, opacity: ruleOp }]} />
+            </View>
 
-          {/* Description */}
-          <Text style={_proSec.desc}>
-            Exclusive editorial stories, curated daily for the history devoted.
-          </Text>
+            {/* Event title peek — partially revealed as the hook */}
+            <Text style={_proSec.peekCategory}>{category}{year ? `  ·  ${year}` : ''}</Text>
+            <Text style={_proSec.peekTitle} numberOfLines={2}>{title}</Text>
 
-          {/* CTA */}
-          <View style={[_proSec.cta, { borderColor: gold, backgroundColor: gold + '12' }]}>
-            <Ionicons name="lock-open" size={14} color={gold} />
-            <Text style={[_proSec.ctaT, { color: gold }]}>UNLOCK THE ARCHIVE</Text>
-            <Ionicons name="arrow-forward" size={14} color={gold} />
+            {/* Lock hint */}
+            <Text style={_proSec.lockHint}>
+              This story is locked. Upgrade to PRO to read the full account.
+            </Text>
+
+            {/* CTA button */}
+            <Animated.View style={{ transform: [{ scale: ctaScale }] }}>
+              <View style={[_proSec.ctaBtn, { backgroundColor: gold }]}>
+                <Ionicons name="lock-open-outline" size={15} color="#0A0815" />
+                <Text style={_proSec.ctaBtnText}>Unlock PRO</Text>
+                <Ionicons name="arrow-forward" size={15} color="#0A0815" />
+              </View>
+            </Animated.View>
+
+            {/* Glow behind CTA */}
+            <Animated.View style={[_proSec.ctaGlow, { backgroundColor: gold, opacity: glowOp }]} pointerEvents="none" />
           </View>
 
-          {/* Footer meta */}
-          <Text style={_proSec.footer}>CURATED · HISTORICAL · EDITORIAL</Text>
+          {/* Hairline editorial frame */}
+          <View style={[_proSec.frame, { borderColor: gold + '25' }]} pointerEvents="none" />
         </TouchableOpacity>
       )}
     </View>
@@ -338,81 +379,110 @@ const ProCardSection = ({ event, allEvents, gold, isPro, onPaywall }: {
 };
 
 const _proSec = StyleSheet.create({
-  cardWrap: { position: 'relative' },
-  locked: {
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 40,
-    overflow: 'hidden',
-  },
-  frame: {
+  cardWrap: { position: 'relative', borderRadius: 28, overflow: 'hidden' },
+
+  topBadgeRow: {
     position: 'absolute',
-    top: 18, left: 18, right: 18, bottom: 18,
-    borderRadius: 20,
-    borderWidth: StyleSheet.hairlineWidth,
+    top: 16,
+    right: 16,
   },
-  kickerRow: {
+  proBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginBottom: 22,
-  },
-  kickerRule: { width: 26, height: 1, borderRadius: 0.5 },
-  kicker: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 3.2,
-  },
-  headline: {
-    fontSize: 44,
-    fontWeight: '800',
-    letterSpacing: -0.8,
-    fontFamily: SERIF_FONT,
-    textAlign: 'center',
-    textShadowColor: 'rgba(0,0,0,0.6)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 10,
-  },
-  subhead: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 3,
-    marginTop: 6,
-    marginBottom: 18,
-    textTransform: 'uppercase',
-  },
-  desc: {
-    color: 'rgba(245,236,215,0.65)',
-    fontSize: 13,
-    lineHeight: 19,
-    textAlign: 'center',
-    fontStyle: 'italic',
-    fontFamily: SERIF_FONT,
-    maxWidth: 280,
-    marginBottom: 28,
-  },
-  cta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 2,
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
     borderWidth: 1,
   },
-  ctaT: {
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 2.2,
-  },
-  footer: {
-    position: 'absolute',
-    bottom: 34,
-    color: 'rgba(245,236,215,0.32)',
+  proBadgeText: {
     fontSize: 9,
-    fontWeight: '700',
+    fontWeight: '900',
+    letterSpacing: 1.8,
+  },
+
+  bottomSection: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 28,
+    paddingBottom: 28,
+    alignItems: 'center',
+    gap: 10,
+  },
+
+  ruleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 4,
+  },
+  rule: { flex: 1, height: 1, maxWidth: 40, borderRadius: 0.5 },
+  kicker: {
+    fontSize: 9,
+    fontWeight: '900',
     letterSpacing: 3,
+  },
+
+  peekCategory: {
+    color: 'rgba(245,236,215,0.5)',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+  },
+  peekTitle: {
+    color: '#F5ECD7',
+    fontSize: 20,
+    fontWeight: '800',
+    fontFamily: SERIF_FONT,
+    textAlign: 'center',
+    letterSpacing: -0.3,
+    lineHeight: 26,
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 8,
+  },
+  lockHint: {
+    color: 'rgba(245,236,215,0.45)',
+    fontSize: 12,
+    textAlign: 'center',
+    lineHeight: 17,
+    fontStyle: 'italic',
+    fontFamily: SERIF_FONT,
+    maxWidth: 260,
+  },
+
+  ctaBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 24,
+    paddingVertical: 13,
+    borderRadius: 14,
+    marginTop: 4,
+  },
+  ctaBtnText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#0A0815',
+    letterSpacing: 0.3,
+  },
+  ctaGlow: {
+    position: 'absolute',
+    bottom: 20,
+    width: 160,
+    height: 40,
+    borderRadius: 20,
+    alignSelf: 'center',
+  },
+
+  frame: {
+    position: 'absolute',
+    top: 12, left: 12, right: 12, bottom: 12,
+    borderRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth,
   },
 });
 
@@ -766,6 +836,10 @@ export default function HomeScreen() {
 
   const goldColor = isPremium ? '#D4A843' : theme.gold;
 
+  // Space the floating glass tab bar occupies above the home indicator.
+  // Used as paddingBottom for inner scrollable content so the last items aren't hidden behind it.
+  const floatingBarPad = Math.max(insets.bottom, 8) + TABBAR_PILL_HEIGHT;
+
   // ── Item renderer ──
   const sortByImpact = (a: any, b: any) => (b.impactScore ?? 0) - (a.impactScore ?? 0);
 
@@ -806,8 +880,8 @@ export default function HomeScreen() {
               nestedScrollEnabled
               bounces={false}
             >
-              {/* Free main event — same size as PRO below */}
-              <View style={{ height: H * 0.65 }}>
+              {/* Free main event — sized so the PRO peek arrow is visible on every device */}
+              <View style={{ height: Math.max(280, H * 0.5) }}>
                 <HistoryCard event={freeMain} allEvents={allEvents} />
               </View>
 
@@ -824,7 +898,7 @@ export default function HomeScreen() {
                 isPro={isPro}
                 onPaywall={() => presentPaywall()}
               />
-              <View style={{ height: 40 }} />
+              <View style={{ height: floatingBarPad + 12 }} />
             </ScrollView>
           );
         } else {
@@ -859,6 +933,7 @@ export default function HomeScreen() {
     tab, theme, t, language, allEvents, tick, goldColor, isPro,
     tomorrowMainUnlocked, tomorrowDiscoverUnlocked, isUnlockReady,
     handleUnlockMain, handleUnlockDiscover, scrollX, presentPaywall,
+    floatingBarPad,
   ]);
 
   const getItemLayout = useCallback((_: any, index: number) => ({
@@ -1000,6 +1075,44 @@ export default function HomeScreen() {
           </View>
         )}
 
+        {/* ═════════════════ TOP BANNER AD (between calendar header and today's event) ═════════════════ */}
+        {shouldShowBanner && !bannerError && (
+          <View
+            style={[
+              ms.topBannerWrap,
+              !bannerLoaded && { height: 0, minHeight: 0, marginVertical: 0, marginHorizontal: 0, overflow: 'hidden', borderWidth: 0 },
+              {
+                borderColor: isPremium
+                  ? 'rgba(212,168,67,0.28)'
+                  : isDark
+                    ? 'rgba(255,255,255,0.12)'
+                    : 'rgba(0,0,0,0.08)',
+                backgroundColor: isPremium
+                  ? 'rgba(20,16,28,0.55)'
+                  : isDark
+                    ? 'rgba(20,20,28,0.45)'
+                    : 'rgba(0,0,0,0.03)',
+              },
+            ]}
+          >
+            <BannerAd
+              unitId={AD_UNIT_IDS.BANNER}
+              size={BannerAdSize.BANNER}
+              onAdLoaded={() => {
+                console.log('[Ads][Banner-top] LOADED — unitId=', AD_UNIT_IDS.BANNER);
+                setBannerLoaded(true);
+                setBannerError(false);
+              }}
+              onAdFailedToLoad={(err: any) => {
+                console.warn('[Ads][Banner-top] FAILED', err?.message);
+                setBannerError(true);
+              }}
+              onAdOpened={() => console.log('[Ads][Banner-top] OPENED')}
+              onAdClosed={() => console.log('[Ads][Banner-top] CLOSED')}
+            />
+          </View>
+        )}
+
         {/* ═════════════════ CONTENT ═════════════════ */}
         <View style={{ flex: 1 }}>
           {tab === 'saved' ? <SavedScreen />
@@ -1042,35 +1155,18 @@ export default function HomeScreen() {
             ) : null}
         </View>
 
-        {/* ═════════════════ BANNER AD (above tab bar) ═════════════════ */}
-        {shouldShowBanner && !bannerError && (
-          <View style={[
-            ms.bannerWrap,
-            {
-              backgroundColor: theme.background,
-              borderTopColor: isPremium ? '#D4A84315' : theme.border,
-            },
-            !bannerLoaded && { height: 0, minHeight: 0, paddingVertical: 0, borderTopWidth: 0, overflow: 'hidden' },
-          ]}>
-            <BannerAd
-              unitId={AD_UNIT_IDS.BANNER}
-              size={BannerAdSize.BANNER}
-              onAdLoaded={() => {
-                console.log('[Ads][Banner-bottom] LOADED — unitId=', AD_UNIT_IDS.BANNER);
-                setBannerLoaded(true);
-                setBannerError(false);
-              }}
-              onAdFailedToLoad={(err: any) => {
-                console.warn('[Ads][Banner-bottom] FAILED', err?.message);
-                setBannerError(true);
-              }}
-              onAdOpened={() => console.log('[Ads][Banner-bottom] OPENED')}
-              onAdClosed={() => console.log('[Ads][Banner-bottom] CLOSED')}
-            />
-          </View>
-        )}
-
-        <TabBar active={tab} onSwitch={switchTab} unseenSaved={unseenSaved} t={t} />
+        {/* ═════════════════ FLOATING GLASS TAB BAR — sits right at the bottom edge ═════════════════ */}
+        <View
+          pointerEvents="box-none"
+          style={[
+            ms.floatingBar,
+            // Sit right against the bottom edge — only 4px breathing room on all devices.
+            // The system home indicator (if present) draws over our bar, like Instagram/TikTok.
+            { paddingBottom: 4 },
+          ]}
+        >
+          <TabBar active={tab} onSwitch={switchTab} unseenSaved={unseenSaved} t={t} />
+        </View>
 
         <AchievementsModal visible={achVis} onClose={() => setAchVis(false)} />
         <LeaderboardModal visible={leadVis} onClose={() => setLeadVis(false)} />
@@ -1155,5 +1251,53 @@ const makeStyles = (theme: any, isDark: boolean, isPremium: boolean) => StyleShe
   bannerWrap: {
     alignItems: 'center', justifyContent: 'center', paddingVertical: 4,
     borderTopWidth: StyleSheet.hairlineWidth, minHeight: 58,
+  },
+
+  // Banner ad anchored at the top, sitting between calendar header and today's card.
+  topBannerWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 6,
+    paddingVertical: 4,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    minHeight: 58,
+    overflow: 'hidden',
+  },
+
+  // Floating glass island anchored at the bottom of the screen
+  floatingBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  bannerGlassWrap: {
+    marginHorizontal: 18,
+    marginBottom: 8,
+    height: 58,
+    borderRadius: 22,
+    borderWidth: 1,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.18,
+        shadowRadius: 18,
+      },
+      android: { elevation: 10 },
+    }),
+  },
+  bannerTopHighlight: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0,
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.32)',
+    zIndex: 10,
   },
 });

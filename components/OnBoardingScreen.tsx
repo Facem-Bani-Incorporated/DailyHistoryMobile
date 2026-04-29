@@ -26,6 +26,7 @@ import {
   Animated,
   Dimensions,
   Easing,
+  Image,
   Platform,
   Pressable,
   ScrollView,
@@ -35,6 +36,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import api from '../api';
 
 const { width: W } = Dimensions.get('window');
 
@@ -281,6 +283,26 @@ export default function OnboardingScreen({ onComplete }: Props) {
     setStep('subscription');
   };
 
+  // ── Background image for subscription step ──
+  const [bgImageUri, setBgImageUri] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (step !== 'subscription') return;
+    api.get('/daily-content/guest').then(res => {
+      const data = res.data;
+      const arr = data?.events
+        ? data.events
+        : Array.isArray(data)
+        ? data
+        : data && typeof data === 'object'
+        ? [data]
+        : [];
+      const event = arr[0] ?? null;
+      const uri = event?.gallery?.[0] ?? event?.imageUrl ?? null;
+      if (uri) setBgImageUri(uri);
+    }).catch(() => {});
+  }, [step]);
+
   // ── Subscription step handlers ──
   const [paywallLoading, setPaywallLoading] = useState(false);
   const handleUnlockPro = async () => {
@@ -452,109 +474,196 @@ export default function OnboardingScreen({ onComplete }: Props) {
     </View>
   );
 
-  // ── SUBSCRIPTION STEP ──
+  // ── SUBSCRIPTION STEP — Liquid Glass Premium ──
   function renderSubscriptionStep() {
     const benefits = [
-      { icon: Sparkles, title: 'Exclusive PRO stories', desc: 'Curated premium events with deeper research and visuals.' },
-      { icon: MapIcon,  title: 'Unlock every category', desc: 'Full access to all topics — science, art, war, culture.' },
-      { icon: ShieldCheck, title: 'Ad-free experience', desc: 'Read without interruptions. Just history, nothing else.' },
-      { icon: Rocket, title: 'Early access', desc: 'Be the first to try new features as we release them.' },
+      { icon: Sparkles,    title: 'Exclusive PRO stories',  desc: 'Curated premium events with deeper research and visuals.' },
+      { icon: MapIcon,     title: 'Unlock every category',  desc: 'Full access to all topics — science, art, war, culture.' },
+      { icon: ShieldCheck, title: 'Ad-free experience',     desc: 'Read without interruptions. Just history, nothing else.' },
+      { icon: Rocket,      title: 'Early access',           desc: 'Be the first to try new features as we release them.' },
     ];
+
     return (
-      <Animated.View
-        style={[
-          s.subContent,
-          {
-            paddingTop: insets.top + 16,
-            paddingBottom: insets.bottom + 24,
-            opacity: subFade,
-            transform: [{ translateY: subSlide }],
-          },
-        ]}
-      >
-        <View style={s.notifTopRow}>
-          <View style={{ flex: 1 }} />
-          <TouchableOpacity
-            onPress={handleSkipPro}
-            style={s.skipButton}
-            activeOpacity={0.5}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          >
-            <Text style={s.skipText}>Skip</Text>
-          </TouchableOpacity>
-        </View>
+      <View style={{ flex: 1 }}>
+        {/* Full-screen PRO event photo background */}
+        {bgImageUri ? (
+          <Image
+            source={{ uri: bgImageUri }}
+            style={StyleSheet.absoluteFill}
+            resizeMode="cover"
+          />
+        ) : (
+          /* Fallback solid dark gradient if no image yet */
+          <LinearGradient
+            colors={['#050308', '#0A0715', '#08050F']}
+            locations={[0, 0.5, 1]}
+            style={StyleSheet.absoluteFill}
+          />
+        )}
 
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 20 }}
-          bounces={false}
+        {/* Dark overlay so glass content stays readable */}
+        <LinearGradient
+          colors={['rgba(5,3,8,0.72)', 'rgba(10,7,21,0.80)', 'rgba(8,5,15,0.90)']}
+          locations={[0, 0.5, 1]}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+
+        {/* Gold ambient glow — top center */}
+        <View style={gl.ambientGlow} pointerEvents="none" />
+
+        <Animated.View
+          style={[
+            gl.content,
+            {
+              paddingTop: insets.top + 12,
+              paddingBottom: insets.bottom + 20,
+              opacity: subFade,
+              transform: [{ translateY: subSlide }],
+            },
+          ]}
         >
-          <View style={s.subHero}>
-            <View style={s.subCrownWrap}>
-              <LinearGradient
-                colors={['#D4A017', '#F5CE50']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={s.subCrownCircle}
-              >
-                <Crown color="#0B0D11" size={26} strokeWidth={2.2} />
-              </LinearGradient>
-            </View>
-
-            <View style={s.subBadge}>
-              <Sparkles color="#D4A017" size={10} strokeWidth={2.5} />
-              <Text style={s.subBadgeT}>DAILY HISTORY PRO</Text>
-            </View>
-
-            <Text style={s.subTitle}>
-              Go deeper into{'\n'}
-              <Text style={s.subTitleGold}>every story.</Text>
-            </Text>
-            <Text style={s.subSubtitle}>
-              Unlock premium events, remove ads, and support the team building the app.
-            </Text>
+          {/* Skip */}
+          <View style={s.notifTopRow}>
+            <View style={{ flex: 1 }} />
+            <TouchableOpacity
+              onPress={handleSkipPro}
+              style={gl.skipBtn}
+              activeOpacity={0.5}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Text style={gl.skipTxt}>Skip</Text>
+            </TouchableOpacity>
           </View>
 
-          <View style={s.subBenefits}>
-            {benefits.map((b, i) => {
-              const Icon = b.icon;
-              return (
-                <View key={i} style={s.subBenefitRow}>
-                  <View style={s.subBenefitIconWrap}>
-                    <Icon color="#D4A017" size={15} strokeWidth={2.2} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.subBenefitTitle}>{b.title}</Text>
-                    <Text style={s.subBenefitDesc}>{b.desc}</Text>
-                  </View>
-                  <CheckCircle2 color="#D4A017" size={15} strokeWidth={2.2} />
-                </View>
-              );
-            })}
-          </View>
-        </ScrollView>
-
-        <View style={s.subCtaArea}>
-          <Pressable
-            onPress={handleUnlockPro}
-            disabled={paywallLoading}
-            style={({ pressed }) => [s.ctaButton, pressed && { opacity: 0.85 }, paywallLoading && { opacity: 0.7 }]}
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 16 }}
+            bounces={false}
           >
-            {paywallLoading ? (
-              <ActivityIndicator color="#0B0D11" size="small" />
-            ) : (
-              <>
-                <Sparkles color="#0B0D11" size={16} strokeWidth={2.5} style={{ marginRight: 8 }} />
-                <Text style={s.ctaText}>Unlock Pro</Text>
-              </>
-            )}
-          </Pressable>
+            {/* ── Hero ── */}
+            <View style={gl.hero}>
+              {/* Crown glass orb */}
+              <View style={gl.orbWrap}>
+                {/* Outer glow ring */}
+                <View style={[gl.orbRing, { width: 120, height: 120, borderRadius: 60, borderColor: 'rgba(212,168,67,0.12)' }]} />
+                <View style={[gl.orbRing, { width: 90, height: 90, borderRadius: 45, borderColor: 'rgba(212,168,67,0.20)' }]} />
+                {/* Glass orb */}
+                <View style={gl.glassOrb}>
+                  <LinearGradient
+                    colors={['rgba(255,255,255,0.18)', 'rgba(255,255,255,0.04)', 'rgba(212,168,67,0.15)']}
+                    locations={[0, 0.4, 1]}
+                    style={StyleSheet.absoluteFill}
+                  />
+                  {/* Specular highlight */}
+                  <LinearGradient
+                    colors={['rgba(255,255,255,0.28)', 'transparent']}
+                    locations={[0, 0.5]}
+                    style={gl.orbSpecular}
+                  />
+                  <Crown color="#D4A843" size={28} strokeWidth={1.8} />
+                </View>
+              </View>
 
-          <TouchableOpacity onPress={handleSkipPro} activeOpacity={0.5} style={s.laterButton}>
-            <Text style={s.laterText}>Continue with free</Text>
-          </TouchableOpacity>
-        </View>
-      </Animated.View>
+              {/* PRO badge pill */}
+              <View style={gl.proPill}>
+                <LinearGradient
+                  colors={['rgba(212,168,67,0.22)', 'rgba(212,168,67,0.10)']}
+                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                  style={StyleSheet.absoluteFill}
+                />
+                <View style={gl.proPillShine} />
+                <Sparkles color="#D4A843" size={10} strokeWidth={2.5} />
+                <Text style={gl.proPillText}>DAILY HISTORY PRO</Text>
+              </View>
+
+              <Text style={gl.heroTitle}>
+                History,{'\n'}
+                <Text style={gl.heroTitleGold}>without limits.</Text>
+              </Text>
+              <Text style={gl.heroSub}>
+                One upgrade. Every story, unlocked.
+              </Text>
+            </View>
+
+            {/* ── Liquid glass benefit cards ── */}
+            <View style={gl.benefitsList}>
+              {benefits.map((b, i) => {
+                const Icon = b.icon;
+                return (
+                  <View key={i} style={gl.glassCard}>
+                    {/* Glass fill */}
+                    <LinearGradient
+                      colors={['rgba(255,255,255,0.07)', 'rgba(255,255,255,0.025)']}
+                      locations={[0, 1]}
+                      style={StyleSheet.absoluteFill}
+                    />
+                    {/* Top specular shine */}
+                    <LinearGradient
+                      colors={['rgba(255,255,255,0.10)', 'transparent']}
+                      locations={[0, 0.6]}
+                      style={gl.cardTopShine}
+                    />
+                    {/* Gold left accent line */}
+                    <View style={gl.cardAccentLine} />
+
+                    <View style={gl.cardIconWrap}>
+                      <LinearGradient
+                        colors={['rgba(212,168,67,0.22)', 'rgba(212,168,67,0.08)']}
+                        style={StyleSheet.absoluteFill}
+                      />
+                      <Icon color="#D4A843" size={16} strokeWidth={2} />
+                    </View>
+
+                    <View style={{ flex: 1 }}>
+                      <Text style={gl.cardTitle}>{b.title}</Text>
+                      <Text style={gl.cardDesc}>{b.desc}</Text>
+                    </View>
+
+                    <CheckCircle2 color="#D4A843" size={16} strokeWidth={2} />
+                  </View>
+                );
+              })}
+            </View>
+          </ScrollView>
+
+          {/* ── CTA ── */}
+          <View style={gl.ctaArea}>
+            {/* CTA gold glow */}
+            <View style={gl.ctaGlow} pointerEvents="none" />
+
+            <Pressable
+              onPress={handleUnlockPro}
+              disabled={paywallLoading}
+              style={({ pressed }) => [gl.ctaBtn, pressed && { opacity: 0.88 }, paywallLoading && { opacity: 0.7 }]}
+            >
+              <LinearGradient
+                colors={['#F5CE50', '#D4A017', '#C49010']}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFill}
+              />
+              {/* Specular shine on button */}
+              <LinearGradient
+                colors={['rgba(255,255,255,0.25)', 'transparent']}
+                locations={[0, 0.5]}
+                style={gl.btnShine}
+              />
+              {paywallLoading ? (
+                <ActivityIndicator color="#0B0D11" size="small" />
+              ) : (
+                <>
+                  <Crown color="#0B0D11" size={16} strokeWidth={2.5} />
+                  <Text style={gl.ctaBtnText}>Unlock PRO</Text>
+                </>
+              )}
+            </Pressable>
+
+            <TouchableOpacity onPress={handleSkipPro} activeOpacity={0.5} style={s.laterButton}>
+              <Text style={gl.laterTxt}>Continue with free</Text>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+      </View>
     );
   }
 }
@@ -921,5 +1030,237 @@ const s = StyleSheet.create({
   },
   subCtaArea: {
     paddingTop: 8,
+  },
+});
+
+// ── Liquid Glass styles ───────────────────────────────────────────────────────
+const gl = StyleSheet.create({
+  content: {
+    flex: 1,
+    paddingHorizontal: 22,
+  },
+
+  ambientGlow: {
+    position: 'absolute',
+    top: -60,
+    alignSelf: 'center',
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+    backgroundColor: '#D4A843',
+    opacity: 0.07,
+  },
+
+  skipBtn: {
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.10)',
+  },
+  skipTxt: {
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+
+  // Hero
+  hero: {
+    alignItems: 'center',
+    paddingTop: 8,
+    paddingBottom: 24,
+  },
+  orbWrap: {
+    width: 130,
+    height: 130,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  orbRing: {
+    position: 'absolute',
+    borderWidth: 1,
+  },
+  glassOrb: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.20)',
+    ...Platform.select({
+      ios: { shadowColor: '#D4A843', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.6, shadowRadius: 22 },
+      android: { elevation: 14 },
+    }),
+  },
+  orbSpecular: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '50%',
+    borderTopLeftRadius: 34,
+    borderTopRightRadius: 34,
+  },
+
+  proPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 100,
+    overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(212,168,67,0.30)',
+    marginBottom: 18,
+  },
+  proPillShine: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0,
+    height: '50%',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  proPillText: {
+    color: '#D4A843',
+    fontSize: 9.5,
+    fontWeight: '900',
+    letterSpacing: 2.2,
+  },
+
+  heroTitle: {
+    fontSize: 34,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -1,
+    lineHeight: 42,
+    textAlign: 'center',
+    marginBottom: 10,
+    ...Platform.select({
+      ios: { textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 8 },
+    }),
+  },
+  heroTitleGold: {
+    color: '#D4A843',
+  },
+  heroSub: {
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.38)',
+    textAlign: 'center',
+    letterSpacing: 0.2,
+    lineHeight: 22,
+  },
+
+  // Benefit cards
+  benefitsList: {
+    gap: 10,
+    marginBottom: 8,
+  },
+  glassCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderRadius: 18,
+    overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.10)',
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 12 },
+      android: { elevation: 4 },
+    }),
+  },
+  cardTopShine: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0,
+    height: 36,
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+  },
+  cardAccentLine: {
+    position: 'absolute',
+    left: 0,
+    top: 14,
+    bottom: 14,
+    width: 2,
+    borderRadius: 1,
+    backgroundColor: '#D4A843',
+    opacity: 0.7,
+  },
+  cardIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(212,168,67,0.25)',
+  },
+  cardTitle: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 14,
+    letterSpacing: 0.1,
+    marginBottom: 3,
+  },
+  cardDesc: {
+    color: 'rgba(255,255,255,0.38)',
+    fontSize: 12,
+    lineHeight: 17,
+    letterSpacing: 0.1,
+  },
+
+  // CTA
+  ctaArea: {
+    paddingTop: 10,
+    gap: 0,
+  },
+  ctaGlow: {
+    position: 'absolute',
+    top: -10,
+    alignSelf: 'center',
+    width: 200,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#D4A843',
+    opacity: 0.18,
+  },
+  ctaBtn: {
+    height: 56,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: { shadowColor: '#D4A843', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.45, shadowRadius: 18 },
+      android: { elevation: 10 },
+    }),
+  },
+  btnShine: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0,
+    height: '50%',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+  },
+  ctaBtnText: {
+    color: '#0A0510',
+    fontWeight: '900',
+    fontSize: 16,
+    letterSpacing: 0.3,
+  },
+  laterTxt: {
+    color: 'rgba(255,255,255,0.28)',
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
   },
 });
