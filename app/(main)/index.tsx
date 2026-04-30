@@ -91,7 +91,7 @@ const d2o = (date: Date) => {
 type Tier = 'free' | 'pro';
 interface PD { data: any[]; empty: boolean }
 const EMPTY: PD = { data: [], empty: true };
-const ck = (iso: string, tier: Tier = 'free') => tier === 'pro' ? `dh_v2_pro_${iso}` : `dh_v2_${iso}`;
+const ck = (iso: string, tier: Tier = 'free') => tier === 'pro' ? `dh_v6_pro_${iso}` : `dh_v6_${iso}`;
 const mk = (tier: Tier, iso: string) => `${tier}_${iso}`;
 const rC = async (iso: string, tier: Tier = 'free') => {
   try {
@@ -308,7 +308,7 @@ const ProCardSection = ({ event, allEvents, gold, isPro, onPaywall }: {
   return (
     <View style={[_proSec.cardWrap, { height: PRO_CARD_H }]}>
       {/* Full event card — fully visible, no dim */}
-      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <View style={StyleSheet.absoluteFill} pointerEvents={isPro ? 'box-none' : 'none'}>
         <HistoryCard event={event} allEvents={allEvents} />
       </View>
 
@@ -729,13 +729,22 @@ export default function HomeScreen() {
       if (c) { mem.current[key] = { data: c.data, empty: c.empty }; return mem.current[key]; }
     }
     try {
-      const path = tierArg === 'pro' ? '/daily-content/pro/by-date' : '/daily-content/by-date';
-      const r = await api.get(path, { params: { date: iso, _t: Date.now() } });
-      const data: any[] = r.data?.events ?? [];
-      const pg: PD = { data, empty: data.length === 0 };
-      mem.current[key] = pg; wC(iso, tierArg, data, pg.empty);
-      return pg;
-    } catch { return EMPTY; }
+      const r = await api.get('/daily-content/by-date', { params: { date: iso, _t: Date.now() } });
+      const allData: any[] = r.data?.events ?? [];
+      const freeData = allData.filter((e: any) => !e.isPro);
+      const proData  = allData.filter((e: any) => !!e.isPro);
+      const freePg: PD = { data: freeData, empty: freeData.length === 0 };
+      const proPg:  PD = { data: proData,  empty: proData.length  === 0 };
+      mem.current[mk('free', iso)] = freePg;
+      mem.current[mk('pro',  iso)] = proPg;
+      wC(iso, 'free', freeData, freePg.empty);
+      wC(iso, 'pro',  proData,  proPg.empty);
+      if (__DEV__) console.log(`[fetchOne] ${iso}: total=${allData.length} free=${freeData.length} pro=${proData.length}`);
+      return tierArg === 'pro' ? proPg : freePg;
+    } catch (e: any) {
+      if (__DEV__) console.log(`[fetchOne] ${iso} ERROR:`, e?.response?.status, e?.message);
+      return EMPTY;
+    }
   }, []);
 
   const fetchAll = useCallback(async () => {

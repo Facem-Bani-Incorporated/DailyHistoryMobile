@@ -9,6 +9,9 @@
       "Bash(git commit -m ' *)",
       "Bash(eas build *)",
       "Bash(NODE_TLS_REJECT_UNAUTHORIZED=0 eas build --profile development --platform all --non-interactive)",
+      "Bash(NODE_TLS_REJECT_UNAUTHORIZED=0 eas build --profile development --platform android)",
+      "Bash(git pull *)",
+      "Bash(git stash *)",
       "Read(//Users/dolaru/Library/Android/**)",
       "Read(//usr/local/share/**)",
       "Read(//Users/dolaru/Android/**)",
@@ -16,7 +19,25 @@
       "Bash(npx expo *)",
       "Bash(node_modules/.bin/expo install *)",
       "Bash(awk 'NR>=842 && NR<=950 && /\\\\}, \\\\[/ {print NR\": \"$0}' /Users/dolaru/DailyHistoryMobile/app/\\\\\\(main\\\\\\)/index.tsx)",
-      "Bash(export PATH=\"/opt/homebrew/bin:$PATH\")"
+      "Bash(export PATH=\"/opt/homebrew/bin:$PATH\")",
+      "Bash(npm install *)",
+      "Bash(NODE_TLS_REJECT_UNAUTHORIZED=0 eas build --profile development --platform android --non-interactive)",
+      "Bash(NODE_TLS_REJECT_UNAUTHORIZED=0 eas credentials --platform android)",
+      "Bash(NODE_TLS_REJECT_UNAUTHORIZED=0 eas credentials --platform android --profile development)",
+      "Bash(keytool -list -v -keystore \"c:\\\\Users\\\\stefan-razvan.dogaru\\\\DailyHistoryMobile\\\\android\\\\app\\\\debug.keystore\" -alias androiddebugkey -storepass android -keypass android)",
+      "PowerShell($java = Get-Command java -ErrorAction SilentlyContinue; if \\($java\\) { $javaHome = $java.Source | Split-Path | Split-Path; & \"$javaHome\\\\bin\\\\keytool\" -list -v -keystore \"c:\\\\Users\\\\stefan-razvan.dogaru\\\\DailyHistoryMobile\\\\android\\\\app\\\\debug.keystore\" -alias androiddebugkey -storepass android -keypass android 2>&1 | Select-String \"SHA1|SHA-1\" })",
+      "PowerShell(Get-ChildItem \"C:\\\\Program Files\" -Directory | Where-Object { $_.Name -match \"java|jdk|android\" -or $_.Name -match \"Java\" } | Select-Object FullName)",
+      "PowerShell($env:ANDROID_HOME; $env:ANDROID_SDK_ROOT; Get-ChildItem \"$env:LOCALAPPDATA\\\\Android\" -ErrorAction SilentlyContinue | Select-Object Name)",
+      "Bash(curl -s \"https://daily-history-server-dev-development.up.railway.app/api/v1/daily-content/guest?date=2026-04-30\")",
+      "Bash(python -c \"import sys, json; d = json.load\\(sys.stdin\\); events = d.get\\('events', d if isinstance\\(d, list\\) else [d] if d else []\\); print\\('Total events:', len\\(events\\)\\); print\\('First event keys:', list\\(events[0].keys\\(\\)\\) if events else 'NO EVENTS'\\); print\\('Pro count \\(is_pro\\):', sum\\(1 for e in events if e.get\\('is_pro'\\)\\)\\); print\\('Pro count \\(isPro\\):', sum\\(1 for e in events if e.get\\('isPro'\\)\\)\\); print\\('Pro count \\(pro\\):', sum\\(1 for e in events if e.get\\('pro'\\)\\)\\); [print\\(f'  Event {i}: is_pro={e.get\\(\\\\\"is_pro\\\\\"\\)}, isPro={e.get\\(\\\\\"isPro\\\\\"\\)}, pro={e.get\\(\\\\\"pro\\\\\"\\)}, title={\\(e.get\\(\\\\\"titleTranslations\\\\\", {}\\) or {}\\).get\\(\\\\\"en\\\\\", \\\\\"?\\\\\"\\)[:40]}'\\) for i, e in enumerate\\(events[:10]\\)]\")",
+      "Bash(curl -s \"https://daily-history-server-dev-development.up.railway.app/api/v1/daily-content/guest?date=2026-04-30\" -o /tmp/api_response.json)",
+      "Bash(node -e \"const d = require\\('/tmp/api_response.json'\\); const events = d.events ?? \\(Array.isArray\\(d\\) ? d : [d]\\); console.log\\('Total:', events.length\\); if\\(events[0]\\) { console.log\\('Keys:', Object.keys\\(events[0]\\).join\\(', '\\)\\); } console.log\\('is_pro count:', events.filter\\(e=>e.is_pro\\).length\\); console.log\\('isPro count:', events.filter\\(e=>e.isPro\\).length\\); console.log\\('pro count:', events.filter\\(e=>e.pro\\).length\\); events.slice\\(0,5\\).forEach\\(\\(e,i\\)=>console.log\\(i, 'is_pro='+e.is_pro, 'isPro='+e.isPro, 'pro='+e.pro, 'title='+\\(e.titleTranslations?.en||'?'\\).slice\\(0,40\\)\\)\\);\")",
+      "Bash(curl -s \"https://daily-history-server-dev-development.up.railway.app/v3/api-docs\")",
+      "Bash(node -e \"const d = require\\('/tmp/api_response.json'\\); const events = d.events ?? \\(Array.isArray\\(d\\) ? d : [d]\\); const e = events[0]; console.log\\('Top event keys:', Object.keys\\(e\\).join\\(', '\\)\\); console.log\\('imageUrl:', e.imageUrl\\); console.log\\('image_url:', e.image_url\\); console.log\\('cloudinaryUrl:', e.cloudinaryUrl\\); console.log\\('image:', e.image\\); console.log\\('imageUrlsByLang:', e.imageUrlsByLang\\); console.log\\('eventDate:', e.eventDate\\); console.log\\('event_date:', e.event_date\\); console.log\\('date:', e.date\\);\")",
+      "Bash(curl -s \"https://daily-history-server-dev-development.up.railway.app/api/v1/daily-content/guest?date=2026-04-30\" -o /c/Users/stefan-razvan.dogaru/api_response.json)",
+      "Bash(node -e \"const d = require\\('C:/Users/stefan-razvan.dogaru/api_response.json'\\); const events = d.events ?? \\(Array.isArray\\(d\\) ? d : [d]\\); const e = events[0]; console.log\\('Top event keys:', Object.keys\\(e\\).join\\(', '\\)\\); console.log\\('imageUrl:', e.imageUrl\\); console.log\\('image_url:', e.image_url\\); console.log\\('cloudinaryUrl:', e.cloudinaryUrl\\); console.log\\('image:', e.image\\); console.log\\('imageUrlsByLang:', e.imageUrlsByLang\\); console.log\\('eventDate:', e.eventDate\\); console.log\\('event_date:', e.event_date\\); console.log\\('date:', e.date\\);\")",
+      "Bash(node -e \"const d = require\\('C:/Users/stefan-razvan.dogaru/api_response.json'\\); const events = d.events ?? \\(Array.isArray\\(d\\) ? d : [d]\\); const e = events[0]; console.log\\('gallery type:', Array.isArray\\(e.gallery\\) ? 'array' : typeof e.gallery\\); console.log\\('gallery sample:', JSON.stringify\\(e.gallery, null, 2\\).slice\\(0, 800\\)\\);\")",
+      "Bash(node -e \"const d = require\\('C:/Users/stefan-razvan.dogaru/api_response.json'\\); const events = d.events ?? \\(Array.isArray\\(d\\) ? d : [d]\\); const found = events.find\\(e => Array.isArray\\(e.gallery\\) && e.gallery.length > 0\\); if \\(found\\) { console.log\\('First gallery item:', JSON.stringify\\(found.gallery[0], null, 2\\)\\); console.log\\('Title:', found.titleTranslations?.en\\); } else { console.log\\('No event with gallery, sample event raw:'\\); console.log\\(JSON.stringify\\(events[0], null, 2\\).slice\\(0, 1500\\)\\); }\")"
     ]
   }
 }

@@ -83,7 +83,7 @@ const getCatColor = (cat: string): string => {
   return '#E85D3A';
 };
 
-const isProEvent = (event: any): boolean => !!(event?.isPro ?? event?.pro);
+const isProEvent = (event: any): boolean => !!(event?.isPro || event?.is_pro || event?.pro);
 
 /* ── Animated entrance ────────────────────── */
 const AnimatedCard = ({

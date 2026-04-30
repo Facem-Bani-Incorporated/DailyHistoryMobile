@@ -5,15 +5,28 @@ import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.BitmapShader
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.RectF
+import android.graphics.Shader
 import android.os.Handler
 import android.os.Looper
+import android.view.View
 import android.widget.RemoteViews
 import com.rexinus.DailyHistoryMobile.MainActivity
 import com.rexinus.DailyHistoryMobile.R
+import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
+import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
-import java.util.Calendar
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.Executors
 
 class HistoryWidget : AppWidgetProvider() {
@@ -25,11 +38,16 @@ class HistoryWidget : AppWidgetProvider() {
     }
 
     companion object {
-        const val PREFS_NAME = "HistoryWidgetPrefs"
-        const val KEY_TITLE = "widget_title"
-        const val KEY_YEAR = "widget_year"
-        const val KEY_IMPACT = "widget_impact"
-        const val KEY_NARRATIVE = "widget_narrative"
+        const val PREFS_NAME      = "HistoryWidgetPrefs"
+        const val KEY_TITLE       = "widget_title"
+        const val KEY_YEAR        = "widget_year"
+        const val KEY_DATE_FULL   = "widget_date_full"
+        const val KEY_IMAGE_URL   = "widget_image_url"
+
+        private const val IMAGE_CACHE_FILE = "widget_image.png"
+        private const val MAX_IMAGE_W      = 540
+        private const val MAX_IMAGE_H      = 405
+        private const val CORNER_RADIUS_PX = 56f
 
         fun updateWidget(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int) {
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -43,100 +61,237 @@ class HistoryWidget : AppWidgetProvider() {
             )
 
             val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
-            val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0)
+            val minWidth  = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0)
             val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0)
 
             val layoutId = when {
                 minWidth >= 250 && minHeight >= 250 -> R.layout.widget_large
-                minWidth >= 250 -> R.layout.widget_medium
-                else -> R.layout.widget_small
+                minWidth >= 250                     -> R.layout.widget_medium
+                else                                -> R.layout.widget_small
             }
 
             val views = RemoteViews(context.packageName, layoutId)
             views.setOnClickPendingIntent(R.id.widget_root, pendingIntent)
 
-            val title     = prefs.getString(KEY_TITLE, "Daily History") ?: "Daily History"
-            val year      = prefs.getString(KEY_YEAR, "") ?: ""
-            val impact    = prefs.getInt(KEY_IMPACT, 0)
-            val narrative = prefs.getString(KEY_NARRATIVE, "Tap to discover today's historical event.") ?: ""
+            val title    = prefs.getString(KEY_TITLE, "Daily History") ?: "Daily History"
+            val year     = prefs.getString(KEY_YEAR, "") ?: ""
+            val dateFull = prefs.getString(KEY_DATE_FULL, "") ?: ""
 
-            val now = Calendar.getInstance()
-            val midnight = Calendar.getInstance().apply {
-                set(Calendar.HOUR_OF_DAY, 23)
-                set(Calendar.MINUTE, 59)
-                set(Calendar.SECOND, 59)
+            try { views.setTextViewText(R.id.widget_title, title) } catch (_: Exception) {}
+            try { views.setTextViewText(R.id.widget_year, year) }   catch (_: Exception) {}
+            try { views.setTextViewText(R.id.widget_date, dateFull) } catch (_: Exception) {}
+
+            val cachedBitmap = loadCachedBitmap(context)
+            if (cachedBitmap != null) {
+                try { views.setImageViewBitmap(R.id.widget_image, cachedBitmap) } catch (_: Exception) {}
             }
-            val diffMs = midnight.timeInMillis - now.timeInMillis
-            val hours = (diffMs / (1000 * 60 * 60)).toInt()
-            val minutes = ((diffMs / (1000 * 60)) % 60).toInt()
-            val countdownText = "${hours}h ${minutes}m"
-
-            try { views.setTextViewText(R.id.widget_title, title) } catch (e: Exception) {}
-            try { views.setTextViewText(R.id.widget_year, year) } catch (e: Exception) {}
-            try { views.setTextViewText(R.id.widget_impact, "⚡ $impact%") } catch (e: Exception) {}
-            try { views.setTextViewText(R.id.widget_countdown, "Next in $countdownText") } catch (e: Exception) {}
-            try { views.setTextViewText(R.id.widget_narrative, narrative) } catch (e: Exception) {}
 
             appWidgetManager.updateAppWidget(appWidgetId, views)
 
-            fetchEventData(context, appWidgetManager, appWidgetId, views)
+            fetchEventData(context, appWidgetManager, appWidgetId, layoutId)
         }
 
-        private fun fetchEventData(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int, views: RemoteViews) {
+        private fun fetchEventData(
+            context: Context,
+            appWidgetManager: AppWidgetManager,
+            appWidgetId: Int,
+            layoutId: Int,
+        ) {
             val executor = Executors.newSingleThreadExecutor()
             val handler  = Handler(Looper.getMainLooper())
             val prefs    = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
             executor.execute {
                 try {
-                    val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
-                    val url = URL("https://daily-history-server-dev-development.up.railway.app/api/v1/daily-content/by-date?date=$today")
-                    val conn = url.openConnection() as HttpURLConnection
-                    conn.requestMethod = "GET"
-                    conn.connectTimeout = 8000
-                    conn.readTimeout = 8000
-                    conn.setRequestProperty("Accept", "application/json")
+                    val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+                    val url = URL("https://daily-history-server-dev-development.up.railway.app/api/v1/daily-content/guest?date=$today")
+                    val conn = (url.openConnection() as HttpURLConnection).apply {
+                        requestMethod = "GET"
+                        connectTimeout = 8000
+                        readTimeout = 8000
+                        setRequestProperty("Accept", "application/json")
+                    }
 
-                    if (conn.responseCode == 200) {
-                        val response = conn.inputStream.bufferedReader().readText()
-                        val json = JSONObject(response)
-                        val events = json.optJSONArray("events")
+                    if (conn.responseCode != 200) { conn.disconnect(); return@execute }
 
-                        if (events != null && events.length() > 0) {
-                            var topEvent = events.getJSONObject(0)
-                            var topImpact = topEvent.optInt("impactScore", 0)
-                            for (i in 1 until events.length()) {
-                                val e = events.getJSONObject(i)
-                                val imp = e.optInt("impactScore", 0)
-                                if (imp > topImpact) { topImpact = imp; topEvent = e }
-                            }
+                    val response = conn.inputStream.bufferedReader().readText()
+                    conn.disconnect()
 
-                            val translations = topEvent.optJSONObject("titleTranslations")
-                            val title = translations?.optString("en") ?: topEvent.optString("title", "Daily History")
-                            val narrativeObj = topEvent.optJSONObject("narrativeTranslations")
-                            val narrative = (narrativeObj?.optString("en") ?: topEvent.optString("narrative", "")).take(120)
-                            val rawDate = topEvent.optString("eventDate").ifEmpty { topEvent.optString("event_date") }.ifEmpty { topEvent.optString("date") }.ifEmpty { topEvent.optString("year") }
-                            val year = if (rawDate.length >= 4) rawDate.take(4) else rawDate
+                    val events = parseEventsArray(response) ?: return@execute
+                    if (events.length() == 0) return@execute
 
-                            prefs.edit().apply {
-                                putString(KEY_TITLE, title)
-                                putString(KEY_YEAR, year)
-                                putInt(KEY_IMPACT, topImpact)
-                                putString(KEY_NARRATIVE, narrative)
-                                apply()
-                            }
+                    val topEvent = pickTopEventWithImage(events) ?: events.getJSONObject(0)
 
-                            handler.post {
-                                try { views.setTextViewText(R.id.widget_title, title) } catch (e: Exception) {}
-                                try { views.setTextViewText(R.id.widget_year, year) } catch (e: Exception) {}
-                                try { views.setTextViewText(R.id.widget_impact, "⚡ $topImpact%") } catch (e: Exception) {}
-                                try { views.setTextViewText(R.id.widget_narrative, narrative) } catch (e: Exception) {}
-                                appWidgetManager.updateAppWidget(appWidgetId, views)
+                    val titleObj  = topEvent.optJSONObject("titleTranslations")
+                    val title     = titleObj?.optString("en")?.takeIf { it.isNotEmpty() }
+                        ?: topEvent.optString("title", "Daily History")
+
+                    val rawDate = listOf("eventDate", "event_date", "date").map { topEvent.optString(it) }
+                        .firstOrNull { it.isNotEmpty() } ?: ""
+                    val (yearStr, dateFull) = formatEventDate(rawDate)
+
+                    val imageUrl = pickFirstImage(topEvent.optJSONArray("gallery"))
+
+                    prefs.edit().apply {
+                        putString(KEY_TITLE, title)
+                        putString(KEY_YEAR, yearStr)
+                        putString(KEY_DATE_FULL, dateFull)
+                        putString(KEY_IMAGE_URL, imageUrl ?: "")
+                        apply()
+                    }
+
+                    val bitmap = imageUrl?.let { downloadAndProcessImage(context, it) }
+
+                    handler.post {
+                        val views = RemoteViews(context.packageName, layoutId)
+
+                        val intent = Intent(context, MainActivity::class.java).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        }
+                        val pendingIntent = PendingIntent.getActivity(
+                            context, 0, intent,
+                            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                        )
+                        views.setOnClickPendingIntent(R.id.widget_root, pendingIntent)
+
+                        try { views.setTextViewText(R.id.widget_title, title) } catch (_: Exception) {}
+                        try { views.setTextViewText(R.id.widget_year, yearStr) } catch (_: Exception) {}
+                        try { views.setTextViewText(R.id.widget_date, dateFull) } catch (_: Exception) {}
+
+                        if (bitmap != null) {
+                            try {
+                                views.setImageViewBitmap(R.id.widget_image, bitmap)
+                                views.setViewVisibility(R.id.widget_image, View.VISIBLE)
+                            } catch (_: Exception) {}
+                        } else {
+                            val cached = loadCachedBitmap(context)
+                            if (cached != null) {
+                                try { views.setImageViewBitmap(R.id.widget_image, cached) } catch (_: Exception) {}
                             }
                         }
+
+                        appWidgetManager.updateAppWidget(appWidgetId, views)
                     }
-                    conn.disconnect()
-                } catch (e: Exception) { e.printStackTrace() }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+
+        private fun parseEventsArray(response: String): JSONArray? {
+            return try {
+                val obj = JSONObject(response)
+                obj.optJSONArray("events")
+            } catch (e: Exception) {
+                try { JSONArray(response) } catch (ex: Exception) { null }
+            }
+        }
+
+        private fun pickTopEventWithImage(events: JSONArray): JSONObject? {
+            var best: JSONObject? = null
+            var bestImpact = -1
+            for (i in 0 until events.length()) {
+                val e = events.optJSONObject(i) ?: continue
+                val gallery = e.optJSONArray("gallery")
+                if (gallery == null || gallery.length() == 0) continue
+                val imp = e.optInt("impactScore", 0)
+                if (imp > bestImpact) { bestImpact = imp; best = e }
+            }
+            return best
+        }
+
+        private fun pickFirstImage(gallery: JSONArray?): String? {
+            if (gallery == null) return null
+            for (i in 0 until gallery.length()) {
+                val item = gallery.opt(i) ?: continue
+                val urlStr = when (item) {
+                    is String     -> item
+                    is JSONObject -> item.optString("url").ifEmpty { item.optString("secureUrl") }
+                    else          -> null
+                }
+                if (!urlStr.isNullOrEmpty() && urlStr.startsWith("http")) return urlStr
+            }
+            return null
+        }
+
+        private fun formatEventDate(rawDate: String): Pair<String, String> {
+            if (rawDate.isEmpty()) return Pair("", "")
+            return try {
+                val date = SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(rawDate)
+                    ?: throw Exception("parse failed")
+                val yearOnly = SimpleDateFormat("yyyy", Locale.US).format(date)
+                val full     = SimpleDateFormat("MMMM d, yyyy", Locale.US).format(date)
+                Pair(yearOnly, full)
+            } catch (e: Exception) {
+                val y = if (rawDate.length >= 4) rawDate.take(4) else rawDate
+                Pair(y, rawDate)
+            }
+        }
+
+        private fun downloadAndProcessImage(context: Context, imageUrl: String): Bitmap? {
+            return try {
+                val conn = (URL(imageUrl).openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 8000
+                    readTimeout = 12000
+                    instanceFollowRedirects = true
+                    setRequestProperty("User-Agent", "DailyHistoryWidget/1.0")
+                }
+                if (conn.responseCode != 200) { conn.disconnect(); return null }
+
+                val raw = BitmapFactory.decodeStream(conn.inputStream)
+                conn.disconnect()
+                if (raw == null) return null
+
+                val scaled = scaleBitmap(raw, MAX_IMAGE_W, MAX_IMAGE_H)
+                if (scaled !== raw) raw.recycle()
+
+                val rounded = roundBitmap(scaled, CORNER_RADIUS_PX)
+                if (rounded !== scaled) scaled.recycle()
+
+                saveBitmapToCache(context, rounded)
+                rounded
+            } catch (e: Exception) {
+                e.printStackTrace()
+                null
+            }
+        }
+
+        private fun scaleBitmap(bitmap: Bitmap, maxW: Int, maxH: Int): Bitmap {
+            val ratio = minOf(maxW.toFloat() / bitmap.width, maxH.toFloat() / bitmap.height, 1f)
+            if (ratio >= 1f) return bitmap
+            val w = (bitmap.width * ratio).toInt().coerceAtLeast(1)
+            val h = (bitmap.height * ratio).toInt().coerceAtLeast(1)
+            return Bitmap.createScaledBitmap(bitmap, w, h, true)
+        }
+
+        private fun roundBitmap(bitmap: Bitmap, radiusPx: Float): Bitmap {
+            val output = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(output)
+            val paint  = Paint(Paint.ANTI_ALIAS_FLAG)
+            paint.shader = BitmapShader(bitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
+            val rect = RectF(0f, 0f, bitmap.width.toFloat(), bitmap.height.toFloat())
+            canvas.drawRoundRect(rect, radiusPx, radiusPx, paint)
+            return output
+        }
+
+        private fun cacheFile(context: Context): File = File(context.cacheDir, IMAGE_CACHE_FILE)
+
+        private fun saveBitmapToCache(context: Context, bitmap: Bitmap) {
+            try {
+                FileOutputStream(cacheFile(context)).use { fos ->
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
+        private fun loadCachedBitmap(context: Context): Bitmap? {
+            return try {
+                val f = cacheFile(context)
+                if (!f.exists()) null else BitmapFactory.decodeFile(f.absolutePath)
+            } catch (e: Exception) {
+                null
             }
         }
     }
