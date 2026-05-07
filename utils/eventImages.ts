@@ -181,13 +181,19 @@ async function fetchFromWikimediaCommons(query: string): Promise<string[]> {
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
- * Resolves exactly 3 image URLs for an event, cascading through:
- *   1. event.gallery / event.images (Cloudinary or Wikipedia URLs already on the event)
- *   2. Wikipedia search + image API
- *   3. Wikimedia Commons search
- *   4. Stable Picsum URLs seeded by event ID
+ * Resolves exactly 3 image URLs for an event.
  *
- * Results are cached per event ID for the app session.
+ * Composition strategy — gallery URLs come first (Cloudinary, best quality),
+ * Wikipedia fills every remaining slot so that when a Cloudinary URL fails at
+ * render time the onError chain falls through to a *relevant* image, not a
+ * random Picsum placeholder.
+ *
+ *   gallery ≥ 3  →  use gallery as-is (all slots covered, skip Wikipedia call)
+ *   gallery 1-2  →  [gallery…, wiki…] padded to 3
+ *   gallery 0    →  [wiki…] padded to 3
+ *   all fail     →  stable Picsum seeded by event ID (offline-safe last resort)
+ *
+ * Results are cached per event ID for the whole app session.
  */
 export async function resolveEventImages(event: EventForImages): Promise<string[]> {
   const eventId = getEventId(event);
@@ -196,43 +202,48 @@ export async function resolveEventImages(event: EventForImages): Promise<string[
   const picsum = getPicsumFallbacks(event);
 
   try {
-    // 1. Use gallery / images already attached to the event
     const rawUrls = event.gallery ?? event.images ?? [];
     const validGallery = (rawUrls as unknown[]).filter(
       (u): u is string => typeof u === 'string' && u.startsWith('http'),
     );
-    if (validGallery.length > 0) {
-      const result = [...validGallery, ...picsum].slice(0, 3);
+
+    // Enough Cloudinary / pipeline images — no Wikipedia call needed
+    if (validGallery.length >= 3) {
+      const result = validGallery.slice(0, 3);
       imageCache.set(eventId, result);
       return result;
     }
 
+    // Fetch Wikipedia to fill every slot not covered by the gallery.
+    // This makes Wikipedia the real fallback for Cloudinary failures at render time.
     const titleForSearch = event.titleTranslations?.en ?? event.title ?? '';
+    let netImages: string[] = [];
+
     if (titleForSearch) {
-      // 2. Wikipedia
       try {
-        const wikiUrls = await fetchFromWikipedia(titleForSearch, event.year);
-        if (wikiUrls.length > 0) {
-          const result = [...wikiUrls, ...picsum].slice(0, 3);
-          imageCache.set(eventId, result);
-          return result;
-        }
+        netImages = await fetchFromWikipedia(titleForSearch, event.year);
       } catch {}
 
-      // 3. Wikimedia Commons
-      try {
-        const commonsQuery = event.year ? `${titleForSearch} ${event.year}` : titleForSearch;
-        const commonsUrls = await fetchFromWikimediaCommons(commonsQuery);
-        if (commonsUrls.length > 0) {
-          const result = [...commonsUrls, ...picsum].slice(0, 3);
-          imageCache.set(eventId, result);
-          return result;
-        }
-      } catch {}
+      if (netImages.length < 3 - validGallery.length) {
+        try {
+          const commonsQuery = event.year ? `${titleForSearch} ${event.year}` : titleForSearch;
+          const commonsExtra = await fetchFromWikimediaCommons(commonsQuery);
+          // Merge without duplicates
+          const seen = new Set(netImages);
+          for (const url of commonsExtra) {
+            if (!seen.has(url)) { seen.add(url); netImages.push(url); }
+          }
+        } catch {}
+      }
     }
+
+    // gallery first, then Wikipedia/Commons, then Picsum as last resort
+    const result = [...validGallery, ...netImages, ...picsum].slice(0, 3);
+    imageCache.set(eventId, result);
+    return result;
   } catch {}
 
-  // 4. Picsum stable fallback — always works offline
+  // Absolute fallback — Picsum always resolves, even fully offline
   imageCache.set(eventId, picsum);
   return picsum;
 }

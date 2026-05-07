@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAllEvents } from '../context/AllEventsContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
+import { useEventImages } from '../hooks/useEventImages';
 import { useTTS } from '../hooks/useTTS';
 import { useGamificationStore } from '../store/useGamificationStore';
 import { getEventId, useSavedStore } from '../store/useSavedStore';
@@ -171,6 +172,7 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
   const { saveEvent, removeEvent, isSaved } = useSavedStore();
   const markEventRead = useGamificationStore(s => s.markEventRead);
   const eventId = event ? getEventId(event) : null;
+  const { images: gallery } = useEventImages(event ?? {});
 
   // ── TTS ──
   const { speak, stop, isPlaying } = useTTS();
@@ -189,7 +191,6 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
 
   const saved = isSaved(eventId!);
   const toggleSave = () => saved ? removeEvent(eventId!) : saveEvent(event);
-  const gallery: string[] = event.gallery ?? [];
   const year = String(event.eventDate ?? event.event_date ?? event.year ?? '').trim();
   const title = event.titleTranslations?.[language] ?? event.titleTranslations?.en ?? '';
   const narrative = event.narrativeTranslations?.[language] ?? event.narrativeTranslations?.en ?? '';

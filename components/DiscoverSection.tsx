@@ -1,7 +1,7 @@
 // components/DiscoverSection.tsx
 import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+import EventImage from './EventImage';
 import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
@@ -152,15 +152,12 @@ const HeroCard = ({
   const category = (event.category ?? 'HISTORY').replace(/_/g, ' ');
   const year = extractYear(event);
   const yearNum = parseInt(year) || 0;
-  const img = event.gallery?.[0];
   const accent = getCatColor(event.category);
   const pro = isProEvent(event);
 
   return (
     <TouchableOpacity activeOpacity={0.94} onPress={onPress} style={[st.heroCard, { height }]}>
-      {img
-        ? <Image source={{ uri: img }} style={StyleSheet.absoluteFill} contentFit="cover" transition={700} />
-        : <View style={[StyleSheet.absoluteFill, { backgroundColor: '#111' }]} />}
+      <EventImage event={event} style={StyleSheet.absoluteFill} showLoader={false} />
 
       <LinearGradient
         colors={['rgba(0,0,0,0.45)', 'transparent', 'rgba(0,0,0,0.82)', 'rgba(0,0,0,0.98)']}
@@ -228,7 +225,6 @@ const EditorialCard = ({
   const category = (event.category ?? 'HISTORY').replace(/_/g, ' ');
   const year = extractYear(event);
   const yearNum = parseInt(year) || 0;
-  const img = event.gallery?.[0];
   const accent = getCatColor(event.category);
   const pro = isProEvent(event);
 
@@ -236,9 +232,7 @@ const EditorialCard = ({
     <TouchableOpacity activeOpacity={0.94} onPress={onPress} style={[st.editCard, { height }]}>
       {/* Left image panel */}
       <View style={st.editThumb}>
-        {img
-          ? <Image source={{ uri: img }} style={StyleSheet.absoluteFill} contentFit="cover" transition={400} />
-          : <View style={[StyleSheet.absoluteFill, { backgroundColor: '#1a1814' }]} />}
+        <EventImage event={event} style={StyleSheet.absoluteFill} showLoader={false} />
         <LinearGradient
           colors={['rgba(0,0,0,0.15)', 'rgba(0,0,0,0.5)', 'rgba(0,0,0,0.92)']}
           locations={[0, 0.5, 1]}
@@ -291,15 +285,12 @@ const CuratedCard = ({
   const title = event.titleTranslations?.[lang] ?? event.titleTranslations?.en ?? '';
   const category = (event.category ?? 'HISTORY').replace(/_/g, ' ');
   const year = extractYear(event);
-  const img = event.gallery?.[0];
   const accent = getCatColor(event.category);
   const pro = isProEvent(event);
 
   return (
     <TouchableOpacity activeOpacity={0.94} onPress={onPress} style={[st.curCard, { width, height }]}>
-      {img
-        ? <Image source={{ uri: img }} style={StyleSheet.absoluteFill} contentFit="cover" transition={400} />
-        : <View style={[StyleSheet.absoluteFill, { backgroundColor: '#1a1814' }]} />}
+      <EventImage event={event} style={StyleSheet.absoluteFill} showLoader={false} />
 
       <LinearGradient
         colors={['rgba(0,0,0,0.3)', 'transparent', 'rgba(0,0,0,0.95)']}

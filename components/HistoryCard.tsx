@@ -23,6 +23,7 @@ import { captureRef } from 'react-native-view-shot';
 import { ShareCard } from '../components/Sharecard';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
+import { useEventImages } from '../hooks/useEventImages';
 import { useGamificationStore } from '../store/useGamificationStore';
 import { getEventId } from '../store/useSavedStore';
 import { StoryModal } from './StoryModal';
@@ -183,8 +184,9 @@ const HistoryCardComponent = ({ event, allEvents = [] }: { event: any; allEvents
   const narrative = event.narrativeTranslations?.[language] ?? event.narrativeTranslations?.en ?? '';
   const category = (event.category ?? 'HISTORY').replace(/_/g, ' ');
   const catLabel = t(category).replace(/_/g, ' ').toUpperCase();
-  const imageUri = event.gallery?.[0];
-  const gallery: string[] = event.gallery ?? [];
+  const { images } = useEventImages(event);
+  const imageUri = images[0];
+  const gallery = images;
   const isPro = !!(event.isPro || event.pro);
 
   const onPressIn = () => {
@@ -240,11 +242,7 @@ const HistoryCardComponent = ({ event, allEvents = [] }: { event: any; allEvents
 
           <View style={[styles.inner, { borderColor: isPremium ? '#D4A84325' : 'rgba(255,255,255,0.08)' }]}>
             {/* Background image */}
-            {imageUri ? (
-              <Image source={{ uri: imageUri }} style={styles.image} contentFit="cover" transition={650} />
-            ) : (
-              <View style={[styles.image, { backgroundColor: isPremium ? '#0A0815' : '#121418' }]} />
-            )}
+            <Image source={{ uri: imageUri }} style={styles.image} contentFit="cover" transition={650} />
 
             {/* Editorial gradient — taller, more balanced */}
             <LinearGradient
