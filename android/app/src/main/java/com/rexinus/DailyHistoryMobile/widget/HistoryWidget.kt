@@ -43,6 +43,7 @@ class HistoryWidget : AppWidgetProvider() {
         const val KEY_IMAGE_URL = "widget_image_url"
 
         private const val IMAGE_CACHE_FILE = "widget_image.png"
+        private const val DEBUG_LOG_FILE   = "widget_debug.log"
         // Keep bitmap RAM well under the 1MB RemoteViews IPC budget:
         // 400 * 300 * 4 bytes (ARGB_8888) = 480KB.
         private const val MAX_IMAGE_W      = 400
@@ -50,6 +51,8 @@ class HistoryWidget : AppWidgetProvider() {
         private const val CORNER_RADIUS_PX = 56f
 
         fun updateWidget(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int) {
+            try { logDebug(context, "updateWidget id=$appWidgetId") } catch (_: Exception) {}
+
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
             val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
@@ -62,19 +65,39 @@ class HistoryWidget : AppWidgetProvider() {
                 else                                -> R.layout.widget_small
             }
 
-            val views = buildViews(context, layoutId)
+            val views = try {
+                buildViews(context, layoutId)
+            } catch (e: Exception) {
+                logDebug(context, "buildViews FAIL: ${e.javaClass.simpleName}: ${e.message}")
+                return
+            }
 
             val title = prefs.getString(KEY_TITLE, "") ?: ""
             val year  = prefs.getString(KEY_YEAR, "")  ?: ""
             applyText(views, title, year)
 
             loadCachedBitmap(context)?.let {
-                try { views.setImageViewBitmap(R.id.widget_image, it) } catch (_: Exception) {}
+                try { views.setImageViewBitmap(R.id.widget_image, it) } catch (e: Exception) {
+                    logDebug(context, "setImageViewBitmap FAIL: ${e.javaClass.simpleName}: ${e.message}")
+                }
             }
 
-            appWidgetManager.updateAppWidget(appWidgetId, views)
+            try {
+                appWidgetManager.updateAppWidget(appWidgetId, views)
+                logDebug(context, "updateAppWidget OK")
+            } catch (e: Exception) {
+                logDebug(context, "updateAppWidget FAIL: ${e.javaClass.simpleName}: ${e.message}")
+            }
 
             fetchEventData(context, appWidgetManager, appWidgetId, layoutId)
+        }
+
+        private fun logDebug(context: Context, msg: String) {
+            try {
+                val ts  = SimpleDateFormat("HH:mm:ss", Locale.US).format(Date())
+                val dir = context.getExternalFilesDir(null) ?: context.filesDir
+                File(dir, DEBUG_LOG_FILE).appendText("[$ts] $msg\n")
+            } catch (_: Exception) { /* logging must never crash the widget */ }
         }
 
         private fun buildViews(context: Context, layoutId: Int): RemoteViews {
@@ -151,12 +174,20 @@ class HistoryWidget : AppWidgetProvider() {
 
                         val finalBitmap = bitmap ?: loadCachedBitmap(context)
                         if (finalBitmap != null) {
-                            try { views.setImageViewBitmap(R.id.widget_image, finalBitmap) } catch (_: Exception) {}
+                            try { views.setImageViewBitmap(R.id.widget_image, finalBitmap) } catch (e: Exception) {
+                                logDebug(context, "post setImageViewBitmap FAIL: ${e.javaClass.simpleName}: ${e.message}")
+                            }
                         }
 
-                        try { appWidgetManager.updateAppWidget(appWidgetId, views) } catch (_: Exception) {}
+                        try {
+                            appWidgetManager.updateAppWidget(appWidgetId, views)
+                            logDebug(context, "fetch update OK title='$title' year='$yearStr' hasImage=${finalBitmap != null}")
+                        } catch (e: Exception) {
+                            logDebug(context, "post updateAppWidget FAIL: ${e.javaClass.simpleName}: ${e.message}")
+                        }
                     }
                 } catch (e: Exception) {
+                    logDebug(context, "fetchEventData FAIL: ${e.javaClass.simpleName}: ${e.message}")
                     e.printStackTrace()
                 }
             }
