@@ -44,11 +44,12 @@ class HistoryWidget : AppWidgetProvider() {
 
         private const val IMAGE_CACHE_FILE = "widget_image.png"
         private const val DEBUG_LOG_FILE   = "widget_debug.log"
-        // Keep bitmap RAM well under the 1MB RemoteViews IPC budget:
-        // 400 * 300 * 4 bytes (ARGB_8888) = 480KB.
-        private const val MAX_IMAGE_W      = 400
-        private const val MAX_IMAGE_H      = 300
-        private const val CORNER_RADIUS_PX = 56f
+        // Tight RemoteViews IPC budget: keep bitmap small to avoid Samsung One UI
+        // launcher rejecting the widget add transaction.
+        // 300 * 225 * 4 bytes (ARGB_8888) = 270KB raw bitmap.
+        private const val MAX_IMAGE_W      = 300
+        private const val MAX_IMAGE_H      = 225
+        private const val CORNER_RADIUS_PX = 48f
 
         fun updateWidget(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int) {
             try { logDebug(context, "updateWidget id=$appWidgetId") } catch (_: Exception) {}
@@ -76,15 +77,12 @@ class HistoryWidget : AppWidgetProvider() {
             val year  = prefs.getString(KEY_YEAR, "")  ?: ""
             applyText(views, title, year)
 
-            loadCachedBitmap(context)?.let {
-                try { views.setImageViewBitmap(R.id.widget_image, it) } catch (e: Exception) {
-                    logDebug(context, "setImageViewBitmap FAIL: ${e.javaClass.simpleName}: ${e.message}")
-                }
-            }
-
+            // Initial render: NO bitmap to keep the IPC transaction small for add-widget
+            // operations on stricter launchers (Samsung One UI). The async fetch below
+            // pushes the bitmap in a separate IPC after the widget is already placed.
             try {
                 appWidgetManager.updateAppWidget(appWidgetId, views)
-                logDebug(context, "updateAppWidget OK")
+                logDebug(context, "updateAppWidget OK (no bitmap)")
             } catch (e: Exception) {
                 logDebug(context, "updateAppWidget FAIL: ${e.javaClass.simpleName}: ${e.message}")
             }
