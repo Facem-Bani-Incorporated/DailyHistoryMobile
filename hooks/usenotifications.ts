@@ -8,13 +8,13 @@ import api from '../api';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuthStore } from '../store/useAuthStore';
 import {
-    buildPersonalizedNotification,
     fireTestNotification,
     requestNotificationPermissions,
-    scheduleDailyNotification,
-    schedulePersonalizedNotification,
+    scheduleDailyForDays,
     setupNotificationChannel,
 } from '../utils/Notifications';
+
+const SCHEDULE_DAYS_AHEAD = 7;
 
 const NOTIF_PREF_KEY = 'notifications_enabled';
 
@@ -33,8 +33,8 @@ interface UseNotificationsReturn {
   isDevAccount: boolean;
   /** Fire a test notification with today's real events (dev only) */
   sendTestNotification: () => Promise<void>;
-  /** Schedule tomorrow's personalized notification */
-  scheduleForTomorrow: (tomorrowEvents: any[]) => Promise<void>;
+  /** Re-schedule the next 7 days at 9 AM (called on app open). */
+  scheduleForTomorrow: () => Promise<void>;
   /** Whether a test notification is currently being sent */
   testLoading: boolean;
 }
@@ -86,20 +86,23 @@ export function useNotifications(): UseNotificationsReturn {
     return () => sub.remove();
   }, []);
 
-  // ── Helper: fetch tomorrow's events and schedule notification ──
-  const fetchAndScheduleTomorrow = useCallback(async () => {
+  // ── Helper: fetch the next N days and schedule one notification per day at 9 AM ──
+  const fetchAndScheduleWeek = useCallback(async () => {
     try {
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const iso = tomorrow.toISOString().split('T')[0];
-      const res = await api.get('/daily-content/by-date', {
-        params: { date: iso, _t: Date.now() },
+      const eventsByDate: Record<string, any[]> = {};
+      const promises = Array.from({ length: SCHEDULE_DAYS_AHEAD }, (_, i) => {
+        const d = new Date();
+        d.setDate(d.getDate() + i + 1); // start tomorrow
+        const iso = d.toISOString().split('T')[0];
+        return api
+          .get('/daily-content/by-date', { params: { date: iso, _t: Date.now() } })
+          .then((r) => { eventsByDate[iso] = r.data?.events ?? []; })
+          .catch(() => { eventsByDate[iso] = []; });
       });
-      const events: any[] = res.data?.events ?? [];
-      await schedulePersonalizedNotification(events, language);
-    } catch {
-      // Schedule with empty events as fallback (shows generic message)
-      await schedulePersonalizedNotification([], language);
+      await Promise.all(promises);
+      await scheduleDailyForDays(eventsByDate, language, 9, 0);
+    } catch (e) {
+      if (__DEV__) console.warn('[Notifications] week schedule failed', e);
     }
   }, [language]);
 
@@ -112,27 +115,19 @@ export function useNotifications(): UseNotificationsReturn {
       const granted = await requestNotificationPermissions();
       setPermissionGranted(granted);
       if (granted) {
-        await fetchAndScheduleTomorrow();
+        await fetchAndScheduleWeek();
       }
     } else {
       // Cancel all scheduled notifications when user disables
       await Notifications.cancelAllScheduledNotificationsAsync();
     }
-  }, [fetchAndScheduleTomorrow]);
+  }, [fetchAndScheduleWeek]);
 
-  // ── Schedule for tomorrow (language-aware) ──
-  const scheduleForTomorrow = useCallback(
-    async (tomorrowEvents: any[]) => {
-      if (!enabled || permissionGranted === false) return;
-
-      const { title, body } = buildPersonalizedNotification(
-        tomorrowEvents,
-        language,
-      );
-      await scheduleDailyNotification(title, body, 9, 0);
-    },
-    [language, permissionGranted, enabled],
-  );
+  // ── Re-schedule the next week (called from app open) ──
+  const scheduleForTomorrow = useCallback(async () => {
+    if (!enabled || permissionGranted === false) return;
+    await fetchAndScheduleWeek();
+  }, [enabled, permissionGranted, fetchAndScheduleWeek]);
 
   // ── Test notification — fetches TODAY's real events ──
   const sendTestNotification = useCallback(async () => {

@@ -1,7 +1,6 @@
 // utils/Notifications.ts
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
-import { useGamificationStore } from '../store/useGamificationStore';
 
 // ── Configure notification handler ──
 Notifications.setNotificationHandler({
@@ -26,7 +25,21 @@ export async function requestNotificationPermissions(): Promise<boolean> {
   }
 }
 
-// ── Schedule a notification at a specific time ──
+// ── Schedule a single notification at a specific Date ──
+async function scheduleAt(date: Date, title: string, body: string, eventData?: any) {
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title,
+      body,
+      sound: 'default',
+      data: eventData ? { event: eventData } : {},
+      ...(Platform.OS === 'android' && { channelId: 'daily-history' }),
+    },
+    trigger: { date } as any,
+  });
+}
+
+// ── Schedule a notification at a specific time tomorrow (legacy single-shot) ──
 export async function scheduleDailyNotification(
   title: string,
   body: string,
@@ -36,31 +49,44 @@ export async function scheduleDailyNotification(
 ) {
   try {
     await Notifications.cancelAllScheduledNotificationsAsync();
-
     const trigger = new Date();
     trigger.setDate(trigger.getDate() + 1);
     trigger.setHours(hour, minute, 0, 0);
-
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title,
-        body,
-        sound: 'default',
-        data: eventData ? { event: eventData } : {},
-        ...(Platform.OS === 'android' && {
-          channelId: 'daily-history',
-        }),
-      },
-      trigger: { date: trigger } as any,
-    });
+    await scheduleAt(trigger, title, body, eventData);
   } catch (e) {
     if (__DEV__) console.warn('[Notifications] Failed to schedule:', e);
   }
 }
 
-// ── Backward compat alias ──
-export const scheduleMidnightNotification = (title: string, body: string) =>
-  scheduleDailyNotification(title, body, 9, 0);
+// ── Schedule next N days at HOUR:MINUTE local time, each with its own event ──
+// `eventsByDate` maps ISO yyyy-mm-dd → events array for that day.
+// Re-call this every app open to refresh the queue with fresh content.
+export async function scheduleDailyForDays(
+  eventsByDate: Record<string, any[]>,
+  language: string,
+  hour: number = 9,
+  minute: number = 0,
+) {
+  try {
+    await Notifications.cancelAllScheduledNotificationsAsync();
+    const now = Date.now();
+
+    for (const iso of Object.keys(eventsByDate).sort()) {
+      const [y, m, d] = iso.split('-').map(Number);
+      // Local-time Date constructor — respects device timezone automatically.
+      const fireAt = new Date(y, m - 1, d, hour, minute, 0, 0);
+      if (fireAt.getTime() <= now) continue;
+
+      const { title, body, event } = buildPersonalizedNotification(
+        eventsByDate[iso] ?? [],
+        language,
+      );
+      await scheduleAt(fireAt, title, body, event);
+    }
+  } catch (e) {
+    if (__DEV__) console.warn('[Notifications] Failed to schedule week:', e);
+  }
+}
 
 // ══════════════════════════════════════════════════════════════
 // HOOK-STYLE ENGAGING NOTIFICATION BUILDER
@@ -287,31 +313,14 @@ export function buildPersonalizedNotification(
 
   if (!events || events.length === 0) return { ...fallback, event: null };
 
-  // ── Pick best event: user's preferred category first, then highest impact ──
-  const { categoryCount } = useGamificationStore.getState();
-  const sortedPrefs = Object.entries(categoryCount ?? {})
-    .sort(([, a], [, b]) => b - a)
-    .map(([cat]) => cat);
+  // Match home screen's "main event" rule: only FREE events, sorted by impactScore,
+  // pick the first one. Never surface a PRO event in notifications.
+  const freeEvents = events.filter((e: any) => !e.isPro);
+  if (freeEvents.length === 0) return { ...fallback, event: null };
 
-  let bestEvent: any = null;
-
-  if (sortedPrefs.length > 0) {
-    for (const prefCat of sortedPrefs) {
-      const match = events.find(
-        (e) => (e.category ?? '').toLowerCase().trim() === prefCat,
-      );
-      if (match) {
-        bestEvent = match;
-        break;
-      }
-    }
-  }
-
-  if (!bestEvent) {
-    bestEvent = [...events].sort(
-      (a, b) => (b.impactScore ?? 0) - (a.impactScore ?? 0),
-    )[0];
-  }
+  const bestEvent = [...freeEvents].sort(
+    (a: any, b: any) => (b.impactScore ?? 0) - (a.impactScore ?? 0),
+  )[0];
 
   if (!bestEvent) return { ...fallback, event: null };
 

@@ -52,7 +52,7 @@ import { getLevelForXP, getXPProgress, useGamificationStore } from '../../store/
 import { useNotificationEventStore } from '../../store/useNotificationEventStore';
 import { useUserSavedEvents } from '../../store/useSavedStore';
 import { haptic } from '../../utils/haptics';
-import { schedulePersonalizedNotification } from '../../utils/Notifications';
+import { scheduleDailyForDays } from '../../utils/Notifications';
 import SavedScreen from './saved';
 
 const { width: W, height: H } = Dimensions.get('window');
@@ -771,8 +771,18 @@ export default function HomeScreen() {
       for (let i = 2; i <= 7; i++) { fetchOne(-i).catch(() => { }); fetchOne(-i, 'pro').catch(() => {}); }
       const notifPref = await AsyncStorage.getItem('notifications_enabled');
       if (notifPref !== 'false') {
-        fetchOne(1).then(d => schedulePersonalizedNotification(d.data, language))
-          .catch(() => schedulePersonalizedNotification([], language));
+        // Schedule next 7 days at 9 AM local time, each with that day's free main event.
+        // Re-runs on every app open so the queue stays fresh as days roll forward.
+        const eventsByDate: Record<string, any[]> = {};
+        const days = 7;
+        await Promise.all(
+          Array.from({ length: days }, (_, i) =>
+            fetchOne(i + 1)
+              .then((d) => { eventsByDate[isoFor(i + 1)] = d.data ?? []; })
+              .catch(() => { eventsByDate[isoFor(i + 1)] = []; }),
+          ),
+        );
+        scheduleDailyForDays(eventsByDate, language, 9, 0).catch(() => {});
       }
     });
   }, []);
