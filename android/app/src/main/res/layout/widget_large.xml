@@ -18,39 +18,39 @@
         android:layout_height="match_parent"
         android:background="@drawable/widget_overlay"/>
 
-    <TextView
-        android:id="@+id/widget_year"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="top|start"
-        android:layout_marginStart="18dp"
-        android:layout_marginTop="14dp"
-        android:textColor="#FFD86E"
-        android:textSize="52sp"
-        android:fontFamily="serif"
-        android:textStyle="bold"
-        android:letterSpacing="0.02"
-        android:shadowColor="#CC000000"
-        android:shadowDx="0"
-        android:shadowDy="2"
-        android:shadowRadius="6"/>
-
-    <TextView
-        android:id="@+id/widget_title"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
-        android:layout_marginStart="18dp"
-        android:layout_marginEnd="18dp"
-        android:layout_marginBottom="16dp"
-        android:textColor="#FFFFFF"
-        android:textSize="18sp"
-        android:fontFamily="sans-serif-black"
-        android:maxLines="3"
-        android:ellipsize="end"
-        android:lineSpacingMultiplier="1.18"
-        android:shadowColor="#CC000000"
-        android:shadowDx="0"
-        android:shadowDy="2"
-        android:shadowRadius="5"/>
+        android:orientation="vertical"
+        android:padding="18dp">
+
+        <TextView
+            android:id="@+id/widget_year"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#FFD86E"
+            android:textSize="44sp"
+            android:fontFamily="serif"
+            android:textStyle="bold"
+            android:shadowColor="#CC000000"
+            android:shadowDx="0"
+            android:shadowDy="2"
+            android:shadowRadius="5"/>
+
+        <TextView
+            android:id="@+id/widget_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:fontFamily="sans-serif-black"
+            android:maxLines="3"
+            android:ellipsize="end"
+            android:lineSpacingMultiplier="1.18"
+            android:shadowColor="#CC000000"
+            android:shadowDx="0"
+            android:shadowDy="2"
+            android:shadowRadius="5"/>
+    </LinearLayout>
 </FrameLayout>
