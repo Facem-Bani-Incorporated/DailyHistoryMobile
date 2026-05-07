@@ -15,6 +15,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
   ViewToken,
 } from 'react-native';
@@ -47,7 +48,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useInterstitialAd } from '../../hooks/useInterstitialAd';
 import { useRewardedUnlock } from '../../hooks/useRewardedUnlock';
 import { useAuthStore } from '../../store/useAuthStore';
-import { useGamificationStore } from '../../store/useGamificationStore';
+import { getLevelForXP, getXPProgress, useGamificationStore } from '../../store/useGamificationStore';
 import { useNotificationEventStore } from '../../store/useNotificationEventStore';
 import { useUserSavedEvents } from '../../store/useSavedStore';
 import { haptic } from '../../utils/haptics';
@@ -546,16 +547,11 @@ const RING_R = (AVATAR_SLOT - RING_STROKE) / 2;
 const RING_C = 2 * Math.PI * RING_R;
 
 const ProfileWithXP = ({ gold, theme, isDark }: { gold: string; theme: any; isDark: boolean }) => {
-  const level = useGamificationStore((s: any) => s.level ?? 1);
-  const xp    = useGamificationStore((s: any) => s.xp ?? s.totalXP ?? 0);
+  const totalXP = useGamificationStore((s: any) => s.totalXP ?? 0);
+  const level = getLevelForXP(totalXP).level;
   const fillAnim = useRef(new Animated.Value(0)).current;
 
-  const progress = useMemo(() => {
-    const curBase = (level - 1) * 100;
-    const nextBase = level * 100;
-    const span = Math.max(1, nextBase - curBase);
-    return Math.min(1, Math.max(0, (xp - curBase) / span));
-  }, [level, xp]);
+  const progress = useMemo(() => getXPProgress(totalXP).percent, [totalXP]);
 
   useEffect(() => {
     Animated.timing(fillAnim, {
@@ -652,6 +648,7 @@ export default function HomeScreen() {
   const { t, language } = useLanguage();
   const { isPro, presentPaywall, presentPaywallIfNeeded } = useRevenueCat();
   const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
   const userSaved = useUserSavedEvents();
   const recordVisit = useGamificationStore(s => s.recordDailyVisit);
   const genRecap = useGamificationStore(s => s.generateWeeklyRecap);
@@ -991,10 +988,10 @@ export default function HomeScreen() {
                 <Text style={[ms.brandLabel, { color: goldColor }]}>
                   {t('Daily').toUpperCase()}
                 </Text>
-                <Text style={[ms.brandTitle, { color: theme.text }]}>{t('History')}</Text>
+                <Text style={[ms.brandTitle, { color: theme.text }]} numberOfLines={1}>{t('History')}</Text>
               </View>
 
-              <View style={ms.headerRight}>
+              <View style={[ms.headerRight, { gap: screenWidth < 375 ? 2 : screenWidth < 414 ? 4 : 6 }]}>
                 {/* Compact PRO star button — replaces the wide Get Pro button */}
                 {!isPro && <ProStarButton gold={goldColor} onPress={() => presentPaywall()} />}
 

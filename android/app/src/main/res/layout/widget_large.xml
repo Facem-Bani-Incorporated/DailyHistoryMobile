@@ -2,14 +2,15 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_background">
 
     <ImageView
         android:id="@+id/widget_image"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:scaleType="centerCrop"
-        android:src="@drawable/widget_background"
+        android:src="@drawable/widget_image_placeholder"
         android:contentDescription="@null"/>
 
     <View
@@ -17,53 +18,39 @@
         android:layout_height="match_parent"
         android:background="@drawable/widget_overlay"/>
 
-    <LinearLayout
+    <TextView
+        android:id="@+id/widget_year"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|start"
+        android:layout_marginStart="18dp"
+        android:layout_marginTop="14dp"
+        android:textColor="#FFD86E"
+        android:textSize="52sp"
+        android:fontFamily="serif"
+        android:textStyle="bold"
+        android:letterSpacing="0.02"
+        android:shadowColor="#CC000000"
+        android:shadowDx="0"
+        android:shadowDy="2"
+        android:shadowRadius="6"/>
+
+    <TextView
+        android:id="@+id/widget_title"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
-        android:orientation="vertical"
-        android:padding="18dp">
-
-        <TextView
-            android:id="@+id/widget_date"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textColor="#FFD700"
-            android:textSize="11sp"
-            android:textAllCaps="true"
-            android:letterSpacing="0.2"
-            android:fontFamily="sans-serif-medium"
-            android:shadowColor="#80000000"
-            android:shadowDx="0"
-            android:shadowDy="1"
-            android:shadowRadius="2"/>
-
-        <View
-            android:layout_width="28dp"
-            android:layout_height="2dp"
-            android:background="#FFD700"
-            android:layout_marginTop="7dp"
-            android:layout_marginBottom="7dp"/>
-
-        <TextView
-            android:id="@+id/widget_title"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textColor="#FFFFFF"
-            android:textSize="20sp"
-            android:fontFamily="sans-serif-black"
-            android:maxLines="3"
-            android:ellipsize="end"
-            android:lineSpacingMultiplier="1.18"
-            android:shadowColor="#90000000"
-            android:shadowDx="0"
-            android:shadowDy="1"
-            android:shadowRadius="3"/>
-
-        <TextView
-            android:id="@+id/widget_year"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:visibility="gone"/>
-    </LinearLayout>
+        android:layout_marginStart="18dp"
+        android:layout_marginEnd="18dp"
+        android:layout_marginBottom="16dp"
+        android:textColor="#FFFFFF"
+        android:textSize="18sp"
+        android:fontFamily="sans-serif-black"
+        android:maxLines="3"
+        android:ellipsize="end"
+        android:lineSpacingMultiplier="1.18"
+        android:shadowColor="#CC000000"
+        android:shadowDx="0"
+        android:shadowDy="2"
+        android:shadowRadius="5"/>
 </FrameLayout>

@@ -2,14 +2,15 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_background">
 
     <ImageView
         android:id="@+id/widget_image"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:scaleType="centerCrop"
-        android:src="@drawable/widget_background"
+        android:src="@drawable/widget_image_placeholder"
         android:contentDescription="@null"/>
 
     <View
@@ -17,53 +18,39 @@
         android:layout_height="match_parent"
         android:background="@drawable/widget_overlay"/>
 
-    <LinearLayout
+    <TextView
+        android:id="@+id/widget_year"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|start"
+        android:layout_marginStart="10dp"
+        android:layout_marginTop="8dp"
+        android:textColor="#FFD86E"
+        android:textSize="22sp"
+        android:fontFamily="serif"
+        android:textStyle="bold"
+        android:letterSpacing="0.02"
+        android:shadowColor="#CC000000"
+        android:shadowDx="0"
+        android:shadowDy="1"
+        android:shadowRadius="4"/>
+
+    <TextView
+        android:id="@+id/widget_title"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
-        android:orientation="vertical"
-        android:padding="11dp">
-
-        <TextView
-            android:id="@+id/widget_date"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textColor="#FFD700"
-            android:textSize="8sp"
-            android:textAllCaps="true"
-            android:letterSpacing="0.15"
-            android:fontFamily="sans-serif-medium"
-            android:shadowColor="#80000000"
-            android:shadowDx="0"
-            android:shadowDy="1"
-            android:shadowRadius="2"/>
-
-        <View
-            android:layout_width="18dp"
-            android:layout_height="1.5dp"
-            android:background="#FFD700"
-            android:layout_marginTop="4dp"
-            android:layout_marginBottom="4dp"/>
-
-        <TextView
-            android:id="@+id/widget_title"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textColor="#FFFFFF"
-            android:textSize="12sp"
-            android:fontFamily="sans-serif-black"
-            android:maxLines="2"
-            android:ellipsize="end"
-            android:lineSpacingMultiplier="1.08"
-            android:shadowColor="#90000000"
-            android:shadowDx="0"
-            android:shadowDy="1"
-            android:shadowRadius="3"/>
-
-        <TextView
-            android:id="@+id/widget_year"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:visibility="gone"/>
-    </LinearLayout>
+        android:layout_marginStart="10dp"
+        android:layout_marginEnd="10dp"
+        android:layout_marginBottom="10dp"
+        android:textColor="#FFFFFF"
+        android:textSize="11sp"
+        android:fontFamily="sans-serif-black"
+        android:maxLines="2"
+        android:ellipsize="end"
+        android:lineSpacingMultiplier="1.05"
+        android:shadowColor="#CC000000"
+        android:shadowDx="0"
+        android:shadowDy="1"
+        android:shadowRadius="3"/>
 </FrameLayout>

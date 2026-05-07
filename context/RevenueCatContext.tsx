@@ -23,7 +23,7 @@ import Purchases, {
 } from 'react-native-purchases';
 import RevenueCatUI, { PAYWALL_RESULT } from 'react-native-purchases-ui';
 
-import { syncProStatus } from '../services/authService';
+import { refreshMe } from '../services/authService';
 import { useAuthStore } from '../store/useAuthStore';
 
 export const PRO_ENTITLEMENT = 'Daily History Pro';
@@ -76,7 +76,11 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
 
   const user = useAuthStore(s => s.user);
 
-  const isPro = !!customerInfo?.entitlements.active[PRO_ENTITLEMENT];
+  // RC entitlement is the live source of truth; backend is_pro is the durable
+  // fallback — set by the RevenueCat webhook, survives app updates and reinstalls.
+  const isPro =
+    !!customerInfo?.entitlements.active[PRO_ENTITLEMENT] ||
+    user?.is_pro === true;
 
   // ── Configure SDK once ──
   useEffect(() => {
@@ -117,7 +121,7 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // ── Identify user in RC when auth is available ──
+  // ── Identify user in RC + refresh backend profile when auth is available ──
   useEffect(() => {
     if (!ready) return;
     (async () => {
@@ -129,6 +133,9 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
             const { customerInfo: info } = await Purchases.logIn(uid);
             setCustomerInfo(info);
           }
+          // Always refresh user from backend on identity sync so is_pro
+          // set by the RevenueCat webhook is picked up immediately.
+          await refreshMe();
         } else {
           const anonymous = await Purchases.isAnonymous();
           if (!anonymous) {
@@ -141,15 +148,6 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
       }
     })();
   }, [ready, user?.id]);
-
-  // ── Sync is_pro to backend whenever subscription state changes ──
-  const prevIsProRef = useRef<boolean | null>(null);
-  useEffect(() => {
-    if (!ready || !user?.id) return;
-    if (prevIsProRef.current === isPro) return;
-    prevIsProRef.current = isPro;
-    syncProStatus(isPro);
-  }, [isPro, ready, user?.id]);
 
   const refresh = useCallback(async () => {
     try {

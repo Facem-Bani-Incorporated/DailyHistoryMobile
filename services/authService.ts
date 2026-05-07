@@ -1,15 +1,14 @@
 import api from '../api';
 import { useAuthStore } from '../store/useAuthStore';
 
-export async function syncProStatus(isPro: boolean): Promise<void> {
-  const userId = useAuthStore.getState().user?.id;
-  if (!userId) return;
+// Fetches the latest user profile from the backend and updates the local store.
+// Called on app boot to pick up is_pro changes made by the RevenueCat webhook.
+export async function refreshMe(): Promise<void> {
   try {
-    await api.patch(`/users/${userId}/pro`, null, { params: { isPro } });
-    useAuthStore.getState().updateUser({ is_pro: isPro });
-    if (__DEV__) console.log('[Pro] Synced is_pro =', isPro);
+    const res = await api.get('/users/me');
+    if (res.data) useAuthStore.getState().updateUser(res.data);
   } catch (e) {
-    if (__DEV__) console.warn('[Pro] syncProStatus failed', e);
+    if (__DEV__) console.warn('[Auth] refreshMe failed', e);
   }
 }
 

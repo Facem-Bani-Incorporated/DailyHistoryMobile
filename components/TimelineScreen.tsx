@@ -2,7 +2,7 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Clock, Sparkles } from 'lucide-react-native';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Dimensions,
   Platform,
@@ -12,12 +12,8 @@ import {
   View,
 } from 'react-native';
 import Animated, {
-  Extrapolation,
-  interpolate,
-  type SharedValue,
   useAnimatedScrollHandler,
   useAnimatedStyle,
-  useDerivedValue,
   useSharedValue,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -40,10 +36,10 @@ const ITEM_GAP    = 10;
 const ITEM_TOTAL  = ITEM_H + ITEM_GAP;
 const ERA_TOTAL   = ERA_H  + ITEM_GAP;
 
-const SPINE_X     = 52;   // spine center from left edge
-const YEAR_W      = 62;   // year capsule width
+const SPINE_X     = 52;
+const YEAR_W      = 62;
 const YEAR_H      = 26;
-const HEADER_H    = 56;   // header bar height (ignoring safe area)
+const HEADER_H    = 56;
 
 // ── Category system ────────────────────────────────────────────────────────
 const CAT: Record<string, { color: string; tag: string; tKey: string }> = {
@@ -133,47 +129,26 @@ type TItem =
 interface Props { allEvents: any[] }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// EVENT ROW — year capsule on spine + card with image
+// EVENT ROW — no per-frame worklets, fully static styling
 // ══════════════════════════════════════════════════════════════════════════════
 const EvRow = React.memo(({
-  event, yOff, scrollY, theme, isDark, language, onPress,
+  event, theme, isDark, language, onPress,
 }: {
-  event: any; yOff: number; scrollY: SharedValue<number>;
-  theme: any; isDark: boolean; language: string; onPress: () => void;
+  event: any; theme: any; isDark: boolean; language: string; onPress: (ev: any) => void;
 }) => {
   const year = extractYear(event);
   const yearStr = formatYear(year, language);
   const title = event.titleTranslations?.[language] ?? event.titleTranslations?.en ?? '';
   const img = event.gallery?.[0];
   const { color: cc, tag: ct } = getCat(event.category);
-  const mid = yOff + ITEM_H / 2;
-  const focusZone = H * 0.32;
-
-  // Distance-based focus: item in viewport center gets highlighted
-  const cardStyle = useAnimatedStyle(() => {
-    const vc = scrollY.value + H / 2;
-    const d = Math.abs(mid - vc);
-    const t = Math.min(d / focusZone, 1);
-    const sc = interpolate(t, [0, 1], [1.02, 0.97], Extrapolation.CLAMP);
-    const op = interpolate(t, [0, 1], [1, 0.55], Extrapolation.CLAMP);
-    return { transform: [{ scale: sc }], opacity: op };
-  });
-
-  const yearStyle = useAnimatedStyle(() => {
-    const vc = scrollY.value + H / 2;
-    const t = Math.min(Math.abs(mid - vc) / focusZone, 1);
-    return {
-      transform: [{ scale: interpolate(t, [0, 1], [1.08, 0.94], Extrapolation.CLAMP) }],
-    };
-  });
 
   return (
     <View style={[rs.row, { height: ITEM_H, marginBottom: ITEM_GAP }]}>
-      {/* Spine line (continuous vertical) */}
+      {/* Spine line */}
       <View style={[rs.spineLine, { backgroundColor: theme.border, left: SPINE_X - 0.75 }]} />
 
-      {/* Year capsule anchored on spine */}
-      <Animated.View style={[rs.yearWrap, yearStyle, {
+      {/* Year capsule */}
+      <View style={[rs.yearWrap, {
         left: SPINE_X - YEAR_W / 2,
         backgroundColor: isDark ? '#15130F' : '#FFFFFF',
         borderColor: cc + '55',
@@ -182,20 +157,19 @@ const EvRow = React.memo(({
         <Text style={[rs.yearText, { color: cc, fontSize: yearStr.length > 5 ? 10 : 12 }]} numberOfLines={1}>
           {yearStr}
         </Text>
-      </Animated.View>
+      </View>
 
-      {/* Horizontal connector */}
+      {/* Connector */}
       <View style={[rs.conn, { backgroundColor: cc + '30', left: SPINE_X + YEAR_W / 2 - 2 }]} />
 
       {/* Card */}
-      <Animated.View style={[rs.cardWrap, cardStyle, { left: SPINE_X + YEAR_W / 2 + 14 }]}>
-        <TouchableOpacity onPress={onPress} activeOpacity={0.82} style={rs.cardTouch}>
+      <View style={[rs.cardWrap, { left: SPINE_X + YEAR_W / 2 + 14 }]}>
+        <TouchableOpacity onPress={() => onPress(event)} activeOpacity={0.82} style={rs.cardTouch}>
           <View style={[rs.card, {
             backgroundColor: isDark ? '#0F0E0C' : '#FFFFFF',
             borderColor: isDark ? '#1E1B17' : '#EEEAE3',
             shadowColor: cc,
           }]}>
-            {/* Image */}
             {img ? (
               <View style={rs.imgBox}>
                 <Image source={{ uri: img }} style={rs.img} contentFit="cover" transition={240} />
@@ -211,8 +185,6 @@ const EvRow = React.memo(({
                 <Text style={[rs.imgPlaceholder, { color: cc }]}>{ct}</Text>
               </View>
             )}
-
-            {/* Body */}
             <View style={rs.body}>
               <View style={rs.tagRow}>
                 <View style={[rs.tagDot, { backgroundColor: cc }]} />
@@ -220,12 +192,10 @@ const EvRow = React.memo(({
               </View>
               <Text style={[rs.title, { color: theme.text }]} numberOfLines={3}>{title}</Text>
             </View>
-
-            {/* Left color bar */}
             <View style={[rs.sideBar, { backgroundColor: cc }]} />
           </View>
         </TouchableOpacity>
-      </Animated.View>
+      </View>
     </View>
   );
 });
@@ -242,9 +212,7 @@ const rs = StyleSheet.create({
   yearAccent: { width: 5, height: 5, borderRadius: 3, marginRight: 6 },
   yearText: { fontWeight: '800', letterSpacing: 0.3, flex: 1, textAlign: 'center', fontFamily: SERIF },
   conn: { position: 'absolute', top: ITEM_H / 2 - 0.75, width: 14, height: 1.5, borderRadius: 1, zIndex: 1 },
-  cardWrap: {
-    position: 'absolute', top: 0, bottom: 0, right: 14,
-  },
+  cardWrap: { position: 'absolute', top: 0, bottom: 0, right: 14 },
   cardTouch: { flex: 1 },
   card: {
     flex: 1, flexDirection: 'row', borderRadius: 16, overflow: 'hidden',
@@ -268,68 +236,44 @@ const rs = StyleSheet.create({
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// ERA ROW — chapter divider
+// ERA ROW — static, no per-frame worklets
 // ══════════════════════════════════════════════════════════════════════════════
 const EraRow = React.memo(({
-  century, count, yOff, scrollY, theme, isDark, gold, language,
+  century, count, theme, isDark, gold, language,
 }: {
-  century: number; count: number; yOff: number;
-  scrollY: SharedValue<number>; theme: any; isDark: boolean; gold: string; language: string;
+  century: number; count: number;
+  theme: any; isDark: boolean; gold: string; language: string;
 }) => {
-  const mid = yOff + ERA_H / 2;
-  const focusZone = H * 0.35;
   const roman = toRoman(century);
   const label = centuryLabel(century, language);
   const range = centuryRange(century);
-
-  const style = useAnimatedStyle(() => {
-    const vc = scrollY.value + H / 2;
-    const t = Math.min(Math.abs(mid - vc) / focusZone, 1);
-    const sc = interpolate(t, [0, 1], [1.015, 0.98], Extrapolation.CLAMP);
-    const op = interpolate(t, [0, 1], [1, 0.7], Extrapolation.CLAMP);
-    return { transform: [{ scale: sc }], opacity: op };
-  });
-
-  const glowStyle = useAnimatedStyle(() => {
-    const vc = scrollY.value + H / 2;
-    const t = Math.min(Math.abs(mid - vc) / (focusZone * 0.6), 1);
-    return {
-      opacity: interpolate(t, [0, 1], [0.35, 0], Extrapolation.CLAMP),
-      transform: [{ scale: interpolate(t, [0, 1], [2.2, 0.6], Extrapolation.CLAMP) }],
-    };
-  });
 
   return (
     <View style={[es.row, { height: ERA_H, marginBottom: ITEM_GAP }]}>
       {/* Gold spine segment */}
       <View style={[es.spineGold, { backgroundColor: gold + '80', left: SPINE_X - 1 }]} />
 
-      {/* Glowing node */}
-      <Animated.View style={[es.glow, { backgroundColor: gold, left: SPINE_X - 12 }, glowStyle]} />
+      {/* Node dot on spine */}
+      <View style={[es.nodeDot, { backgroundColor: gold, left: SPINE_X - 5 }]} />
 
       {/* Card */}
-      <Animated.View style={[es.wrap, style]}>
+      <View style={[es.wrap]}>
         <View style={[es.card, {
           backgroundColor: isDark ? '#15110A' : '#FFFBF0',
           borderColor: gold + '35',
         }]}>
-          {/* Background gradient accent */}
           <LinearGradient
             colors={[gold + '18', 'transparent']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={StyleSheet.absoluteFill}
           />
-
-          {/* Roman numeral badge */}
           <View style={[es.romanWrap, { borderColor: gold + '55' }]}>
             <View style={[es.romanInner, { backgroundColor: gold }]}>
               <Text style={es.romanText}>{roman}</Text>
             </View>
             <Sparkles size={10} color={gold} style={es.sparkle} />
           </View>
-
-          {/* Text block */}
           <View style={es.texts}>
             <Text style={[es.chapterTag, { color: gold }]}>
               {tl(language, 'chapter').toUpperCase()} · {century}
@@ -343,11 +287,9 @@ const EraRow = React.memo(({
               </Text>
             </View>
           </View>
-
-          {/* Right ornament */}
           <View style={[es.ornament, { backgroundColor: gold + '15' }]} />
         </View>
-      </Animated.View>
+      </View>
     </View>
   );
 });
@@ -355,8 +297,8 @@ const EraRow = React.memo(({
 const es = StyleSheet.create({
   row: { position: 'relative' },
   spineGold: { position: 'absolute', top: 0, bottom: -ITEM_GAP, width: 2, borderRadius: 1 },
-  glow: {
-    position: 'absolute', top: ERA_H / 2 - 12, width: 24, height: 24, borderRadius: 12, zIndex: 1,
+  nodeDot: {
+    position: 'absolute', top: ERA_H / 2 - 5, width: 10, height: 10, borderRadius: 5, zIndex: 1,
   },
   wrap: {
     position: 'absolute', top: 6, bottom: 6, left: SPINE_X + 18, right: 14,
@@ -432,42 +374,58 @@ export default function TimelineScreen({ allEvents }: Props) {
     onScroll: (ev) => { scrollY.value = ev.contentOffset.y; },
   });
 
-  // Progress bar fill (0–1)
-  const progress = useDerivedValue(() => {
+  // Progress bar — single worklet, no per-item subscriptions
+  const progressStyle = useAnimatedStyle(() => {
     const max = Math.max(1, totalHeight - H * 0.5);
-    return Math.max(0, Math.min(1, scrollY.value / max));
-  }, [totalHeight]);
+    const pct = Math.max(0, Math.min(1, scrollY.value / max));
+    return { height: `${pct * 100}%` };
+  });
 
-  const progressStyle = useAnimatedStyle(() => ({
-    height: `${progress.value * 100}%`,
-  }));
-
-  // Current-era badge (updates on scroll end — cheap, no per-frame work)
+  // Current-era badge — updated only on scroll end (no per-frame JS work)
   const [displayCentury, setDisplayCentury] = useState(0);
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+
   useEffect(() => {
     const first = items.find(i => i.k === 'era');
     if (first && first.k === 'era') setDisplayCentury(first.century);
   }, [items]);
 
-  const onScrollJS = useCallback((e: any) => {
+  const onScrollEnd = useCallback((e: any) => {
     const y = e.nativeEvent.contentOffset.y + H / 2;
     let c = 0;
-    for (const it of items) {
+    for (const it of itemsRef.current) {
       if (it.k === 'era' && it.y <= y) c = it.century;
     }
-    if (c !== 0 && c !== displayCentury) setDisplayCentury(c);
-  }, [items, displayCentury]);
+    if (c !== 0) setDisplayCentury(c);
+  }, []);
 
   const press = useCallback((ev: any) => { haptic('light'); setSelectedEvent(ev); }, []);
 
+  // renderItem passes stable `press` ref — EvRow/EraRow React.memo works correctly
   const renderItem = useCallback(({ item }: { item: TItem }) => {
     if (item.k === 'era') {
-      return <EraRow century={item.century} count={item.count} yOff={item.y}
-               scrollY={scrollY} theme={theme} isDark={isDark} gold={gold} language={language} />;
+      return (
+        <EraRow
+          century={item.century}
+          count={item.count}
+          theme={theme}
+          isDark={isDark}
+          gold={gold}
+          language={language}
+        />
+      );
     }
-    return <EvRow event={item.event} yOff={item.y} scrollY={scrollY}
-             theme={theme} isDark={isDark} language={language} onPress={() => press(item.event)} />;
-  }, [theme, isDark, language, gold, scrollY, press]);
+    return (
+      <EvRow
+        event={item.event}
+        theme={theme}
+        isDark={isDark}
+        language={language}
+        onPress={press}
+      />
+    );
+  }, [theme, isDark, language, gold, press]);
 
   const getLayout = useCallback((_: any, i: number) => {
     const item = items[i];
@@ -502,7 +460,6 @@ export default function TimelineScreen({ allEvents }: Props) {
             </View>
           </View>
 
-          {/* Current era badge (right side) */}
           {displayCentury !== 0 && (
             <View style={[m.eraBadge, { backgroundColor: gold + '14', borderColor: gold + '30' }]}>
               <Text style={[m.eraBadgeText, { color: gold }]}>{toRoman(Math.abs(displayCentury))}</Text>
@@ -524,21 +481,18 @@ export default function TimelineScreen({ allEvents }: Props) {
         </View>
       ) : (
         <View style={{ flex: 1 }}>
-          {/* Top fade overlay (fades items entering from top) */}
           <LinearGradient
             colors={[theme.background, theme.background + '00']}
             style={[m.fadeTop, { top: insets.top + HEADER_H, height: 40 }]}
             pointerEvents="none"
           />
-
-          {/* Bottom fade overlay */}
           <LinearGradient
             colors={[theme.background + '00', theme.background]}
             style={[m.fadeBot, { height: 80, bottom: insets.bottom }]}
             pointerEvents="none"
           />
 
-          {/* Scroll progress rail (right edge) */}
+          {/* Progress rail — single Reanimated worklet only */}
           <View style={[m.progRail, {
             backgroundColor: theme.border + '80',
             top: insets.top + HEADER_H + 20,
@@ -547,7 +501,6 @@ export default function TimelineScreen({ allEvents }: Props) {
             <Animated.View style={[m.progFill, { backgroundColor: gold }, progressStyle]} />
           </View>
 
-          {/* Year range labels on rail */}
           <View style={[m.railTop, { top: insets.top + HEADER_H + 8 }]} pointerEvents="none">
             <Text style={[m.railYear, { color: theme.subtext }]}>{formatYear(yearRange.first, language)}</Text>
           </View>
@@ -555,15 +508,14 @@ export default function TimelineScreen({ allEvents }: Props) {
             <Text style={[m.railYear, { color: theme.subtext }]}>{formatYear(yearRange.last, language)}</Text>
           </View>
 
-          {/* List */}
           <Animated.FlatList
             data={items}
             renderItem={renderItem}
             keyExtractor={keyEx}
             getItemLayout={getLayout}
             onScroll={scrollHandler}
-            onMomentumScrollEnd={onScrollJS}
-            onScrollEndDrag={onScrollJS}
+            onMomentumScrollEnd={onScrollEnd}
+            onScrollEndDrag={onScrollEnd}
             scrollEventThrottle={16}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{
@@ -571,10 +523,11 @@ export default function TimelineScreen({ allEvents }: Props) {
               paddingBottom: insets.bottom + 60,
               paddingRight: 24,
             }}
-            removeClippedSubviews={Platform.OS === 'android'}
-            maxToRenderPerBatch={12}
-            windowSize={11}
-            initialNumToRender={8}
+            removeClippedSubviews={true}
+            maxToRenderPerBatch={8}
+            windowSize={5}
+            initialNumToRender={10}
+            updateCellsBatchingPeriod={50}
           />
         </View>
       )}
@@ -587,7 +540,6 @@ export default function TimelineScreen({ allEvents }: Props) {
 const m = StyleSheet.create({
   root: { flex: 1 },
 
-  // Header
   hdrWrap: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20 },
   hdr: {
     height: HEADER_H, paddingHorizontal: 20,
@@ -607,7 +559,6 @@ const m = StyleSheet.create({
   eraBadgeText: { fontSize: 12, fontWeight: '900', letterSpacing: 0.5, fontFamily: SERIF },
   sep: { height: StyleSheet.hairlineWidth, opacity: 0.6 },
 
-  // Empty state
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 40 },
   emptyRing: {
     width: 84, height: 84, borderRadius: 42, borderWidth: 1.5,
@@ -617,11 +568,9 @@ const m = StyleSheet.create({
   emptyT: { fontSize: 17, fontWeight: '800', fontFamily: SERIF, letterSpacing: -0.3 },
   emptyS: { fontSize: 12.5, opacity: 0.5, textAlign: 'center', lineHeight: 19 },
 
-  // Fades
   fadeTop: { position: 'absolute', left: 0, right: 0, zIndex: 5 },
   fadeBot: { position: 'absolute', left: 0, right: 0, zIndex: 5 },
 
-  // Progress rail
   progRail: {
     position: 'absolute', right: 10, width: 2, borderRadius: 1,
     overflow: 'hidden', zIndex: 6,

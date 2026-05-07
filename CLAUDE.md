@@ -60,7 +60,7 @@ Zustand stores in [store/](store/), all persisted to AsyncStorage:
 
 ### Monetization
 
-- **RevenueCat** ([context/RevenueCatContext.tsx](context/RevenueCatContext.tsx)) is the source of truth for PRO. Entitlement identifier is exactly `"Daily History Pro"`. `syncProStatus()` mirrors the flag to the backend via `PATCH /users/me/pro`. The `API_KEYS` in that file are still RevenueCat **test** keys — swap to `appl_*` / `goog_*` before shipping.
+- **RevenueCat** ([context/RevenueCatContext.tsx](context/RevenueCatContext.tsx)) — entitlement identifier is exactly `"Daily History Pro"`. `isPro` is computed as `RC entitlement || user.is_pro` so the backend webhook is the durable fallback. The client no longer calls `PATCH /users/me/pro`; the RevenueCat webhook on the backend handles that. On identity sync, `refreshMe()` (`GET /users/me`) is called to pull the latest `is_pro` from DB. The `API_KEYS` in that file are still RevenueCat **test** keys — swap to `appl_*` / `goog_*` before shipping.
 - **AdMob** ([config/ads.ts](config/ads.ts)) — `USE_TEST_IDS = true` forces test ad units; flip to `false` for real IDs. AdMob is initialized via `useAdsInit` in `_layout.tsx`.
 
 ### Native

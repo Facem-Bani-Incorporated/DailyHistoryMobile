@@ -14,7 +14,6 @@ import android.graphics.RectF
 import android.graphics.Shader
 import android.os.Handler
 import android.os.Looper
-import android.view.View
 import android.widget.RemoteViews
 import com.rexinus.DailyHistoryMobile.MainActivity
 import com.rexinus.DailyHistoryMobile.R
@@ -38,27 +37,20 @@ class HistoryWidget : AppWidgetProvider() {
     }
 
     companion object {
-        const val PREFS_NAME      = "HistoryWidgetPrefs"
-        const val KEY_TITLE       = "widget_title"
-        const val KEY_YEAR        = "widget_year"
-        const val KEY_DATE_FULL   = "widget_date_full"
-        const val KEY_IMAGE_URL   = "widget_image_url"
+        const val PREFS_NAME    = "HistoryWidgetPrefs"
+        const val KEY_TITLE     = "widget_title"
+        const val KEY_YEAR      = "widget_year"
+        const val KEY_IMAGE_URL = "widget_image_url"
 
         private const val IMAGE_CACHE_FILE = "widget_image.png"
-        private const val MAX_IMAGE_W      = 540
-        private const val MAX_IMAGE_H      = 405
+        // Keep bitmap RAM well under the 1MB RemoteViews IPC budget:
+        // 400 * 300 * 4 bytes (ARGB_8888) = 480KB.
+        private const val MAX_IMAGE_W      = 400
+        private const val MAX_IMAGE_H      = 300
         private const val CORNER_RADIUS_PX = 56f
 
         fun updateWidget(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int) {
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-
-            val intent = Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            }
-            val pendingIntent = PendingIntent.getActivity(
-                context, 0, intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
 
             val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
             val minWidth  = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0)
@@ -70,25 +62,37 @@ class HistoryWidget : AppWidgetProvider() {
                 else                                -> R.layout.widget_small
             }
 
-            val views = RemoteViews(context.packageName, layoutId)
-            views.setOnClickPendingIntent(R.id.widget_root, pendingIntent)
+            val views = buildViews(context, layoutId)
 
-            val title    = prefs.getString(KEY_TITLE, "Daily History") ?: "Daily History"
-            val year     = prefs.getString(KEY_YEAR, "") ?: ""
-            val dateFull = prefs.getString(KEY_DATE_FULL, "") ?: ""
+            val title = prefs.getString(KEY_TITLE, "") ?: ""
+            val year  = prefs.getString(KEY_YEAR, "")  ?: ""
+            applyText(views, title, year)
 
-            try { views.setTextViewText(R.id.widget_title, title) } catch (_: Exception) {}
-            try { views.setTextViewText(R.id.widget_year, year) }   catch (_: Exception) {}
-            try { views.setTextViewText(R.id.widget_date, dateFull) } catch (_: Exception) {}
-
-            val cachedBitmap = loadCachedBitmap(context)
-            if (cachedBitmap != null) {
-                try { views.setImageViewBitmap(R.id.widget_image, cachedBitmap) } catch (_: Exception) {}
+            loadCachedBitmap(context)?.let {
+                try { views.setImageViewBitmap(R.id.widget_image, it) } catch (_: Exception) {}
             }
 
             appWidgetManager.updateAppWidget(appWidgetId, views)
 
             fetchEventData(context, appWidgetManager, appWidgetId, layoutId)
+        }
+
+        private fun buildViews(context: Context, layoutId: Int): RemoteViews {
+            val views = RemoteViews(context.packageName, layoutId)
+            val intent = Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+            val pendingIntent = PendingIntent.getActivity(
+                context, 0, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            views.setOnClickPendingIntent(R.id.widget_root, pendingIntent)
+            return views
+        }
+
+        private fun applyText(views: RemoteViews, title: String, year: String) {
+            try { views.setTextViewText(R.id.widget_title, title) } catch (_: Exception) {}
+            try { views.setTextViewText(R.id.widget_year, year)   } catch (_: Exception) {}
         }
 
         private fun fetchEventData(
@@ -113,7 +117,6 @@ class HistoryWidget : AppWidgetProvider() {
                     }
 
                     if (conn.responseCode != 200) { conn.disconnect(); return@execute }
-
                     val response = conn.inputStream.bufferedReader().readText()
                     conn.disconnect()
 
@@ -122,20 +125,20 @@ class HistoryWidget : AppWidgetProvider() {
 
                     val topEvent = pickTopEventWithImage(events) ?: events.getJSONObject(0)
 
-                    val titleObj  = topEvent.optJSONObject("titleTranslations")
-                    val title     = titleObj?.optString("en")?.takeIf { it.isNotEmpty() }
+                    val titleObj = topEvent.optJSONObject("titleTranslations")
+                    val title    = titleObj?.optString("en")?.takeIf { it.isNotEmpty() }
                         ?: topEvent.optString("title", "Daily History")
 
-                    val rawDate = listOf("eventDate", "event_date", "date").map { topEvent.optString(it) }
+                    val rawDate = listOf("eventDate", "event_date", "date")
+                        .map { topEvent.optString(it) }
                         .firstOrNull { it.isNotEmpty() } ?: ""
-                    val (yearStr, dateFull) = formatEventDate(rawDate)
+                    val yearStr = extractYear(rawDate)
 
                     val imageUrl = pickFirstImage(topEvent.optJSONArray("gallery"))
 
                     prefs.edit().apply {
                         putString(KEY_TITLE, title)
                         putString(KEY_YEAR, yearStr)
-                        putString(KEY_DATE_FULL, dateFull)
                         putString(KEY_IMAGE_URL, imageUrl ?: "")
                         apply()
                     }
@@ -143,34 +146,15 @@ class HistoryWidget : AppWidgetProvider() {
                     val bitmap = imageUrl?.let { downloadAndProcessImage(context, it) }
 
                     handler.post {
-                        val views = RemoteViews(context.packageName, layoutId)
+                        val views = buildViews(context, layoutId)
+                        applyText(views, title, yearStr)
 
-                        val intent = Intent(context, MainActivity::class.java).apply {
-                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                        }
-                        val pendingIntent = PendingIntent.getActivity(
-                            context, 0, intent,
-                            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                        )
-                        views.setOnClickPendingIntent(R.id.widget_root, pendingIntent)
-
-                        try { views.setTextViewText(R.id.widget_title, title) } catch (_: Exception) {}
-                        try { views.setTextViewText(R.id.widget_year, yearStr) } catch (_: Exception) {}
-                        try { views.setTextViewText(R.id.widget_date, dateFull) } catch (_: Exception) {}
-
-                        if (bitmap != null) {
-                            try {
-                                views.setImageViewBitmap(R.id.widget_image, bitmap)
-                                views.setViewVisibility(R.id.widget_image, View.VISIBLE)
-                            } catch (_: Exception) {}
-                        } else {
-                            val cached = loadCachedBitmap(context)
-                            if (cached != null) {
-                                try { views.setImageViewBitmap(R.id.widget_image, cached) } catch (_: Exception) {}
-                            }
+                        val finalBitmap = bitmap ?: loadCachedBitmap(context)
+                        if (finalBitmap != null) {
+                            try { views.setImageViewBitmap(R.id.widget_image, finalBitmap) } catch (_: Exception) {}
                         }
 
-                        appWidgetManager.updateAppWidget(appWidgetId, views)
+                        try { appWidgetManager.updateAppWidget(appWidgetId, views) } catch (_: Exception) {}
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()
@@ -181,7 +165,7 @@ class HistoryWidget : AppWidgetProvider() {
         private fun parseEventsArray(response: String): JSONArray? {
             return try {
                 val obj = JSONObject(response)
-                obj.optJSONArray("events")
+                obj.optJSONArray("events") ?: obj.optJSONArray("data")
             } catch (e: Exception) {
                 try { JSONArray(response) } catch (ex: Exception) { null }
             }
@@ -214,17 +198,14 @@ class HistoryWidget : AppWidgetProvider() {
             return null
         }
 
-        private fun formatEventDate(rawDate: String): Pair<String, String> {
-            if (rawDate.isEmpty()) return Pair("", "")
+        private fun extractYear(rawDate: String): String {
+            if (rawDate.isEmpty()) return ""
             return try {
                 val date = SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(rawDate)
                     ?: throw Exception("parse failed")
-                val yearOnly = SimpleDateFormat("yyyy", Locale.US).format(date)
-                val full     = SimpleDateFormat("MMMM d, yyyy", Locale.US).format(date)
-                Pair(yearOnly, full)
+                SimpleDateFormat("yyyy", Locale.US).format(date)
             } catch (e: Exception) {
-                val y = if (rawDate.length >= 4) rawDate.take(4) else rawDate
-                Pair(y, rawDate)
+                if (rawDate.length >= 4) rawDate.take(4) else rawDate
             }
         }
 
