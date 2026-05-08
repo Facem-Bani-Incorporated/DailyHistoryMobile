@@ -1,6 +1,7 @@
 // components/CalendarModal.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Star } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
@@ -17,6 +18,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
+import CelestialDay from './CelestialDay';
 
 const { width: W, height: H } = Dimensions.get('window');
 const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
@@ -60,16 +62,17 @@ function getFirstDayOfMonth(year: number, month: number): number {
   return new Date(year, month, 1).getDay();
 }
 
-/* ── Editorial Day Cell ── */
+/* ── Celestial Day Cell — sun (today) / moon-with-phase (other days) ── */
 const DayCell = React.memo(({
-  day, isToday, isSelected, isDisabled, hasEvents, impactLevel, theme, isDark, gold, onPress,
+  day, date, isToday, isSelected, isDisabled, hasEvents, impactLevel, theme, isDark, gold, onPress,
 }: {
-  day: number; isToday: boolean; isSelected: boolean; isDisabled: boolean;
+  day: number; date: Date; isToday: boolean; isSelected: boolean; isDisabled: boolean;
   hasEvents: boolean; impactLevel: number; theme: any; isDark: boolean; gold: string;
   onPress: () => void;
 }) => {
   const scale = useRef(new Animated.Value(1)).current;
   const pulse = useRef(new Animated.Value(0)).current;
+  const starPulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (isSelected) {
@@ -84,6 +87,17 @@ const DayCell = React.memo(({
     }
   }, [isSelected]);
 
+  useEffect(() => {
+    if (impactLevel === 3) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(starPulse, { toValue: 1, duration: 1100, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+          Animated.timing(starPulse, { toValue: 0, duration: 1100, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        ]),
+      ).start();
+    }
+  }, [impactLevel]);
+
   const handlePressIn = () => {
     if (isDisabled) return;
     Animated.spring(scale, { toValue: 0.88, tension: 300, friction: 15, useNativeDriver: true }).start();
@@ -93,23 +107,25 @@ const DayCell = React.memo(({
   };
 
   const haloScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.35] });
-  const haloOp = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0] });
+  const haloOp = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.45, 0] });
+  const starScale = starPulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.18] });
 
-  const dotColor = () => {
-    if (impactLevel === 3) return gold;
+  const cellInner = CELL_SIZE - 8;
+  const bodySize = cellInner - 4;
+
+  const subDot = () => {
     if (impactLevel === 2) return isDark ? '#A88B4D' : '#8B7355';
     if (impactLevel === 1) return isDark ? '#5A564E' : '#B5B0A8';
     return 'transparent';
   };
-
-  const dotSize = impactLevel === 3 ? 4 : impactLevel === 2 ? 3 : 2.5;
+  const subDotSize = impactLevel === 2 ? 3 : 2.5;
 
   return (
     <Pressable
       onPress={isDisabled ? undefined : onPress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
-      style={[cs.cellWrap, isDisabled && { opacity: 0.25 }]}
+      style={[cs.cellWrap, isDisabled && { opacity: 0.3 }]}
     >
       {isSelected && (
         <Animated.View style={[
@@ -126,11 +142,6 @@ const DayCell = React.memo(({
         cs.cell,
         {
           transform: [{ scale }],
-          backgroundColor: isSelected
-            ? gold
-            : isToday
-              ? (isDark ? '#2A251C' : '#F5EFE3')
-              : 'transparent',
         },
         isSelected && {
           shadowColor: gold,
@@ -140,38 +151,42 @@ const DayCell = React.memo(({
           elevation: 8,
         },
       ]}>
-        <Text style={[
-          cs.cellText,
-          {
-            color: isSelected ? '#000' : theme.text,
-            fontFamily: SERIF,
-            fontWeight: isSelected || isToday
-              ? '700'
-              : impactLevel === 3
-                ? '600'
-                : hasEvents
-                  ? '500'
-                  : '400',
-            opacity: isSelected ? 1 : hasEvents || isToday ? 1 : isDark ? 0.72 : 0.65,
-          },
-        ]}>
-          {day}
-        </Text>
+        <CelestialDay
+          date={date}
+          size={bodySize}
+          isToday={isToday}
+          dayNumber={day}
+          textSize={Math.round(bodySize * 0.36)}
+          textColor={isToday ? '#1A0F00' : isSelected ? '#FFF7DC' : '#F4EFD8'}
+        />
 
-        {hasEvents && !isSelected && (
+        {isSelected && !isToday && (
+          <View style={[cs.selectedRing, { borderColor: gold }]} />
+        )}
+
+        {/* Landmark star — impact > 90 */}
+        {impactLevel === 3 && (
+          <Animated.View style={[cs.starWrap, { transform: [{ scale: starScale }] }]}>
+            <View style={[cs.starBg, {
+              backgroundColor: isDark ? '#1A1410' : '#FBF8F2',
+              borderColor: gold,
+            }]}>
+              <Star size={9} color={gold} fill={gold} strokeWidth={1.5} />
+            </View>
+          </Animated.View>
+        )}
+
+        {/* Lower-importance event marker */}
+        {hasEvents && impactLevel !== 3 && !isSelected && (
           <View style={[
             cs.dot,
             {
-              width: dotSize,
-              height: dotSize,
-              borderRadius: dotSize / 2,
-              backgroundColor: dotColor(),
+              width: subDotSize,
+              height: subDotSize,
+              borderRadius: subDotSize / 2,
+              backgroundColor: subDot(),
             },
           ]} />
-        )}
-
-        {isToday && !isSelected && (
-          <View style={[cs.todayRing, { borderColor: gold }]} />
         )}
       </Animated.View>
     </Pressable>
@@ -192,13 +207,9 @@ const cs = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cellText: {
-    fontSize: 15,
-    letterSpacing: -0.2,
-  },
   dot: {
     position: 'absolute',
-    bottom: 5,
+    bottom: 1,
   },
   halo: {
     position: 'absolute',
@@ -206,12 +217,25 @@ const cs = StyleSheet.create({
     height: CELL_SIZE - 8,
     borderRadius: (CELL_SIZE - 8) / 2,
   },
-  todayRing: {
+  selectedRing: {
     position: 'absolute',
     width: CELL_SIZE - 4,
     height: CELL_SIZE - 4,
     borderRadius: (CELL_SIZE - 4) / 2,
+    borderWidth: 1.5,
+  },
+  starWrap: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+  },
+  starBg: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
     borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 
@@ -220,7 +244,7 @@ export default function CalendarModal({
   visible, onClose, onSelectDate, selectedDate, maxFutureOffset = 1, events = [],
 }: CalendarModalProps) {
   const { theme, isDark } = useTheme();
-  const { language } = useLanguage();
+  const { language, t } = useLanguage();
   const insets = useSafeAreaInsets();
   const gold = isDark ? '#E8B84D' : '#C77E08';
 
@@ -245,7 +269,7 @@ export default function CalendarModal({
       const d = new Date(dateStr);
       if (d.getMonth() === viewMonth && d.getFullYear() === viewYear) {
         const day = d.getDate();
-        const impact = ev.impactScore || 0;
+        const impact = ev.impactScore ?? ev.impact_score ?? 0;
         if (!map[day]) map[day] = { hasEvents: true, maxImpact: 0, count: 0 };
         map[day].count += 1;
         if (impact > map[day].maxImpact) map[day].maxImpact = impact;
@@ -257,14 +281,14 @@ export default function CalendarModal({
   const monthStats = useMemo(() => {
     const days = Object.values(dayMetadata);
     const totalEvents = days.reduce((sum, d) => sum + d.count, 0);
-    const highImpactDays = days.filter(d => d.maxImpact > 80).length;
+    const highImpactDays = days.filter(d => d.maxImpact > 90).length;
     return { totalEvents, highImpactDays, activeDays: days.length };
   }, [dayMetadata]);
 
   const getImpactLevel = (day: number) => {
     const score = dayMetadata[day]?.maxImpact || 0;
-    if (score > 80) return 3;
-    if (score > 40) return 2;
+    if (score > 90) return 3;
+    if (score > 50) return 2;
     if (score > 0) return 1;
     return 0;
   };
@@ -537,6 +561,7 @@ export default function CalendarModal({
                   <DayCell
                     key={di}
                     day={day}
+                    date={date}
                     isToday={isT}
                     isSelected={isSel}
                     isDisabled={date > maxDate}
@@ -553,31 +578,42 @@ export default function CalendarModal({
           ))}
         </Animated.View>
 
-        {/* Legend — only shown when we have event data to legend */}
-        {monthStats.totalEvents > 0 && (
-          <View style={[ms.legend, {
-            borderTopColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
-          }]}>
-            <View style={ms.legendItem}>
-              <View style={[ms.legendDot, { backgroundColor: gold, width: 4, height: 4, borderRadius: 2 }]} />
-              <Text style={[ms.legendText, { color: theme.subtext }]}>landmark</Text>
+        {/* Legend — star explanation + event tiers */}
+        <View style={[ms.legend, {
+          borderTopColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+        }]}>
+          <View style={ms.starLegendRow}>
+            <View style={[cs.starBg, {
+              backgroundColor: isDark ? '#1A1410' : '#FBF8F2',
+              borderColor: gold,
+              width: 18, height: 18, borderRadius: 9,
+            }]}>
+              <Star size={10} color={gold} fill={gold} strokeWidth={1.5} />
             </View>
-            <View style={ms.legendItem}>
-              <View style={[ms.legendDot, {
-                backgroundColor: isDark ? '#A88B4D' : '#8B7355',
-                width: 3, height: 3, borderRadius: 1.5,
-              }]} />
-              <Text style={[ms.legendText, { color: theme.subtext }]}>notable</Text>
-            </View>
-            <View style={ms.legendItem}>
-              <View style={[ms.legendDot, {
-                backgroundColor: isDark ? '#5A564E' : '#B5B0A8',
-                width: 2.5, height: 2.5, borderRadius: 1.25,
-              }]} />
-              <Text style={[ms.legendText, { color: theme.subtext }]}>minor</Text>
-            </View>
+            <Text style={[ms.starLegendText, { color: theme.text, fontFamily: SERIF }]}>
+              {t('calendar_landmark_explain')}
+            </Text>
           </View>
-        )}
+
+          {monthStats.totalEvents > 0 && (
+            <View style={ms.legendDots}>
+              <View style={ms.legendItem}>
+                <View style={[ms.legendDot, {
+                  backgroundColor: isDark ? '#A88B4D' : '#8B7355',
+                  width: 3, height: 3, borderRadius: 1.5,
+                }]} />
+                <Text style={[ms.legendText, { color: theme.subtext }]}>{t('legend_notable')}</Text>
+              </View>
+              <View style={ms.legendItem}>
+                <View style={[ms.legendDot, {
+                  backgroundColor: isDark ? '#5A564E' : '#B5B0A8',
+                  width: 2.5, height: 2.5, borderRadius: 1.25,
+                }]} />
+                <Text style={[ms.legendText, { color: theme.subtext }]}>{t('legend_minor')}</Text>
+              </View>
+            </View>
+          )}
+        </View>
       </Animated.View>
     </Modal>
   );
@@ -716,12 +752,28 @@ const ms = StyleSheet.create({
   },
 
   legend: {
+    paddingTop: 16,
+    marginTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: 12,
+  },
+  starLegendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 4,
+  },
+  starLegendText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 16,
+    fontStyle: 'italic',
+    opacity: 0.85,
+  },
+  legendDots: {
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 20,
-    paddingTop: 18,
-    marginTop: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
   },
   legendItem: {
     flexDirection: 'row',

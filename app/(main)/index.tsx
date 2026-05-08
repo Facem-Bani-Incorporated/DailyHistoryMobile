@@ -27,6 +27,7 @@ import AchievementsModal from '../../components/AchievementsModal';
 import AchievementToast from '../../components/AchievementToast';
 import AdCard from '../../components/AdCard';
 import CalendarModal from '../../components/CalendarModal';
+import CelestialDay from '../../components/CelestialDay';
 import { DiscoverSection } from '../../components/DiscoverSection';
 import { HistoryCard } from '../../components/HistoryCard';
 import LeaderboardModal from '../../components/LeaderboardModal';
@@ -58,7 +59,7 @@ import SavedScreen from './saved';
 const { width: W, height: H } = Dimensions.get('window');
 const CARD_H = H * 0.55;
 const CACHE_TTL = 30 * 60 * 1000;
-const MAX_FWD = 1;
+const MAX_FWD = 2;
 const PAST_DAYS = 200;
 const TODAY_INDEX = PAST_DAYS;
 const AD_FREQUENCY = 3;
@@ -641,6 +642,36 @@ const _lo = StyleSheet.create({
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
+// PRO FUTURE ACCESS BANNER — shown at top of day+1 / day+2 content for PRO users
+// ═════════════════════════════════════════════════════════════════════════════
+const ProFutureBanner = ({ gold, dayOff }: { gold: string; dayOff: number }) => (
+  <View style={[_pfb.wrap, { backgroundColor: gold + '12', borderColor: gold + '30' }]}>
+    <Ionicons name="star" size={10} color={gold} />
+    <Text style={[_pfb.text, { color: gold }]}>
+      {dayOff === 1 ? 'TOMORROW' : `+${dayOff} DAYS`}{' · PRO EARLY ACCESS'}
+    </Text>
+  </View>
+);
+const _pfb = StyleSheet.create({
+  wrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignSelf: 'center',
+  },
+  text: {
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 2,
+  },
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
 // MAIN SCREEN
 // ═════════════════════════════════════════════════════════════════════════════
 export default function HomeScreen() {
@@ -661,6 +692,8 @@ export default function HomeScreen() {
 
   const [tomorrowMainUnlocked, setTomorrowMainUnlocked] = useState(false);
   const [tomorrowDiscoverUnlocked, setTomorrowDiscoverUnlocked] = useState(false);
+  const [day2MainUnlocked, setDay2MainUnlocked] = useState(false);
+  const [day2DiscoverUnlocked, setDay2DiscoverUnlocked] = useState(false);
   const [unlockDate, setUnlockDate] = useState(todayISO());
   const [bannerLoaded, setBannerLoaded] = useState(false);
   const [bannerError, setBannerError] = useState(false);
@@ -670,6 +703,8 @@ export default function HomeScreen() {
     if (unlockDate !== today) {
       setTomorrowMainUnlocked(false);
       setTomorrowDiscoverUnlocked(false);
+      setDay2MainUnlocked(false);
+      setDay2DiscoverUnlocked(false);
       setUnlockDate(today);
     }
   });
@@ -679,6 +714,12 @@ export default function HomeScreen() {
   }, [showForUnlock]);
   const handleUnlockDiscover = useCallback(() => {
     showForUnlock(() => { haptic('success'); setTomorrowDiscoverUnlocked(true); });
+  }, [showForUnlock]);
+  const handleUnlockDay2Main = useCallback(() => {
+    showForUnlock(() => { haptic('success'); setDay2MainUnlocked(true); });
+  }, [showForUnlock]);
+  const handleUnlockDay2Discover = useCallback(() => {
+    showForUnlock(() => { haptic('success'); setDay2DiscoverUnlocked(true); });
   }, [showForUnlock]);
 
   const [achVis, setAchVis] = useState(false);
@@ -763,11 +804,11 @@ export default function HomeScreen() {
     recordVisit();
     try { genRecap(); } catch { }
     setTimeout(() => { if (getRecap()) setRecapVis(true); }, 2000);
-    Promise.all([fetchOne(0), fetchOne(-1), fetchOne(1)]).then(async () => {
+    Promise.all([fetchOne(0), fetchOne(-1), fetchOne(1), fetchOne(2)]).then(async () => {
       setLoading(false);
       setTick(t => t + 1);
       fetchAll();
-      fetchOne(0, 'pro').catch(() => {}); fetchOne(-1, 'pro').catch(() => {}); fetchOne(1, 'pro').catch(() => {});
+      fetchOne(0, 'pro').catch(() => {}); fetchOne(-1, 'pro').catch(() => {}); fetchOne(1, 'pro').catch(() => {}); fetchOne(2, 'pro').catch(() => {});
       for (let i = 2; i <= 7; i++) { fetchOne(-i).catch(() => { }); fetchOne(-i, 'pro').catch(() => {}); }
       const notifPref = await AsyncStorage.getItem('notifications_enabled');
       if (notifPref !== 'false') {
@@ -863,10 +904,22 @@ export default function HomeScreen() {
     let content: React.ReactNode = null;
 
     if (dayOff === 1 && !isPro) {
+      const hintPg = mem.current[mk('free', isoFor(1))] ?? EMPTY;
+      const hintEvent = [...hintPg.data].sort(sortByImpact)[0] ?? undefined;
       if (tab === 'today' && !tomorrowMainUnlocked) {
-        content = <LockedTomorrowCard variant="main" onUnlock={handleUnlockMain} isReady={isUnlockReady} />;
+        content = <LockedTomorrowCard variant="main" onUnlock={handleUnlockMain} isReady={isUnlockReady} dayOffset={1} hintEvent={hintEvent} bottomPad={floatingBarPad} onPaywall={() => presentPaywall()} />;
       } else if (tab === 'discover' && !tomorrowDiscoverUnlocked) {
-        content = <LockedTomorrowCard variant="discover" onUnlock={handleUnlockDiscover} isReady={isUnlockReady} />;
+        content = <LockedTomorrowCard variant="discover" onUnlock={handleUnlockDiscover} isReady={isUnlockReady} dayOffset={1} hintEvent={hintEvent} bottomPad={floatingBarPad} onPaywall={() => presentPaywall()} />;
+      }
+    }
+
+    if (dayOff === 2 && !isPro) {
+      const hintPg = mem.current[mk('free', isoFor(2))] ?? EMPTY;
+      const hintEvent = [...hintPg.data].sort(sortByImpact)[0] ?? undefined;
+      if (tab === 'today' && !day2MainUnlocked) {
+        content = <LockedTomorrowCard variant="main" onUnlock={handleUnlockDay2Main} isReady={isUnlockReady} dayOffset={2} hintEvent={hintEvent} bottomPad={floatingBarPad} onPaywall={() => presentPaywall()} />;
+      } else if (tab === 'discover' && !day2DiscoverUnlocked) {
+        content = <LockedTomorrowCard variant="discover" onUnlock={handleUnlockDay2Discover} isReady={isUnlockReady} dayOffset={2} hintEvent={hintEvent} bottomPad={floatingBarPad} onPaywall={() => presentPaywall()} />;
       }
     }
 
@@ -942,14 +995,21 @@ export default function HomeScreen() {
 
     return (
       <AnimatedPage dayOff={dayOff} scrollX={scrollX}>
-        {content}
+        {dayOff > 0 && isPro ? (
+          <View style={{ flex: 1 }}>
+            <ProFutureBanner gold={goldColor} dayOff={dayOff} />
+            <View style={{ flex: 1 }}>{content}</View>
+          </View>
+        ) : content}
       </AnimatedPage>
     );
   }, [
     tab, theme, t, language, allEvents, tick, goldColor, isPro,
-    tomorrowMainUnlocked, tomorrowDiscoverUnlocked, isUnlockReady,
-    handleUnlockMain, handleUnlockDiscover, scrollX, presentPaywall,
-    floatingBarPad,
+    tomorrowMainUnlocked, tomorrowDiscoverUnlocked,
+    day2MainUnlocked, day2DiscoverUnlocked, isUnlockReady,
+    handleUnlockMain, handleUnlockDiscover,
+    handleUnlockDay2Main, handleUnlockDay2Discover,
+    scrollX, presentPaywall, floatingBarPad,
   ]);
 
   const getItemLayout = useCallback((_: any, index: number) => ({
@@ -971,10 +1031,15 @@ export default function HomeScreen() {
     if (t === 'saved') setSeenSaved(userSaved.length);
   }, [userSaved.length, isPro, presentPaywallIfNeeded]);
   const swipeOn = tab === 'today' || tab === 'discover';
-  const isTomorrowNext = off === 0 && canFwd;
-  const isTomorrowLocked = isTomorrowNext && (
-    (tab === 'today' && !tomorrowMainUnlocked) ||
-    (tab === 'discover' && !tomorrowDiscoverUnlocked)
+  const isNextDayLocked = canFwd && !isPro && (
+    (off === 0 && (
+      (tab === 'today' && !tomorrowMainUnlocked) ||
+      (tab === 'discover' && !tomorrowDiscoverUnlocked)
+    )) ||
+    (off === 1 && (
+      (tab === 'today' && !day2MainUnlocked) ||
+      (tab === 'discover' && !day2DiscoverUnlocked)
+    ))
   );
 
   const shouldShowBanner = SHOW_BANNER_TABS.includes(tab) && !loading && !isPro;
@@ -1048,18 +1113,13 @@ export default function HomeScreen() {
                 <TouchableOpacity onPress={() => { haptic('light'); setCalVis(true); }}
                   activeOpacity={0.7} style={ms.dateCenter}>
                   <View style={ms.datePrimary}>
-                    <View style={[ms.dayCircle, {
-                      backgroundColor: info.isToday ? goldColor : 'transparent',
-                      borderColor: info.isToday ? goldColor : isPremium ? '#2A2230' : theme.border,
-                      ...(isPremium && info.isToday && {
-                        shadowColor: '#D4A843', shadowOffset: { width: 0, height: 0 },
-                        shadowOpacity: 0.4, shadowRadius: 8, elevation: 6,
-                      }),
-                    }]}>
-                      <Text style={[ms.dayNum, {
-                        color: info.isToday ? (isPremium ? '#05040A' : '#000') : theme.text,
-                      }]}>{info.day}</Text>
-                    </View>
+                    <CelestialDay
+                      date={offDate(off)}
+                      size={48}
+                      isToday={info.isToday}
+                      dayNumber={info.day}
+                      intense
+                    />
                     <View style={ms.dateTexts}>
                       <Text style={[ms.dateLabel, { color: theme.text }]}>
                         {info.isToday ? t('today') : info.isTomorrow ? t('tomorrow') : info.fullDay}
@@ -1071,7 +1131,7 @@ export default function HomeScreen() {
                   </View>
                 </TouchableOpacity>
 
-                {isTomorrowLocked ? (
+                {isNextDayLocked ? (
                   <TouchableOpacity onPress={goFwd} activeOpacity={0.6}
                     hitSlop={{ top: 16, bottom: 16, left: 12, right: 12 }}
                     style={[ms.unlockArrow, { backgroundColor: goldColor + '15', borderColor: goldColor + '35' }]}>

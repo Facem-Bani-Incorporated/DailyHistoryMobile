@@ -4,6 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Crown, Trophy, X } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -202,7 +203,11 @@ const UserHero = ({ me, nextUser, data, tabColor, isDark, language, theme, t }: 
         {/* Main row: avatar + rank */}
         <View style={uh.mainRow}>
           <View style={[uh.avatar, { backgroundColor: avatarColor, borderColor: tabColor + '60' }]}>
-            <Text style={uh.avatarText}>{(me.username || '?')[0].toUpperCase()}</Text>
+            {me.photoUrl ? (
+              <Image source={{ uri: me.photoUrl }} style={uh.avatarImg} contentFit="cover" />
+            ) : (
+              <Text style={uh.avatarText}>{(me.username || '?')[0].toUpperCase()}</Text>
+            )}
           </View>
 
           <View style={{ flex: 1 }}>
@@ -285,6 +290,7 @@ const uh = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   avatarText: { color: '#FFF', fontSize: 22, fontWeight: '900' },
+  avatarImg: { width: '100%', height: '100%', borderRadius: 28 },
   username: { fontSize: 17, fontWeight: '800', letterSpacing: -0.3, fontFamily: SERIF },
   level: { fontSize: 11.5, fontWeight: '600', opacity: 0.65, marginTop: 2 },
 
@@ -422,9 +428,17 @@ const Podium = ({ top3, tabColor, isDark, theme, language, t }: {
           borderRadius: position === 1 ? 34 : 27,
           borderWidth: position === 1 ? 3 : 2,
         }]}>
-          <Text style={[pd.avatarText, { fontSize: position === 1 ? 26 : 20 }]}>
-            {(entry.username || '?')[0].toUpperCase()}
-          </Text>
+          {entry.photoUrl ? (
+            <Image
+              source={{ uri: entry.photoUrl }}
+              style={{ width: '100%', height: '100%', borderRadius: position === 1 ? 34 : 27 }}
+              contentFit="cover"
+            />
+          ) : (
+            <Text style={[pd.avatarText, { fontSize: position === 1 ? 26 : 20 }]}>
+              {(entry.username || '?')[0].toUpperCase()}
+            </Text>
+          )}
           {entry.isCurrentUser && (
             <View style={[pd.youDot, { backgroundColor: tabColor }]} />
           )}
@@ -557,7 +571,11 @@ const ListRow = ({ entry, tabColor, isDark, theme, t, index, language }: {
         borderColor: isMe ? tabColor + '80' : 'transparent',
         borderWidth: isMe ? 2 : 0,
       }]}>
-        <Text style={lr.avatarText}>{(entry.username || '?')[0].toUpperCase()}</Text>
+        {entry.photoUrl ? (
+          <Image source={{ uri: entry.photoUrl }} style={lr.avatarImg} contentFit="cover" />
+        ) : (
+          <Text style={lr.avatarText}>{(entry.username || '?')[0].toUpperCase()}</Text>
+        )}
       </View>
 
       {/* Info */}
@@ -602,6 +620,7 @@ const lr = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   avatarText: { color: '#FFF', fontWeight: '900', fontSize: 16 },
+  avatarImg: { width: 42, height: 42, borderRadius: 21 },
   info: { flex: 1, minWidth: 0 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   username: { fontSize: 14, fontWeight: '800', letterSpacing: -0.2, flexShrink: 1 },

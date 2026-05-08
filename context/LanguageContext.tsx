@@ -54,6 +54,9 @@ const translations: Record<Language, Record<string, string>> = {
     culture: "Culture", religion: "Religion", economics: "Economics",
     sports: "Sports", technology: "Technology", nature: "Nature",
     calendar_hint: "Select a date to explore its history",
+    calendar_landmark_explain: "A star marks a day whose main event is mega important for history.",
+    legend_notable: "notable",
+    legend_minor: "minor",
     // LEADERBOARD
     leaderboard: "Leaderboard", your_rank: "YOUR RANK",
     no_users_found: "No users found.", level: "Level"
@@ -91,6 +94,9 @@ const translations: Record<Language, Record<string, string>> = {
     culture: "Cultură", religion: "Religie", economics: "Economie",
     sports: "Sport", technology: "Tehnologie", nature: "Natură",
     calendar_hint: "Alege o dată pentru a-i explora istoria",
+    calendar_landmark_explain: "O steluță marchează o zi al cărei eveniment principal este mega important pentru istorie.",
+    legend_notable: "notabil",
+    legend_minor: "minor",
     // LEADERBOARD
     leaderboard: "Clasament", your_rank: "LOCUL TĂU",
     no_users_found: "Nu există utilizatori momentan.", level: "Nivel"
@@ -128,6 +134,9 @@ const translations: Record<Language, Record<string, string>> = {
     culture: "Culture", religion: "Religion", economics: "Économie",
     sports: "Sport", technology: "Technologie", nature: "Nature",
     calendar_hint: "Choisissez une date pour explorer son histoire",
+    calendar_landmark_explain: "Une étoile marque un jour dont l'événement principal est méga important pour l'histoire.",
+    legend_notable: "notable",
+    legend_minor: "mineur",
     // LEADERBOARD
     leaderboard: "Classement", your_rank: "VOTRE RANG",
     no_users_found: "Aucun utilisateur trouvé.", level: "Niveau"
@@ -165,6 +174,9 @@ const translations: Record<Language, Record<string, string>> = {
     culture: "Kultur", religion: "Religion", economics: "Wirtschaft",
     sports: "Sport", technology: "Technologie", nature: "Natur",
     calendar_hint: "Wähle ein Datum, um seine Geschichte zu erkunden",
+    calendar_landmark_explain: "Ein Stern markiert einen Tag, dessen Hauptereignis mega wichtig für die Geschichte ist.",
+    legend_notable: "bemerkenswert",
+    legend_minor: "klein",
     // LEADERBOARD
     leaderboard: "Bestenliste", your_rank: "DEIN RANG",
     no_users_found: "Keine Benutzer gefunden.", level: "Level"
@@ -202,6 +214,9 @@ const translations: Record<Language, Record<string, string>> = {
     culture: "Cultura", religion: "Religión", economics: "Economía",
     sports: "Deporte", technology: "Tecnología", nature: "Naturaleza",
     calendar_hint: "Elige una fecha para explorar su historia",
+    calendar_landmark_explain: "Una estrella marca un día cuyo evento principal es mega importante para la historia.",
+    legend_notable: "notable",
+    legend_minor: "menor",
     // LEADERBOARD
     leaderboard: "Clasificación", your_rank: "TU RANGO",
     no_users_found: "No se encontraron usuarios.", level: "Nivel"

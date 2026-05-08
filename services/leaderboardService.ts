@@ -10,6 +10,7 @@ export interface LeaderboardEntry {
   level: number;
   rank: number;
   isCurrentUser: boolean;
+  photoUrl?: string;
 }
 
 export const fetchLeaderboard = async (type: LeaderboardType): Promise<LeaderboardEntry[]> => {
@@ -35,21 +36,62 @@ export const fetchLeaderboard = async (type: LeaderboardType): Promise<Leaderboa
 
     const sortField = fieldMap[type];
 
+    // My own photo from auth store (always available for the current user)
+    const myPhotoUrl = (user as any)?.avatar_url || (user as any)?.avatarUrl || (user as any)?.picture || undefined;
+
+    // Generates a nice avatar image from the username — same trick as ProfileAvatar.tsx
+    const generatedAvatar = (name: string) =>
+      `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=ffd700&color=000&bold=true&size=128`;
+
     // Sortăm descrescător în funcție de tab-ul selectat
     const sorted = [...response.data].sort((a, b) => (b[sortField] || 0) - (a[sortField] || 0));
 
     // Mapăm pe formatul cerut de interfață
     return sorted.map((item: any, index: number) => {
-      const itemId = item.userId; 
+      const itemId = item.userId;
       const username = item.username || 'Utilizator';
+      const isCurrentUser = String(itemId) === String(myId);
+
+      // Try every plausible field the backend might return for the profile photo
+      let photoUrl: string | undefined =
+        item.avatarUrl ||
+        item.avatar_url ||
+        item.photoUrl ||
+        item.picture ||
+        item.profileImageUrl ||
+        item.profilePicture ||
+        undefined;
+
+      // For the current user, fall back to the auth store photo (guaranteed to work)
+      if (!photoUrl && isCurrentUser) {
+        photoUrl = myPhotoUrl;
+      }
+
+      // Try parsing the gamificationData blob if the backend returns it
+      if (!photoUrl && item.gamificationData) {
+        try {
+          const blob = typeof item.gamificationData === 'string'
+            ? JSON.parse(item.gamificationData)
+            : item.gamificationData;
+          if (blob?.photoUrl && typeof blob.photoUrl === 'string') {
+            photoUrl = blob.photoUrl;
+          }
+        } catch {}
+      }
+
+      // Final fallback: generate a nice initial-based avatar so every user has an image
+      if (!photoUrl) {
+        photoUrl = generatedAvatar(username);
+      }
 
       return {
         userId: String(itemId),
-        username: username,
+        username,
         value: item[sortField] || 0,
         level: Math.floor((item.totalXP || 0) / 100) + 1,
         rank: index + 1,
-        isCurrentUser: String(itemId) === String(myId)
+        isCurrentUser,
+        photoUrl,
       };
     });
   } catch (error) {

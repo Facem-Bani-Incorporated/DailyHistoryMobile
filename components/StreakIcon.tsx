@@ -4,6 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import LottieView from 'lottie-react-native';
 import { AlertTriangle, Flame, X } from 'lucide-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -77,7 +78,7 @@ const L: Record<string, Record<string, string>> = {
     restoring: 'Ready to restore', adNotReady: 'Ad loading...',
     newJourney: 'Begin your journey', newJourneyDesc: 'Read your first story to light the flame.',
     // bonus
-    bonusXP: 'Bonus: Watch ad for +50 XP',
+    bonusXP: 'Bonus: Watch ad for +500 XP',
     bonusReady: 'Bonus reward ready',
   },
   ro: {
@@ -98,7 +99,7 @@ const L: Record<string, Record<string, string>> = {
     restore: 'Recuperează Streak', restoreDesc: 'Vizionează o reclamă scurtă ca să-l recuperezi',
     restoring: 'Gata de recuperare', adNotReady: 'Se încarcă reclama...',
     newJourney: 'Începe călătoria', newJourneyDesc: 'Citește prima poveste ca să aprinzi flacăra.',
-    bonusXP: 'Bonus: Vizionează reclamă +50 XP',
+    bonusXP: 'Bonus: Vizionează reclamă +500 XP',
     bonusReady: 'Recompensă bonus gata',
   },
   fr: {
@@ -119,7 +120,7 @@ const L: Record<string, Record<string, string>> = {
     restore: 'Restaurer la Série', restoreDesc: 'Regardez une pub pour la récupérer',
     restoring: 'Prêt à restaurer', adNotReady: 'Chargement...',
     newJourney: 'Commencez votre voyage', newJourneyDesc: 'Lisez votre première histoire.',
-    bonusXP: 'Bonus : Regarder une pub +50 XP',
+    bonusXP: 'Bonus : Regarder une pub +500 XP',
     bonusReady: 'Récompense bonus prête',
   },
   de: {
@@ -140,7 +141,7 @@ const L: Record<string, Record<string, string>> = {
     restore: 'Streak Wiederherstellen', restoreDesc: 'Schau eine kurze Werbung um ihn zurückzuholen',
     restoring: 'Bereit zur Wiederherstellung', adNotReady: 'Wird geladen...',
     newJourney: 'Beginne deine Reise', newJourneyDesc: 'Lies deine erste Geschichte.',
-    bonusXP: 'Bonus: Werbung ansehen +50 XP',
+    bonusXP: 'Bonus: Werbung ansehen +500 XP',
     bonusReady: 'Bonus-Belohnung bereit',
   },
   es: {
@@ -161,7 +162,7 @@ const L: Record<string, Record<string, string>> = {
     restore: 'Recuperar Racha', restoreDesc: 'Mira un anuncio corto para recuperarla',
     restoring: 'Listo para recuperar', adNotReady: 'Cargando anuncio...',
     newJourney: 'Comienza tu viaje', newJourneyDesc: 'Lee tu primera historia.',
-    bonusXP: 'Bono: Ver anuncio +50 XP',
+    bonusXP: 'Bono: Ver anuncio +500 XP',
     bonusReady: 'Recompensa bonus lista',
   },
 };
@@ -440,7 +441,14 @@ const StreakModal = ({ visible, onClose }: { visible: boolean; onClose: () => vo
               </View>
             ) : (
               // ── ACTIVE STREAK ──
-              <View style={[sms.heroCard, { backgroundColor: '#0A0806', borderColor: heatColor + '35' }]}>
+              <View style={[sms.heroCard, { borderColor: heatColor + '40' }]}>
+                {/* Background gradient — dark bottom fades into fire-tinted top */}
+                <LinearGradient
+                  colors={['#0D0A07', '#100C08', '#0A0806']}
+                  start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 1 }}
+                  style={StyleSheet.absoluteFill}
+                />
+
                 {/* Tier halo behind flame */}
                 <View style={sms.lottieWrap}>
                   <TierHalo color={tier.color} glow={tier.glow} pulseValue={pulse} />
@@ -448,18 +456,22 @@ const StreakModal = ({ visible, onClose }: { visible: boolean; onClose: () => vo
                     style={sms.lottieBig} />
                 </View>
 
-                {/* Tier badge */}
-                <View style={[sms.tierPill, { backgroundColor: tier.color + '18', borderColor: tier.color + '55' }]}>
-                  <Text style={{ fontSize: 10 }}>{tier.icon}</Text>
-                  <Text style={[sms.tierPillText, { color: tier.color }]}>{tierName.toUpperCase()}</Text>
-                </View>
-
-                {/* Streak number */}
+                {/* Streak number + tier pill inline */}
                 <View style={sms.heroTextWrap}>
-                  <Text style={sms.heroNumber}>{streak}</Text>
-                  <Text style={[sms.heroLabel, { color: heatColor }]}>
-                    {streak === 1 ? tx(language, 'day') : tx(language, 'days')}
-                  </Text>
+                  <Text style={[sms.heroNumber, {
+                    textShadowColor: heatColor + '88',
+                    textShadowOffset: { width: 0, height: 0 },
+                    textShadowRadius: 18,
+                  }]}>{streak}</Text>
+                  <View style={sms.heroLabelRow}>
+                    <Text style={[sms.heroLabel, { color: heatColor }]}>
+                      {streak === 1 ? tx(language, 'day') : tx(language, 'days')}
+                    </Text>
+                    <View style={[sms.heroBadge, { backgroundColor: tier.color + '20', borderColor: tier.color + '50' }]}>
+                      <Text style={{ fontSize: 9 }}>{tier.icon}</Text>
+                      <Text style={[sms.heroBadgeText, { color: tier.color }]}>{tierName.toUpperCase()}</Text>
+                    </View>
+                  </View>
                 </View>
 
                 {/* Milestone progress bar */}
@@ -535,10 +547,15 @@ const StreakModal = ({ visible, onClose }: { visible: boolean; onClose: () => vo
                         backgroundColor: active
                           ? heatColor
                           : (isDark ? '#1A1510' : '#EFEAE0'),
-                        borderColor: isToday ? heatColor : 'transparent',
-                        borderWidth: isToday && !active ? 1.5 : 0,
+                        borderColor: isToday ? heatColor : (active ? heatColor + '60' : 'transparent'),
+                        borderWidth: isToday && !active ? 2 : active ? 1 : 0,
+                        shadowColor: active ? heatColor : 'transparent',
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.5,
+                        shadowRadius: 6,
+                        elevation: active ? 4 : 0,
                       }]}>
-                        {active && <Flame size={13} color="#FFF" strokeWidth={2.8} fill="#FFF" />}
+                        {active && <Flame size={14} color="#FFF" strokeWidth={2.5} fill="#FFF" />}
                       </View>
                       {isToday && (
                         <Text style={[sms.calToday, { color: heatColor }]}>
@@ -609,7 +626,7 @@ const StreakModal = ({ visible, onClose }: { visible: boolean; onClose: () => vo
                 </Text>
               </View>
               <View style={[sms.bonusBadge, { backgroundColor: heatColor + '20' }]}>
-                <Text style={[sms.bonusBadgeT, { color: heatColor }]}>+50 XP</Text>
+                <Text style={[sms.bonusBadgeT, { color: heatColor }]}>+500 XP</Text>
               </View>
             </TouchableOpacity>
           )}
@@ -680,15 +697,15 @@ const sms = StyleSheet.create({
   heroCard: { borderRadius: 26, borderWidth: 1, overflow: 'hidden', marginBottom: 12, paddingBottom: 16 },
   lottieWrap: { width: '100%', height: 210, alignItems: 'center', justifyContent: 'center' },
   lottieBig: { width: 210, height: 210, zIndex: 2 },
-  tierPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    alignSelf: 'center', paddingHorizontal: 10, paddingVertical: 5,
-    borderRadius: 10, borderWidth: 1, marginTop: -20,
-  },
-  tierPillText: { fontSize: 9.5, fontWeight: '900', letterSpacing: 1.6 },
-  heroTextWrap: { alignItems: 'center', marginTop: 8 },
-  heroNumber: { fontSize: 62, fontWeight: '900', color: '#FFFFFF', letterSpacing: -3, fontFamily: SERIF, lineHeight: 66 },
+  heroTextWrap: { alignItems: 'center', marginTop: 4 },
+  heroNumber: { fontSize: 72, fontWeight: '900', color: '#FFFFFF', letterSpacing: -3, fontFamily: SERIF, lineHeight: 76 },
   heroLabel: { fontSize: 10.5, fontWeight: '800', letterSpacing: 2, textTransform: 'uppercase', marginTop: 2 },
+  heroLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
+  heroBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1,
+  },
+  heroBadgeText: { fontSize: 9, fontWeight: '900', letterSpacing: 1.2 },
 
   // Milestone
   milestoneWrap: { paddingHorizontal: 20, marginTop: 16, marginBottom: 14 },
@@ -696,8 +713,8 @@ const sms = StyleSheet.create({
   milestoneLabel: { fontSize: 10.5, fontWeight: '700', color: 'rgba(255,255,255,0.55)', letterSpacing: 0.4 },
   milestoneNextBadge: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   milestoneNext: { fontSize: 10, fontWeight: '900', letterSpacing: 1.2 },
-  milestoneTrack: { height: 5, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 3, overflow: 'hidden' },
-  milestoneFill: { height: 5, borderRadius: 3 },
+  milestoneTrack: { height: 7, backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 4, overflow: 'hidden' },
+  milestoneFill: { height: 7, borderRadius: 4 },
   maxTierWrap: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8 },
   maxTierText: { fontSize: 11, fontWeight: '800', color: '#FFD700', letterSpacing: 0.5 },
 
@@ -756,7 +773,7 @@ const sms = StyleSheet.create({
   calDay: { alignItems: 'center', flex: 1, gap: 8 },
   calDayLabel: { fontSize: 10, letterSpacing: 0.8 },
   calDot: {
-    width: 32, height: 32, borderRadius: 16,
+    width: 36, height: 36, borderRadius: 18,
     alignItems: 'center', justifyContent: 'center',
   },
   calToday: { fontSize: 8, fontWeight: '900', letterSpacing: 1, marginTop: 2 },

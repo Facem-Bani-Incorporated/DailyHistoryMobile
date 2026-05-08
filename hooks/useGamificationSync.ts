@@ -34,6 +34,9 @@ export function buildSyncPayload(): GamificationSyncDTO {
     categoriesArray = [];
   }
 
+  const authUser = useAuthStore.getState().user;
+  const photoUrl = (authUser as any)?.avatar_url || (authUser as any)?.picture || null;
+
   const blob = {
     readEventsToday: s.readEventsToday ?? [],
     readDate: s.readDate ?? null,
@@ -48,6 +51,7 @@ export function buildSyncPayload(): GamificationSyncDTO {
     weeklyRecaps: s.weeklyRecaps ?? {},
     currentWeekKey: s.currentWeekKey ?? null,
     calendarLog: s.calendarLog ?? {},
+    photoUrl,
   };
 
   return {

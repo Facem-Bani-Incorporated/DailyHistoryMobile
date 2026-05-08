@@ -33,7 +33,7 @@ export const ADS_CONFIG = {
   INTERSTITIAL_FREQUENCY: 5,
 
   // XP bonus for watching a rewarded ad
-  REWARDED_XP_BONUS: 50,
+  REWARDED_XP_BONUS: 500,
 
   // Cooldown between interstitials (ms) — minimum 60s
   INTERSTITIAL_COOLDOWN: 60 * 1000,

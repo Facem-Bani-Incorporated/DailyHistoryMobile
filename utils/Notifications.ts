@@ -1,5 +1,6 @@
 // utils/Notifications.ts
 import * as Notifications from 'expo-notifications';
+import { SchedulableTriggerInputTypes } from 'expo-notifications';
 import { Platform } from 'react-native';
 
 // ── Configure notification handler ──
@@ -33,9 +34,12 @@ async function scheduleAt(date: Date, title: string, body: string, eventData?: a
       body,
       sound: 'default',
       data: eventData ? { event: eventData } : {},
-      ...(Platform.OS === 'android' && { channelId: 'daily-history' }),
     },
-    trigger: { date } as any,
+    trigger: {
+      type: SchedulableTriggerInputTypes.DATE,
+      date,
+      ...(Platform.OS === 'android' ? { channelId: 'daily-history' } : {}),
+    },
   });
 }
 
@@ -48,7 +52,6 @@ export async function scheduleDailyNotification(
   eventData?: any,
 ) {
   try {
-    await Notifications.cancelAllScheduledNotificationsAsync();
     const trigger = new Date();
     trigger.setDate(trigger.getDate() + 1);
     trigger.setHours(hour, minute, 0, 0);
