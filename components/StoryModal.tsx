@@ -5,7 +5,7 @@ import { Bookmark, BookOpen, Clock, Pause, Play, Share2, X } from 'lucide-react-
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated, Dimensions, Linking, Modal, Platform, ScrollView,
-  Share, StatusBar, StyleSheet, Text, TouchableOpacity, View,
+  StatusBar, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAllEvents } from '../context/AllEventsContext';
@@ -16,6 +16,7 @@ import { useTTS } from '../hooks/useTTS';
 import { useGamificationStore } from '../store/useGamificationStore';
 import { getEventId, useSavedStore } from '../store/useSavedStore';
 import RelatedEvents from './RelatedEvents';
+import { SharePickerModal } from './SharePickerModal';
 
 const { height: H, width: W } = Dimensions.get('window');
 const HERO_H = H * 0.48;
@@ -167,6 +168,7 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
   const [viewerStartIndex, setViewerStartIndex] = useState(0);
   const [relatedEvent, setRelatedEvent] = useState<any>(null);
   const [contentH, setContentH] = useState(H * 2);
+  const [sharePickerVisible, setSharePickerVisible] = useState(false);
 
   const scrollY = useRef(new Animated.Value(0)).current;
   const { saveEvent, removeEvent, isSaved } = useSavedStore();
@@ -231,7 +233,7 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
                   : <Play color="#fff" size={16} strokeWidth={2.5} />}
               </TouchableOpacity>
 
-              <TouchableOpacity onPress={() => Share.share({ message: `${title} (${year})\n\n${narrative.substring(0, 140)}…\n\nDaily History App` }).catch(() => {})} style={st.btn}>
+              <TouchableOpacity onPress={() => setSharePickerVisible(true)} style={st.btn}>
                 <Share2 color="#fff" size={17} strokeWidth={2} />
               </TouchableOpacity>
               <TouchableOpacity onPress={toggleSave} style={[st.btn, { marginLeft: 10 }, saved && st.btnActive]}>
@@ -323,6 +325,13 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
 
       {viewerVisible && gallery.length > 0 && <ImageViewer images={gallery} initialIndex={viewerStartIndex} onClose={() => setViewerVisible(false)} />}
       {relatedEvent && <StoryModal visible={!!relatedEvent} event={relatedEvent} onClose={() => setRelatedEvent(null)} theme={theme} allEvents={allEvents} />}
+      <SharePickerModal
+        visible={sharePickerVisible}
+        event={event}
+        language={language}
+        gallery={gallery}
+        onClose={() => setSharePickerVisible(false)}
+      />
     </>
   );
 };

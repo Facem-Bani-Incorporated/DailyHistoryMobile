@@ -1057,28 +1057,70 @@ export default function HomeScreen() {
               <LinearGradient colors={['#0A0815', '#05040A']} style={StyleSheet.absoluteFill} />
             )}
 
-            {/* Brand + icon row */}
-            <View style={ms.brandRow}>
-              <View style={ms.brandLeft}>
-                <Text style={[ms.brandLabel, { color: goldColor }]}>
-                  {t('Daily').toUpperCase()}
-                </Text>
-                <Text style={[ms.brandTitle, { color: theme.text }]} numberOfLines={1}>{t('History')}</Text>
-              </View>
+            {isPremium && <PremiumAccentLine />}
 
-              <View style={[ms.headerRight, { gap: screenWidth < 375 ? 2 : screenWidth < 414 ? 4 : 6 }]}>
-                {/* Compact PRO star button — replaces the wide Get Pro button */}
-                {!isPro && <ProStarButton gold={goldColor} onPress={() => presentPaywall()} />}
+            {/* Single header row: [streak+trophy] | [date nav] | [achievements+search+avatar] */}
+            <View style={ms.headerRow}>
 
+              {/* Left — gamification */}
+              <View style={ms.headerLeft}>
+                <StreakIcon />
                 <TouchableOpacity onPress={() => { haptic('light'); setLeadVis(true); }}
                   activeOpacity={0.6} style={ms.iconBtn}>
                   <Trophy size={18} color={theme.subtext} strokeWidth={1.8} />
                 </TouchableOpacity>
+              </View>
 
-                <TouchableOpacity onPress={() => switchTab('search')} activeOpacity={0.6}
-                  style={[ms.iconBtn, { backgroundColor: tab === 'search' ? goldColor + '18' : 'transparent' }]}>
-                  <Search size={18} color={tab === 'search' ? goldColor : theme.subtext} strokeWidth={1.8} />
-                </TouchableOpacity>
+              {/* Center — date navigation */}
+              {tab !== 'search' ? (
+                <Animated.View style={[ms.dateCenterNav, { transform: [{ translateX: dateAnim }] }]}>
+                  <TouchableOpacity onPress={goBck} activeOpacity={0.6}
+                    hitSlop={{ top: 16, bottom: 16, left: 12, right: 12 }} style={ms.navArrow}>
+                    <Text style={[ms.navArrowIcon, { color: theme.subtext }]}>{'\u2039'}</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity onPress={() => { haptic('light'); setCalVis(true); }}
+                    activeOpacity={0.7} style={ms.dateCenter}>
+                    <View style={ms.datePrimary}>
+                      <CelestialDay
+                        date={offDate(off)}
+                        size={48}
+                        isToday={info.isToday}
+                        dayNumber={info.day}
+                        intense
+                      />
+                      <View style={ms.dateTexts}>
+                        <Text style={[ms.dateLabel, { color: theme.text }]}>
+                          {info.isToday ? t('today') : info.isTomorrow ? t('tomorrow') : info.fullDay}
+                        </Text>
+                        <Text style={[ms.dateSub, { color: theme.subtext }]}>
+                          {`${info.monthLong} ${info.dayNum}, ${info.yearNum}`}
+                        </Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+
+                  {isNextDayLocked ? (
+                    <TouchableOpacity onPress={goFwd} activeOpacity={0.6}
+                      hitSlop={{ top: 16, bottom: 16, left: 12, right: 12 }}
+                      style={[ms.unlockArrow, { backgroundColor: goldColor + '15', borderColor: goldColor + '35' }]}>
+                      <Ionicons name="lock-closed" size={13} color={goldColor} />
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity onPress={goFwd} activeOpacity={0.6} disabled={!canFwd}
+                      hitSlop={{ top: 16, bottom: 16, left: 12, right: 12 }}
+                      style={[ms.navArrow, !canFwd && { opacity: 0.2 }]}>
+                      <Text style={[ms.navArrowIcon, { color: theme.subtext }]}>{'\u203A'}</Text>
+                    </TouchableOpacity>
+                  )}
+                </Animated.View>
+              ) : (
+                <View style={{ flex: 1 }} />
+              )}
+
+              {/* Right — utilities */}
+              <View style={[ms.headerRight, { gap: screenWidth < 375 ? 2 : screenWidth < 414 ? 4 : 6 }]}>
+                {!isPro && <ProStarButton gold={goldColor} onPress={() => presentPaywall()} />}
 
                 <TouchableOpacity onPress={() => { haptic('light'); setAchVis(true); }}
                   activeOpacity={0.6}
@@ -1095,57 +1137,14 @@ export default function HomeScreen() {
                   )}
                 </TouchableOpacity>
 
-                <StreakIcon />
+                <TouchableOpacity onPress={() => switchTab('search')} activeOpacity={0.6}
+                  style={[ms.iconBtn, { backgroundColor: tab === 'search' ? goldColor + '18' : 'transparent' }]}>
+                  <Search size={18} color={tab === 'search' ? goldColor : theme.subtext} strokeWidth={1.8} />
+                </TouchableOpacity>
+
                 <ProfileWithXP gold={goldColor} theme={theme} isDark={isDark} />
               </View>
             </View>
-
-            {isPremium && <PremiumAccentLine />}
-
-            {/* Date nav */}
-            {tab !== 'search' && (
-              <Animated.View style={[ms.dateNav, { transform: [{ translateX: dateAnim }] }]}>
-                <TouchableOpacity onPress={goBck} activeOpacity={0.6}
-                  hitSlop={{ top: 16, bottom: 16, left: 12, right: 12 }} style={ms.navArrow}>
-                  <Text style={[ms.navArrowIcon, { color: theme.subtext }]}>{'\u2039'}</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity onPress={() => { haptic('light'); setCalVis(true); }}
-                  activeOpacity={0.7} style={ms.dateCenter}>
-                  <View style={ms.datePrimary}>
-                    <CelestialDay
-                      date={offDate(off)}
-                      size={48}
-                      isToday={info.isToday}
-                      dayNumber={info.day}
-                      intense
-                    />
-                    <View style={ms.dateTexts}>
-                      <Text style={[ms.dateLabel, { color: theme.text }]}>
-                        {info.isToday ? t('today') : info.isTomorrow ? t('tomorrow') : info.fullDay}
-                      </Text>
-                      <Text style={[ms.dateSub, { color: theme.subtext }]}>
-                        {`${info.monthLong} ${info.dayNum}, ${info.yearNum}`}
-                      </Text>
-                    </View>
-                  </View>
-                </TouchableOpacity>
-
-                {isNextDayLocked ? (
-                  <TouchableOpacity onPress={goFwd} activeOpacity={0.6}
-                    hitSlop={{ top: 16, bottom: 16, left: 12, right: 12 }}
-                    style={[ms.unlockArrow, { backgroundColor: goldColor + '15', borderColor: goldColor + '35' }]}>
-                    <Ionicons name="lock-closed" size={13} color={goldColor} />
-                  </TouchableOpacity>
-                ) : (
-                  <TouchableOpacity onPress={goFwd} activeOpacity={0.6} disabled={!canFwd}
-                    hitSlop={{ top: 16, bottom: 16, left: 12, right: 12 }}
-                    style={[ms.navArrow, !canFwd && { opacity: 0.2 }]}>
-                    <Text style={[ms.navArrowIcon, { color: theme.subtext }]}>{'\u203A'}</Text>
-                  </TouchableOpacity>
-                )}
-              </Animated.View>
-            )}
 
             <View style={[ms.sep, { backgroundColor: isPremium ? '#D4A84315' : theme.border }]} />
           </View>
@@ -1278,19 +1277,12 @@ const makeStyles = (theme: any, isDark: boolean, isPremium: boolean) => StyleShe
     paddingHorizontal: 16,
     overflow: 'hidden',
   },
-  brandRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingTop: 10, paddingBottom: 14,
+  headerRow: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingTop: 8, paddingBottom: 10,
   },
-  brandLeft: { gap: 1, flexShrink: 1, minWidth: 0 },
-  brandLabel: {
-    fontSize: 9, fontWeight: '700', letterSpacing: 4,
-    opacity: isPremium ? 0.8 : 0.6,
-  },
-  brandTitle: {
-    fontSize: 22, fontWeight: '800', letterSpacing: 0.5,
-    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
-  },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 0 },
+  dateCenterNav: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 2, flexShrink: 0 },
   iconBtn: { width: 32, height: 32, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   achBadge: {
@@ -1299,7 +1291,6 @@ const makeStyles = (theme: any, isDark: boolean, isPremium: boolean) => StyleShe
   },
   achBadgeT: { fontSize: 9, fontWeight: '900', color: '#FFF' },
 
-  dateNav: { flexDirection: 'row', alignItems: 'center', paddingBottom: 14 },
   navArrow: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   navArrowIcon: { fontSize: 28, fontWeight: '300', lineHeight: 30, marginTop: -1 },
   dateCenter: { flex: 1, alignItems: 'center' },

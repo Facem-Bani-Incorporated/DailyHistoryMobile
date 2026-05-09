@@ -2,26 +2,21 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as Sharing from 'expo-sharing';
-import { Check, Share2, X } from 'lucide-react-native';
+import { Share2 } from 'lucide-react-native';
 import { memo, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
-  Modal,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   TouchableWithoutFeedback,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { captureRef } from 'react-native-view-shot';
 
-import { ShareCard } from '../components/Sharecard';
 import { useLanguage } from '../context/LanguageContext';
+import { SharePickerModal } from './SharePickerModal';
 import { useTheme } from '../context/ThemeContext';
 import { useEventImages } from '../hooks/useEventImages';
 import { useGamificationStore } from '../store/useGamificationStore';
@@ -54,104 +49,6 @@ const eraLabel = (year: number): string => {
   if (year < 2000) return 'XX Century';
   return 'Contemporary';
 };
-
-/* ═══════════════════════════════════════════
-   SHARE PICKER MODAL
-   ═══════════════════════════════════════════ */
-const SharePickerModal = ({ visible, event, language, gallery, onClose }: {
-  visible: boolean; event: any; language: string; gallery: string[]; onClose: () => void;
-}) => {
-  const { theme, isDark, isPremium } = useTheme();
-  const insets = useSafeAreaInsets();
-  const [selectedIdx, setSelectedIdx] = useState(0);
-  const [sharing, setSharing] = useState(false);
-  const shareCardRef = useRef<View>(null);
-
-  useEffect(() => {
-    if (visible) setSelectedIdx(0);
-  }, [visible]);
-
-  const handleShare = async () => {
-    setSharing(true);
-    await new Promise(r => setTimeout(r, 300));
-    try {
-      const uri = await captureRef(shareCardRef, { format: 'png', quality: 1 });
-      if (await Sharing.isAvailableAsync()) {
-        const title = event.titleTranslations?.[language] ?? event.titleTranslations?.en ?? '';
-        const year = extractYear(event);
-        await Sharing.shareAsync(uri, { dialogTitle: `${title} (${year})`, mimeType: 'image/png', UTI: 'public.png' });
-      }
-    } catch {} finally { setSharing(false); }
-  };
-
-  const bg = isPremium ? '#05040A' : isDark ? '#090807' : '#FDFBF7';
-  const gold = isPremium ? '#D4A843' : isDark ? '#E8B84D' : '#C77E08';
-
-  return (
-    <Modal visible={visible} animationType="slide" transparent statusBarTranslucent>
-      <View style={sp.overlay}>
-        <View style={[sp.sheet, { backgroundColor: bg, paddingBottom: insets.bottom + 20 }]}>
-          <View style={sp.header}>
-            <TouchableOpacity onPress={onClose} style={[sp.closeBtn, { borderColor: theme.border }]}>
-              <X size={16} color={theme.subtext} strokeWidth={2.5} />
-            </TouchableOpacity>
-            <Text style={[sp.headerTitle, { color: theme.text }]}>Share Story</Text>
-            <View style={{ width: 36 }} />
-          </View>
-
-          <View style={sp.previewWrap}>
-            <ShareCard event={event} language={language} cardRef={shareCardRef} imageIndex={selectedIdx} />
-          </View>
-
-          {gallery.length > 1 && (
-            <View style={sp.pickerSection}>
-              <Text style={[sp.pickerLabel, { color: theme.subtext }]}>Choose image</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={sp.pickerScroll}>
-                {gallery.map((img, i) => (
-                  <TouchableOpacity key={i} onPress={() => setSelectedIdx(i)} activeOpacity={0.8}
-                    style={[sp.thumbWrap, {
-                      borderColor: i === selectedIdx ? gold : 'transparent',
-                      borderWidth: 2,
-                    }]}>
-                    <Image source={{ uri: img }} style={sp.thumb} contentFit="cover" transition={200} />
-                    {i === selectedIdx && (
-                      <View style={[sp.thumbCheck, { backgroundColor: gold }]}>
-                        <Check size={10} color="#000" strokeWidth={3} />
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-          )}
-
-          <TouchableOpacity onPress={handleShare} disabled={sharing} activeOpacity={0.8}
-            style={[sp.shareBtn, { backgroundColor: gold, opacity: sharing ? 0.6 : 1 }]}>
-            <Share2 size={16} color="#000" strokeWidth={2.5} />
-            <Text style={sp.shareBtnText}>{sharing ? 'Sharing...' : 'Share'}</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
-  );
-};
-
-const sp = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
-  sheet: { borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingTop: 12 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 12 },
-  closeBtn: { width: 36, height: 36, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { fontSize: 16, fontWeight: '700', letterSpacing: 0.2 },
-  previewWrap: { alignItems: 'center', paddingVertical: 12, transform: [{ scale: 0.55 }], marginVertical: -80 },
-  pickerSection: { paddingHorizontal: 20, marginBottom: 16 },
-  pickerLabel: { fontSize: 11, fontWeight: '600', letterSpacing: 0.5, marginBottom: 10, textTransform: 'uppercase', opacity: 0.5 },
-  pickerScroll: { gap: 8, paddingRight: 20 },
-  thumbWrap: { width: 64, height: 64, borderRadius: 12, overflow: 'hidden' },
-  thumb: { width: '100%', height: '100%' },
-  thumbCheck: { position: 'absolute', top: 4, right: 4, width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
-  shareBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginHorizontal: 20, paddingVertical: 15, borderRadius: 14 },
-  shareBtnText: { fontSize: 15, fontWeight: '800', color: '#000', letterSpacing: 0.3 },
-});
 
 /* ═══════════════════════════════════════════
    MAIN HISTORY CARD — Editorial/magazine style
