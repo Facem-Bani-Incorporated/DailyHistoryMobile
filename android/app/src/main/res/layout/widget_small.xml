@@ -12,49 +12,45 @@
         android:src="@drawable/widget_background"
         android:contentDescription="@null"/>
 
-    <View
+    <ImageView
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="@drawable/widget_overlay"/>
+        android:src="@drawable/widget_overlay"
+        android:scaleType="fitXY"
+        android:contentDescription="@null"/>
 
-    <LinearLayout
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|center_horizontal"
+        android:layout_marginTop="10dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp"
+        android:paddingLeft="10dp"
+        android:paddingRight="10dp"
+        android:background="@drawable/glass_pill"
+        android:text="ON THIS DAY"
+        android:textColor="#CCFFFFFF"
+        android:textSize="8sp"
+        android:fontFamily="sans-serif-medium"
+        android:gravity="center"
+        android:letterSpacing="0.15"/>
+
+    <TextView
+        android:id="@+id/widget_year"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_gravity="bottom"
-        android:orientation="vertical"
-        android:padding="11dp">
+        android:layout_gravity="bottom|center_horizontal"
+        android:paddingBottom="12dp"
+        android:paddingLeft="8dp"
+        android:paddingRight="8dp"
+        android:gravity="center"
+        android:textColor="#FFFFFF"
+        android:textSize="32sp"
+        android:fontFamily="sans-serif-black"
+        android:shadowColor="#AA000000"
+        android:shadowDx="0"
+        android:shadowDy="1"
+        android:shadowRadius="8"/>
 
-        <TextView
-            android:id="@+id/widget_date"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:visibility="gone"/>
-
-        <TextView
-            android:id="@+id/widget_year"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textColor="#FFD700"
-            android:textSize="18sp"
-            android:fontFamily="sans-serif-black"
-            android:shadowColor="#90000000"
-            android:shadowDx="0"
-            android:shadowDy="1"
-            android:shadowRadius="3"/>
-
-        <TextView
-            android:id="@+id/widget_title"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textColor="#FFFFFF"
-            android:textSize="12sp"
-            android:fontFamily="sans-serif-black"
-            android:maxLines="2"
-            android:ellipsize="end"
-            android:lineSpacingMultiplier="1.08"
-            android:shadowColor="#90000000"
-            android:shadowDx="0"
-            android:shadowDy="1"
-            android:shadowRadius="3"/>
-    </LinearLayout>
 </FrameLayout>

@@ -1,6 +1,7 @@
 // app/_layout.tsx
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import * as Notifications from 'expo-notifications';
+import * as Linking from 'expo-linking';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
@@ -25,6 +26,30 @@ function AppContent() {
   const prevTokenRef = useRef<string | null | undefined>(undefined);
   const onboardingActiveRef = useRef(false);
 
+  const handleWidgetDeepLink = (url: string | null) => {
+    if (!url || !url.startsWith('dailyhistorymobile://widget')) return;
+    try {
+      const parsed = Linking.parse(url);
+      const title = typeof parsed.queryParams?.title === 'string' ? parsed.queryParams.title : '';
+      const year = typeof parsed.queryParams?.year === 'string' ? parsed.queryParams.year : '';
+      const narrative = typeof parsed.queryParams?.narrative === 'string' ? parsed.queryParams.narrative : '';
+      const image = typeof parsed.queryParams?.image === 'string' ? parsed.queryParams.image : '';
+
+      const event = {
+        titleTranslations: { en: title || 'Daily History' },
+        narrativeTranslations: { en: narrative || 'Open the app to explore this event.' },
+        eventDate: year ? `${year}-01-01` : '',
+        gallery: image ? [image] : [],
+      };
+
+      useNotificationEventStore.getState().setPendingEvent(event);
+      if (token) router.replace('/(main)');
+      else router.replace('/preview');
+    } catch (error) {
+      if (__DEV__) console.warn('[Widget deeplink] parse failed', error);
+    }
+  };
+
   // ── Sync gamification data with backend ──
   useGamificationSync();
 
@@ -47,6 +72,14 @@ function AppContent() {
 
     return () => sub.remove();
   }, []);
+
+  useEffect(() => {
+    Linking.getInitialURL().then((url) => {
+      handleWidgetDeepLink(url);
+    });
+    const sub = Linking.addEventListener('url', ({ url }) => handleWidgetDeepLink(url));
+    return () => sub.remove();
+  }, [token]);
 
   useEffect(() => {
     GoogleSignin.configure({
