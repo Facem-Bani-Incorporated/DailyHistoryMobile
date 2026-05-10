@@ -9,6 +9,7 @@ export interface GamificationSyncDTO {
   dailyGoalsCompleted: number;
   lastActiveDate: string | null;
   gamificationData: string | null; // JSON blob — opaque for backend
+  savedEvents?: number[];
 }
 
 /**

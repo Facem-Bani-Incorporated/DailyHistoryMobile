@@ -5,6 +5,7 @@ import type { GamificationSyncDTO } from '../services/gamificationService';
 import { fetchGamification, syncGamification } from '../services/gamificationService';
 import { useAuthStore } from '../store/useAuthStore';
 import { useGamificationStore } from '../store/useGamificationStore';
+import { getEventId, useSavedStore } from '../store/useSavedStore';
 
 const SYNC_INTERVAL = 5 * 60 * 1000; // 5 minutes
 
@@ -22,6 +23,11 @@ function getUserId(): string | null {
 // ── Build DTO payload from Zustand state (exported for logout sync) ──
 export function buildSyncPayload(): GamificationSyncDTO {
   const s = useGamificationStore.getState();
+  const userId = getUserId();
+  const perUserEvents = useSavedStore.getState()._perUser[userId ?? ''] ?? [];
+  const savedEventIds = perUserEvents
+    .map(e => { const n = Number(getEventId(e)); return Number.isFinite(n) ? n : null; })
+    .filter((n): n is number => n !== null);
 
   let categoriesArray: string[] = [];
   try {
@@ -62,6 +68,7 @@ export function buildSyncPayload(): GamificationSyncDTO {
     dailyGoalsCompleted: s.dailyGoalsCompleted ?? 0,
     lastActiveDate: s.lastActiveDate ?? null,
     gamificationData: JSON.stringify(blob),
+    savedEvents: savedEventIds,
   };
 }
 
