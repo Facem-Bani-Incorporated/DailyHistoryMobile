@@ -59,7 +59,15 @@
       "Bash(export JAVA_HOME=\"/Applications/Android Studio.app/Contents/jbr/Contents/Home\")",
       "Bash(export ANDROID_HOME=\"$HOME/Library/Android/sdk\")",
       "Bash(xxd)",
-      "Bash(python3 -)"
+      "Bash(python3 -)",
+      "Bash(psql \"postgresql://postgres:UNCVrcluyUBsLTLwwFnjhcQZbDmdHHbR@autorack.proxy.rlwy.net:37585/railway\" -c \"\\\\d public.user_gamification\")",
+      "Bash(/opt/homebrew/opt/libpq/bin/psql \"postgresql://postgres:UNCVrcluyUBsLTLwwFnjhcQZbDmdHHbR@autorack.proxy.rlwy.net:37585/railway\" -c \"\\\\d public.user_gamification\")",
+      "Bash(/opt/homebrew/opt/libpq/bin/psql \"postgresql://postgres:UNCVrcluyUBsLTLwwFnjhcQZbDmdHHbR@autorack.proxy.rlwy.net:37585/railway\" -c \"\\\\d public.user_saved_events\")",
+      "Bash(python3 generate_import.py)",
+      "Bash(/opt/homebrew/opt/libpq/bin/psql \"postgresql://postgres:UNCVrcluyUBsLTLwwFnjhcQZbDmdHHbR@autorack.proxy.rlwy.net:37585/railway\" -v ON_ERROR_STOP=1 -f daily-history-import.sql)",
+      "Bash(/opt/homebrew/opt/libpq/bin/psql \"postgresql://postgres:UNCVrcluyUBsLTLwwFnjhcQZbDmdHHbR@autorack.proxy.rlwy.net:37585/railway\" -c \"SELECT COUNT\\(*\\) as events FROM public.events; SELECT COUNT\\(*\\) as users FROM public.users; SELECT COUNT\\(*\\) as daily_content FROM public.daily_content; SELECT COUNT\\(*\\) as user_gamification FROM public.user_gamification; SELECT COUNT\\(*\\) as translations FROM public.translations;\")",
+      "Bash(curl -s \"https://daily-history-server-dev-development.up.railway.app/api/v1/daily-content/guest?date=2026-05-12\")",
+      "Bash(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' -A DailyHistoryWidget/1.0 https://upload.wikimedia.org/wikipedia/en/1/18/Wana_Decrypt0r_screenshot.png)"
     ]
   }
 }

@@ -1016,7 +1016,8 @@ export default function HomeScreen() {
     length: W, offset: W * index, index,
   }), []);
 
-  const ms = makeStyles(theme, isDark, isPremium);
+  const ms = makeStyles(theme, isDark, isPremium, screenWidth);
+  const celestialSize = Math.max(26, Math.round(Math.min(40, screenWidth * 0.103)));
   const info = labelFor(off, language);
   const canFwd = off < MAX_FWD;
   const showChrome = tab === 'today' || tab === 'discover' || tab === 'search';
@@ -1084,16 +1085,16 @@ export default function HomeScreen() {
                     <View style={ms.datePrimary}>
                       <CelestialDay
                         date={offDate(off)}
-                        size={48}
+                        size={celestialSize}
                         isToday={info.isToday}
                         dayNumber={info.day}
                         intense
                       />
                       <View style={ms.dateTexts}>
-                        <Text style={[ms.dateLabel, { color: theme.text }]}>
+                        <Text style={[ms.dateLabel, { color: theme.text }]} numberOfLines={1}>
                           {info.isToday ? t('today') : info.isTomorrow ? t('tomorrow') : info.fullDay}
                         </Text>
-                        <Text style={[ms.dateSub, { color: theme.subtext }]}>
+                        <Text style={[ms.dateSub, { color: theme.subtext }]} numberOfLines={1}>
                           {`${info.monthLong} ${info.dayNum}, ${info.yearNum}`}
                         </Text>
                       </View>
@@ -1269,43 +1270,47 @@ export default function HomeScreen() {
 // ═════════════════════════════════════════════════════════════════════════════
 // STYLES
 // ═════════════════════════════════════════════════════════════════════════════
-const makeStyles = (theme: any, isDark: boolean, isPremium: boolean) => StyleSheet.create({
+const makeStyles = (theme: any, isDark: boolean, isPremium: boolean, sw: number) => {
+  // Scale factor clamped between 0.62 (very narrow, e.g. Fold outer) and 1.0 (390px+)
+  const s = Math.min(1, Math.max(0.62, sw / 390));
+  const sc = (base: number, min: number) => Math.max(min, Math.round(base * s));
+  return StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.background },
 
   chrome: {
     backgroundColor: isPremium ? 'transparent' : theme.background,
-    paddingHorizontal: 16,
+    paddingHorizontal: sc(16, 8),
     overflow: 'hidden',
   },
   headerRow: {
     flexDirection: 'row', alignItems: 'center',
     paddingTop: 8, paddingBottom: 10,
   },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 0 },
-  dateCenterNav: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: sc(4, 2), flexShrink: 0 },
+  dateCenterNav: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 2, flexShrink: 0 },
-  iconBtn: { width: 32, height: 32, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  iconBtn: { width: sc(32, 24), height: sc(32, 24), borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   achBadge: {
     position: 'absolute', top: -4, right: -4, minWidth: 16, height: 16,
     borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3,
   },
   achBadgeT: { fontSize: 9, fontWeight: '900', color: '#FFF' },
 
-  navArrow: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  navArrowIcon: { fontSize: 28, fontWeight: '300', lineHeight: 30, marginTop: -1 },
-  dateCenter: { flex: 1, alignItems: 'center' },
-  datePrimary: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  navArrow: { width: sc(32, 20), height: sc(32, 20), borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  navArrowIcon: { fontSize: sc(28, 20), fontWeight: '300', lineHeight: sc(30, 22), marginTop: -1 },
+  dateCenter: { flex: 1, minWidth: 0, alignItems: 'center' },
+  datePrimary: { flexDirection: 'row', alignItems: 'center', gap: sc(10, 5) },
   dayCircle: {
     width: 44, height: 44, borderRadius: 22, borderWidth: 1.5,
     alignItems: 'center', justifyContent: 'center',
   },
   dayNum: { fontSize: 17, fontWeight: '800', letterSpacing: -0.5 },
-  dateTexts: { gap: 2 },
-  dateLabel: { fontSize: 16, fontWeight: '700', letterSpacing: 0.2 },
-  dateSub: { fontSize: 12, fontWeight: '500', opacity: 0.6 },
+  dateTexts: { gap: 1, flexShrink: 1, minWidth: 0 },
+  dateLabel: { fontSize: sc(15, 11), fontWeight: '700', letterSpacing: 0.2 },
+  dateSub: { fontSize: sc(11, 9), fontWeight: '500', opacity: 0.6 },
   sep: { height: isPremium ? 1 : StyleSheet.hairlineWidth },
   unlockArrow: {
-    width: 32, height: 32, borderRadius: 16,
+    width: sc(32, 20), height: sc(32, 20), borderRadius: 16,
     alignItems: 'center', justifyContent: 'center', borderWidth: 1,
   },
 
@@ -1367,4 +1372,5 @@ const makeStyles = (theme: any, isDark: boolean, isPremium: boolean) => StyleShe
     backgroundColor: 'rgba(255,255,255,0.32)',
     zIndex: 10,
   },
-});
+  });
+};

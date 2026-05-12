@@ -89,7 +89,7 @@ android {
 
     namespace 'com.rexinus.DailyHistoryMobile'
     defaultConfig {
-        applicationId 'com.rexinus.DailyHistoryMobile'
+        applicationId 'com.rexinus.dailyhistorymobile'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
