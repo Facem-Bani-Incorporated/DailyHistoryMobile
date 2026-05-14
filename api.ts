@@ -3,7 +3,7 @@ import axios from 'axios';
 import { useAuthStore } from './store/useAuthStore';
 
 const api = axios.create({
-  baseURL: 'https://daily-history-server-dev-development.up.railway.app/api/v1',
+  baseURL: 'https://daily-history-server-production.up.railway.app/api/v1',
   timeout: 10000,
 });
 
