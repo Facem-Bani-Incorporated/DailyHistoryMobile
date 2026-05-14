@@ -12,7 +12,20 @@
           "package_name": "com.rexinus.DailyHistoryMobile"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "146058417942-rjlbk2ng3a7i51v9dj2l1uvntj8o8nmf.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.rexinus.DailyHistoryMobile",
+            "certificate_hash": "db6c4f07787362ef69502ff510b769c84f42faf9"
+          }
+        },
+        {
+          "client_id": "146058417942-b63gth649kqijdf8avkh8fuhbgael563.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyCicWpaIFy2Z1WZtqb_2EgVK4EVM5Q5kX0"
@@ -20,7 +33,79 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "146058417942-b63gth649kqijdf8avkh8fuhbgael563.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "146058417942-oulpjek0jpbbp6so5g0vj7vcn62qt1uj.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.rexinus.DailyHistoryMobile"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:146058417942:android:7933d61ae8449f5620a237",
+        "android_client_info": {
+          "package_name": "com.rexinus.dailyhistorymobile"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "146058417942-mohd3r7v4g4j81f6pm4ink56ljhqihn3.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.rexinus.dailyhistorymobile",
+            "certificate_hash": "345a443cb08247777f99f088592fbbb138c4ceda"
+          }
+        },
+        {
+          "client_id": "146058417942-p76o3l6soduec6o7rlk4le0a8ub9kgmh.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.rexinus.dailyhistorymobile",
+            "certificate_hash": "c66eb8ed82110be80c0ce97e2195df7e777b5fdc"
+          }
+        },
+        {
+          "client_id": "146058417942-vii1rvhrpcpu8o5l1oeph3v6bpb3q96k.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.rexinus.dailyhistorymobile",
+            "certificate_hash": "9aaf7466daee77ef9ff8a6a64f209ca05d9363ce"
+          }
+        },
+        {
+          "client_id": "146058417942-b63gth649kqijdf8avkh8fuhbgael563.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCicWpaIFy2Z1WZtqb_2EgVK4EVM5Q5kX0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "146058417942-b63gth649kqijdf8avkh8fuhbgael563.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "146058417942-oulpjek0jpbbp6so5g0vj7vcn62qt1uj.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.rexinus.DailyHistoryMobile"
+              }
+            }
+          ]
         }
       }
     }

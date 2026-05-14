@@ -1,4 +1,4 @@
-package com.rexinus.DailyHistoryMobile
+package com.rexinus.dailyhistorymobile
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

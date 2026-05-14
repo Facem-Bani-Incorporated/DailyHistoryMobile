@@ -1,4 +1,4 @@
-package com.rexinus.DailyHistoryMobile.widget
+package com.rexinus.dailyhistorymobile.widget
 
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
@@ -10,8 +10,8 @@ import android.graphics.BitmapFactory
 import android.os.Handler
 import android.os.Looper
 import android.widget.RemoteViews
-import com.rexinus.DailyHistoryMobile.MainActivity
-import com.rexinus.DailyHistoryMobile.R
+import com.rexinus.dailyhistorymobile.MainActivity
+import com.rexinus.dailyhistorymobile.R
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File

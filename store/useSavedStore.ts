@@ -1,7 +1,5 @@
 // store/useSavedStore.ts
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
-import { createJSONStorage, persist } from 'zustand/middleware';
 import { useAuthStore } from './useAuthStore';
 
 // ── Helpers ──────────────────────────────────────────────
@@ -30,18 +28,16 @@ const getUserId = (): string => {
 
 // ── Types ────────────────────────────────────────────────
 interface SavedStore {
-  // Internal per-user map
   _perUser: Record<string, any[]>;
-
-  // BACKWARDS COMPATIBLE: other files that read `savedEvents` still work
   savedEvents: any[];
+  isLoading: boolean;
 
   saveEvent: (event: any) => void;
   removeEvent: (eventId: string) => void;
   isSaved: (eventId: string) => boolean;
+  clearForUser: (userId: string) => void;
 }
 
-// Helper: builds the next state and computes savedEvents from current user
 const buildState = (perUser: Record<string, any[]>) => {
   const uid = getUserId();
   return {
@@ -50,90 +46,44 @@ const buildState = (perUser: Record<string, any[]>) => {
   };
 };
 
-export const useSavedStore = create<SavedStore>()(
-  persist(
-    (set, get) => ({
-      _perUser: {},
-      savedEvents: [],
+export const useSavedStore = create<SavedStore>()((set, get) => ({
+  _perUser: {},
+  savedEvents: [],
+  isLoading: true,
 
-      saveEvent: (event: any) => {
-        const uid = getUserId();
-        const id = getEventId(event);
-        const current = get()._perUser[uid] ?? [];
-        if (current.some(e => getEventId(e) === id)) return;
-        const updated = { ...get()._perUser, [uid]: [event, ...current] };
-        set(buildState(updated));
-      },
+  saveEvent: (event: any) => {
+    const uid = getUserId();
+    const id = getEventId(event);
+    const current = get()._perUser[uid] ?? [];
+    if (current.some(e => getEventId(e) === id)) return;
+    const updated = { ...get()._perUser, [uid]: [event, ...current] };
+    set(buildState(updated));
+    try { require('../hooks/useGamificationSync').pushToServer(); } catch {}
+  },
 
-      removeEvent: (eventId: string) => {
-        const uid = getUserId();
-        const current = get()._perUser[uid] ?? [];
-        const updated = {
-          ...get()._perUser,
-          [uid]: current.filter(e => getEventId(e) !== eventId),
-        };
-        set(buildState(updated));
-      },
+  removeEvent: (eventId: string) => {
+    const uid = getUserId();
+    const current = get()._perUser[uid] ?? [];
+    const updated = {
+      ...get()._perUser,
+      [uid]: current.filter(e => getEventId(e) !== eventId),
+    };
+    set(buildState(updated));
+    try { require('../hooks/useGamificationSync').pushToServer(); } catch {}
+  },
 
-      isSaved: (eventId: string) => {
-        const uid = getUserId();
-        return (get()._perUser[uid] ?? []).some(e => getEventId(e) === eventId);
-      },
-    }),
-    {
-      name: 'saved_events',
-      storage: createJSONStorage(() => AsyncStorage),
-      version: 2,
+  isSaved: (eventId: string) => {
+    const uid = getUserId();
+    return (get()._perUser[uid] ?? []).some(e => getEventId(e) === eventId);
+  },
 
-      migrate: (persisted: any, version: number) => {
-        try {
-          if (!persisted || typeof persisted !== 'object') {
-            return { _perUser: {}, savedEvents: [] };
-          }
-
-          // v0 / v1: old format had `savedEvents` array at top level
-          if (version < 2) {
-            const oldEvents = Array.isArray(persisted.savedEvents)
-              ? persisted.savedEvents
-              : [];
-            const perUser = oldEvents.length > 0 ? { guest: oldEvents } : {};
-            return {
-              _perUser: perUser,
-              savedEvents: [], // will be recomputed on first access
-            };
-          }
-
-          return persisted;
-        } catch {
-          // If anything goes wrong, start fresh — never crash
-          return { _perUser: {}, savedEvents: [] };
-        }
-      },
-
-      // Recompute savedEvents after rehydration so it matches current user
-      onRehydrateStorage: () => {
-        return (state, error) => {
-          if (error || !state) return;
-          try {
-            const uid = getUserId();
-            const events = state._perUser?.[uid] ?? [];
-            useSavedStore.setState({ savedEvents: events });
-          } catch {
-            // silent
-          }
-        };
-      },
-
-      // Only persist _perUser, not the computed savedEvents
-      partialize: (state) => ({
-        _perUser: state._perUser,
-      } as any),
-    }
-  )
-);
+  clearForUser: (userId: string) => {
+    const updated = { ...get()._perUser, [userId]: [] };
+    set({ _perUser: updated, savedEvents: [] });
+  },
+}));
 
 // ── Reactive hook for current user's saved events ────────
-// Use this in saved.tsx for guaranteed reactivity
 export const useUserSavedEvents = (): any[] => {
   const user = useAuthStore(s => s.user);
   const perUser = useSavedStore(s => s._perUser);
@@ -141,19 +91,13 @@ export const useUserSavedEvents = (): any[] => {
   return perUser[uid] ?? [];
 };
 
-// ── Keep savedEvents in sync when auth changes ──────────
-// Call this once in your root layout or App.tsx:
-//   useKeepSavedInSync();
+// ── Legacy compat ────────────────────────────────────────
 export const useKeepSavedInSync = () => {
   const user = useAuthStore(s => s.user);
   const perUser = useSavedStore(s => s._perUser);
-
-  // Update savedEvents whenever user changes
   const uid = user?.id ?? 'guest';
   const events = perUser[uid] ?? [];
   const current = useSavedStore.getState().savedEvents;
-
-  // Only update if different reference
   if (current !== events) {
     useSavedStore.setState({ savedEvents: events });
   }

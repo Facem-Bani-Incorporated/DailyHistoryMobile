@@ -271,7 +271,7 @@ const _peek = StyleSheet.create({
 // PRO CARD SECTION — Event visible at top, fades into lock CTA at bottom
 // The user sees enough to be intrigued but can't read the full story.
 // ═════════════════════════════════════════════════════════════════════════════
-const PRO_CARD_H = Math.max(280, H * 0.5);
+const PRO_CARD_H = Math.max(300, H * 0.57);
 const SERIF_FONT = Platform.OS === 'ios' ? 'Georgia' : 'serif';
 
 const ProCardSection = ({ event, allEvents, gold, isPro, onPaywall }: {
@@ -950,7 +950,7 @@ export default function HomeScreen() {
               bounces={false}
             >
               {/* Free main event — sized so the PRO peek arrow is visible on every device */}
-              <View style={{ height: Math.max(280, H * 0.5) }}>
+              <View style={{ height: Math.max(300, H * 0.57) }}>
                 <HistoryCard event={freeMain} allEvents={allEvents} />
               </View>
 
@@ -1016,7 +1016,8 @@ export default function HomeScreen() {
     length: W, offset: W * index, index,
   }), []);
 
-  const ms = makeStyles(theme, isDark, isPremium);
+  const celestialSize = Math.round(Math.min(36, Math.max(26, screenWidth * 0.082)));
+  const ms = makeStyles(theme, isDark, isPremium, screenWidth);
   const info = labelFor(off, language);
   const canFwd = off < MAX_FWD;
   const showChrome = tab === 'today' || tab === 'discover' || tab === 'search';
@@ -1084,7 +1085,7 @@ export default function HomeScreen() {
                     <View style={ms.datePrimary}>
                       <CelestialDay
                         date={offDate(off)}
-                        size={48}
+                        size={celestialSize}
                         isToday={info.isToday}
                         dayNumber={info.day}
                         intense
@@ -1100,19 +1101,11 @@ export default function HomeScreen() {
                     </View>
                   </TouchableOpacity>
 
-                  {isNextDayLocked ? (
-                    <TouchableOpacity onPress={goFwd} activeOpacity={0.6}
-                      hitSlop={{ top: 16, bottom: 16, left: 12, right: 12 }}
-                      style={[ms.unlockArrow, { backgroundColor: goldColor + '15', borderColor: goldColor + '35' }]}>
-                      <Ionicons name="lock-closed" size={13} color={goldColor} />
-                    </TouchableOpacity>
-                  ) : (
-                    <TouchableOpacity onPress={goFwd} activeOpacity={0.6} disabled={!canFwd}
+                  <TouchableOpacity onPress={goFwd} activeOpacity={0.6} disabled={!canFwd}
                       hitSlop={{ top: 16, bottom: 16, left: 12, right: 12 }}
                       style={[ms.navArrow, !canFwd && { opacity: 0.2 }]}>
                       <Text style={[ms.navArrowIcon, { color: theme.subtext }]}>{'\u203A'}</Text>
                     </TouchableOpacity>
-                  )}
                 </Animated.View>
               ) : (
                 <View style={{ flex: 1 }} />
@@ -1269,43 +1262,48 @@ export default function HomeScreen() {
 // ═════════════════════════════════════════════════════════════════════════════
 // STYLES
 // ═════════════════════════════════════════════════════════════════════════════
-const makeStyles = (theme: any, isDark: boolean, isPremium: boolean) => StyleSheet.create({
+const makeStyles = (theme: any, isDark: boolean, isPremium: boolean, sw = 390) => {
+  const compact = sw < 380;
+  const labelSize = compact ? 12 : sw < 414 ? 13 : 14;
+  const subSize = compact ? 9 : 10;
+  const headerGapV = compact ? 4 : 6;
+  return StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.background },
 
   chrome: {
     backgroundColor: isPremium ? 'transparent' : theme.background,
-    paddingHorizontal: 16,
+    paddingHorizontal: compact ? 10 : 14,
     overflow: 'hidden',
   },
   headerRow: {
     flexDirection: 'row', alignItems: 'center',
-    paddingTop: 8, paddingBottom: 10,
+    paddingTop: headerGapV, paddingBottom: headerGapV,
   },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 0 },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 2, flexShrink: 0 },
   dateCenterNav: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 2, flexShrink: 0 },
-  iconBtn: { width: 32, height: 32, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  iconBtn: { width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   achBadge: {
-    position: 'absolute', top: -4, right: -4, minWidth: 16, height: 16,
+    position: 'absolute', top: -4, right: -4, minWidth: 15, height: 15,
     borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3,
   },
-  achBadgeT: { fontSize: 9, fontWeight: '900', color: '#FFF' },
+  achBadgeT: { fontSize: 8, fontWeight: '900', color: '#FFF' },
 
-  navArrow: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  navArrowIcon: { fontSize: 28, fontWeight: '300', lineHeight: 30, marginTop: -1 },
+  navArrow: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  navArrowIcon: { fontSize: 24, fontWeight: '300', lineHeight: 26, marginTop: -1 },
   dateCenter: { flex: 1, alignItems: 'center' },
-  datePrimary: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  datePrimary: { flexDirection: 'row', alignItems: 'center', gap: compact ? 6 : 8 },
   dayCircle: {
-    width: 44, height: 44, borderRadius: 22, borderWidth: 1.5,
+    width: 40, height: 40, borderRadius: 20, borderWidth: 1.5,
     alignItems: 'center', justifyContent: 'center',
   },
-  dayNum: { fontSize: 17, fontWeight: '800', letterSpacing: -0.5 },
-  dateTexts: { gap: 2 },
-  dateLabel: { fontSize: 16, fontWeight: '700', letterSpacing: 0.2 },
-  dateSub: { fontSize: 12, fontWeight: '500', opacity: 0.6 },
+  dayNum: { fontSize: 15, fontWeight: '800', letterSpacing: -0.5 },
+  dateTexts: { gap: 1 },
+  dateLabel: { fontSize: labelSize, fontWeight: '700', letterSpacing: 0.1 },
+  dateSub: { fontSize: subSize, fontWeight: '500', opacity: 0.6 },
   sep: { height: isPremium ? 1 : StyleSheet.hairlineWidth },
   unlockArrow: {
-    width: 32, height: 32, borderRadius: 16,
+    width: 28, height: 28, borderRadius: 14,
     alignItems: 'center', justifyContent: 'center', borderWidth: 1,
   },
 
@@ -1368,3 +1366,4 @@ const makeStyles = (theme: any, isDark: boolean, isPremium: boolean) => StyleShe
     zIndex: 10,
   },
 });
+};

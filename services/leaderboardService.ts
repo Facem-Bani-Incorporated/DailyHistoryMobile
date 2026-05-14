@@ -1,4 +1,5 @@
 import api from '../api';
+import { getLevelForXP } from '../store/useGamificationStore';
 import { useAuthStore } from '../store/useAuthStore';
 
 export type LeaderboardType = 'xp' | 'streak' | 'stories' | 'goals';
@@ -88,7 +89,7 @@ export const fetchLeaderboard = async (type: LeaderboardType): Promise<Leaderboa
         userId: String(itemId),
         username,
         value: item[sortField] || 0,
-        level: Math.floor((item.totalXP || 0) / 100) + 1,
+        level: getLevelForXP(item.totalXP || 0).level,
         rank: index + 1,
         isCurrentUser,
         photoUrl,

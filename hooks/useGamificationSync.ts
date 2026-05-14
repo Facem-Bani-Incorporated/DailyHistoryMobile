@@ -28,6 +28,7 @@ export function buildSyncPayload(): GamificationSyncDTO {
   const savedEventIds = perUserEvents
     .map(e => { const n = Number(getEventId(e)); return Number.isFinite(n) ? n : null; })
     .filter((n): n is number => n !== null);
+  if (__DEV__) console.log('[GamSync] savedEventIds to push:', savedEventIds, 'from', perUserEvents.map(e => ({ id: e?.id, eid: getEventId(e) })));
 
   let categoriesArray: string[] = [];
   try {
@@ -58,6 +59,7 @@ export function buildSyncPayload(): GamificationSyncDTO {
     currentWeekKey: s.currentWeekKey ?? null,
     calendarLog: s.calendarLog ?? {},
     photoUrl,
+    savedEventsData: perUserEvents,
   };
 
   return {
@@ -111,6 +113,20 @@ function hydrateFromServer(dto: GamificationSyncDTO, userId: string) {
     });
   } catch (e) {
     console.warn('[GamSync] hydrateFromServer error:', e);
+  }
+
+  try {
+    const serverEvents = Array.isArray(blob.savedEventsData) ? blob.savedEventsData : [];
+    const perUser = useSavedStore.getState()._perUser;
+    useSavedStore.setState({
+      _perUser: { ...perUser, [userId]: serverEvents },
+      savedEvents: serverEvents,
+      isLoading: false,
+    });
+    if (__DEV__) console.log('[GamSync] restored savedEvents from server:', serverEvents.length);
+  } catch (e) {
+    console.warn('[GamSync] savedEvents hydrate error:', e);
+    useSavedStore.setState({ isLoading: false });
   }
 }
 
@@ -168,11 +184,13 @@ export function useGamificationSync() {
           hydrateFromServer(dto, userId);
         } else {
           useGamificationStore.setState({ _userId: userId });
+          useSavedStore.setState({ isLoading: false });
           await pushToServer();
         }
       } catch {
         if (cancelled) return;
         useGamificationStore.setState({ _userId: userId });
+        useSavedStore.setState({ isLoading: false });
       }
 
       // ── Always record daily visit after hydrate ──

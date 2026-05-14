@@ -68,8 +68,8 @@ export default function LoginScreen() {
     ]).start();
 
     const cfg = {
-      webClientId: '49902921378-4k5mjec67t0pnu0jrfti1bejpi1e5u3h.apps.googleusercontent.com',
-      iosClientId: '49902921378-bicgq9s907d0qegfjkvk8a3mqlhsmrt7.apps.googleusercontent.com',
+      webClientId: '146058417942-b63gth649kqijdf8avkh8fuhbgael563.apps.googleusercontent.com',
+      iosClientId: '146058417942-oulpjek0jpbbp6so5g0vj7vcn62qt1uj.apps.googleusercontent.com',
       offlineAccess: true,
     };
     console.log('[GoogleSignin] configure with:', JSON.stringify(cfg));

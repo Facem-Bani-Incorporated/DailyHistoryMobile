@@ -18,7 +18,7 @@
       "googleServicesFile": "./GoogleService-Info.plist"
     },
     "android": {
-      "package": "com.rexinus.DailyHistoryMobile",
+      "package": "com.rexinus.dailyhistorymobile",
       "googleServicesFile": "./google-services.json",
       "config": {
         "googleMaps": {

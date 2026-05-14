@@ -1,9 +1,9 @@
-package com.rexinus.DailyHistoryMobile.widget
+package com.rexinus.dailyhistorymobile.widget
 
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
-import com.rexinus.DailyHistoryMobile.R
+import com.rexinus.dailyhistorymobile.R
 
 class HistoryWidgetLarge : AppWidgetProvider() {
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
