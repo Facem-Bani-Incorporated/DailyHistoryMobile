@@ -42,6 +42,7 @@ import TabBar, { TABBAR_PILL_HEIGHT } from '../../components/TabBar';
 import TimelineScreen from '../../components/TimelineScreen';
 import WeeklyRecapModal from '../../components/WeeklyRecapModal';
 import { AD_UNIT_IDS } from '../../config/ads';
+import { ENDPOINTS } from '../../config/api';
 import { AllEventsProvider } from '../../context/AllEventsContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useRevenueCat } from '../../context/RevenueCatContext';
@@ -767,7 +768,7 @@ export default function HomeScreen() {
       if (c) { mem.current[key] = { data: c.data, empty: c.empty }; return mem.current[key]; }
     }
     try {
-      const r = await api.get('/daily-content/by-date', { params: { date: iso, _t: Date.now() } });
+      const r = await api.get(ENDPOINTS.DAILY_CONTENT, { params: { date: iso, _t: Date.now() } });
       const allData: any[] = r.data?.events ?? [];
       const freeData = allData.filter((e: any) => !e.isPro);
       const proData  = allData.filter((e: any) => !!e.isPro);
@@ -788,7 +789,7 @@ export default function HomeScreen() {
   const fetchAll = useCallback(async () => {
     const ps = Array.from({ length: 60 }, (_, i) => {
       const d = new Date(); d.setDate(d.getDate() - i);
-      return api.get('/daily-content/by-date', { params: { date: d.toISOString().split('T')[0] } })
+      return api.get(ENDPOINTS.DAILY_CONTENT, { params: { date: d.toISOString().split('T')[0] } })
         .then(r => r.data?.events ?? []).catch(() => []);
     });
     const all = (await Promise.all(ps)).flat();

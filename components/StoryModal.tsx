@@ -163,41 +163,72 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
   const contextEvents = useAllEvents();
   const allEvents = (allEventsProp && allEventsProp.length > 0) ? allEventsProp : contextEvents;
 
+  // Internal navigation stack — tapping a related event pushes onto it.
+  // We can't open a nested fullScreen Modal on iOS, so instead we swap the
+  // event being displayed inside the same Modal and let the user back out
+  // through the stack with the close button.
+  const [eventStack, setEventStack] = useState<any[]>([]);
+  const currentEvent = eventStack.length > 0 ? eventStack[eventStack.length - 1] : event;
+
   const [galleryIndex, setGalleryIndex] = useState(0);
   const [viewerVisible, setViewerVisible] = useState(false);
   const [viewerStartIndex, setViewerStartIndex] = useState(0);
-  const [relatedEvent, setRelatedEvent] = useState<any>(null);
   const [contentH, setContentH] = useState(H * 2);
   const [sharePickerVisible, setSharePickerVisible] = useState(false);
 
   const scrollY = useRef(new Animated.Value(0)).current;
+  const scrollViewRef = useRef<any>(null);
   const { saveEvent, removeEvent, isSaved } = useSavedStore();
   const markEventRead = useGamificationStore(s => s.markEventRead);
-  const eventId = event ? getEventId(event) : null;
-  const { images: gallery } = useEventImages(event ?? {});
+  const eventId = currentEvent ? getEventId(currentEvent) : null;
+  const { images: gallery } = useEventImages(currentEvent ?? {});
+
+  const resetScroll = () => {
+    scrollY.setValue(0);
+    setGalleryIndex(0);
+    // Use a microtask delay so the new event renders first, then we scroll.
+    requestAnimationFrame(() => {
+      scrollViewRef.current?.scrollTo?.({ y: 0, animated: false });
+    });
+  };
+
+  const pushRelated = (evt: any) => {
+    if (!evt) return;
+    stop();
+    setEventStack(prev => [...prev, evt]);
+    resetScroll();
+  };
+
+  const handleClose = () => {
+    if (eventStack.length > 0) {
+      setEventStack(prev => prev.slice(0, -1));
+      resetScroll();
+    } else {
+      onClose();
+    }
+  };
 
   // ── TTS ──
   const { speak, stop, isPlaying } = useTTS();
 
   useEffect(() => {
-    if (visible && eventId && event) markEventRead(eventId, event.category ?? 'history', String(event.eventDate ?? event.event_date ?? event.year ?? '').trim());
+    if (visible && eventId && currentEvent) markEventRead(eventId, currentEvent.category ?? 'history', String(currentEvent.eventDate ?? currentEvent.event_date ?? currentEvent.year ?? '').trim());
   }, [visible, eventId]);
 
   useEffect(() => {
-    if (visible) { setGalleryIndex(0); setRelatedEvent(null); }
-    // Stop TTS when modal closes
+    if (visible) { setGalleryIndex(0); setEventStack([]); }
     if (!visible) stop();
-  }, [visible, eventId]);
+  }, [visible, event]);
 
-  if (!event) return null;
+  if (!currentEvent) return null;
 
   const saved = isSaved(eventId!);
-  const toggleSave = () => saved ? removeEvent(eventId!) : saveEvent(event);
-  const year = String(event.eventDate ?? event.event_date ?? event.year ?? '').trim();
-  const title = event.titleTranslations?.[language] ?? event.titleTranslations?.en ?? '';
-  const narrative = event.narrativeTranslations?.[language] ?? event.narrativeTranslations?.en ?? '';
-  const category = (event.category ?? 'HISTORY').replace(/_/g, ' ').toUpperCase();
-  const sourceUrl = event.source_url ?? event.sourceUrl ?? null;
+  const toggleSave = () => saved ? removeEvent(eventId!) : saveEvent(currentEvent);
+  const year = String(currentEvent.eventDate ?? currentEvent.event_date ?? currentEvent.year ?? '').trim();
+  const title = currentEvent.titleTranslations?.[language] ?? currentEvent.titleTranslations?.en ?? '';
+  const narrative = currentEvent.narrativeTranslations?.[language] ?? currentEvent.narrativeTranslations?.en ?? '';
+  const category = (currentEvent.category ?? 'HISTORY').replace(/_/g, ' ').toUpperCase();
+  const sourceUrl = currentEvent.source_url ?? currentEvent.sourceUrl ?? null;
   const readTime = estimateReadTime(narrative || '');
 
   const ttsLabel = TTS_LABELS[language] ?? TTS_LABELS.en;
@@ -214,7 +245,7 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
 
   return (
     <>
-      <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose} statusBarTranslucent>
+      <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={handleClose} statusBarTranslucent>
         <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
         <View style={[st.root, { backgroundColor: theme.background }]}>
           <View style={[st.progressTrack, { top: insets.top }]} pointerEvents="none"><Animated.View style={[st.progressFill, { width: progressWidth, backgroundColor: theme.gold }]} /></View>
@@ -223,7 +254,7 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
           <Animated.View style={[st.floatingBar, { paddingTop: insets.top + 6, backgroundColor: headerBg }]} pointerEvents="box-none">
             <Animated.Text style={[st.floatingTitle, { color: theme.text, opacity: titleOpacity }]} numberOfLines={1}>{title}</Animated.Text>
             <View style={st.actions}>
-              <TouchableOpacity onPress={onClose} style={st.btn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}><X color="#fff" size={18} strokeWidth={2.5} /></TouchableOpacity>
+              <TouchableOpacity onPress={handleClose} style={st.btn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}><X color="#fff" size={18} strokeWidth={2.5} /></TouchableOpacity>
               <View style={{ flex: 1 }} />
 
               {/* ── TTS Play/Pause button ── */}
@@ -242,7 +273,7 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
             </View>
           </Animated.View>
 
-          <Animated.ScrollView bounces showsVerticalScrollIndicator={false} onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })} scrollEventThrottle={16} onContentSizeChange={(_, h) => setContentH(h)} contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}>
+          <Animated.ScrollView ref={scrollViewRef} bounces showsVerticalScrollIndicator={false} onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })} scrollEventThrottle={16} onContentSizeChange={(_, h) => setContentH(h)} contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}>
             {/* Hero */}
             <View style={st.heroWrap}>
               <Animated.View style={{ height: HERO_H + 40, marginTop: -40, transform: [{ translateY: heroParallax }] }}>
@@ -300,7 +331,7 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
               <Paragraphs text={narrative || 'No story available.'} theme={theme} />
 
               {/* ── What else happened in [year]? ── */}
-              <SameYearEvents currentEvent={event} allEvents={allEvents} year={year} theme={theme} isDark={isDark} language={language} onPress={(evt) => setRelatedEvent(evt)} />
+              <SameYearEvents currentEvent={currentEvent} allEvents={allEvents} year={year} theme={theme} isDark={isDark} language={language} onPress={pushRelated} />
 
               {sourceUrl && (
                 <TouchableOpacity onPress={() => Linking.openURL(sourceUrl).catch(() => {})} activeOpacity={0.75} style={[st.wikiBtn, { borderColor: theme.gold + '40', backgroundColor: theme.gold + '0D' }]}>
@@ -309,7 +340,7 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
                 </TouchableOpacity>
               )}
 
-              {allEvents.length > 0 && <RelatedEvents currentEvent={event} allEvents={allEvents} theme={theme} isDark={isDark} onEventPress={(evt) => setRelatedEvent(evt)} />}
+              {allEvents.length > 0 && <RelatedEvents currentEvent={currentEvent} allEvents={allEvents} theme={theme} isDark={isDark} onEventPress={pushRelated} />}
 
               <TouchableOpacity onPress={toggleSave} activeOpacity={0.8} style={[st.saveBtn, { backgroundColor: saved ? '#ffd700' + '18' : theme.card, borderColor: saved ? '#ffd700' + '60' : theme.border }]}>
                 <Bookmark size={15} color={saved ? '#ffd700' : theme.subtext} fill={saved ? '#ffd700' : 'transparent'} strokeWidth={2} />
@@ -324,10 +355,9 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
       </Modal>
 
       {viewerVisible && gallery.length > 0 && <ImageViewer images={gallery} initialIndex={viewerStartIndex} onClose={() => setViewerVisible(false)} />}
-      {relatedEvent && <StoryModal visible={!!relatedEvent} event={relatedEvent} onClose={() => setRelatedEvent(null)} theme={theme} allEvents={allEvents} />}
       <SharePickerModal
         visible={sharePickerVisible}
-        event={event}
+        event={currentEvent}
         language={language}
         gallery={gallery}
         onClose={() => setSharePickerVisible(false)}

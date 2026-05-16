@@ -15,7 +15,8 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.rexinus.DailyHistoryMobile",
-      "googleServicesFile": "./GoogleService-Info.plist"
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "appleTeamId": "G2T895H353"
     },
     "android": {
       "package": "com.rexinus.dailyhistorymobile",

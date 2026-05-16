@@ -1,5 +1,8 @@
 import api from '../api';
+import { ENDPOINTS } from '../config/api';
+import { buildAvatarUrl } from '../config/urls';
 import { useAuthStore } from '../store/useAuthStore';
+import { getLevelForXP } from '../store/useGamificationStore';
 
 export type LeaderboardType = 'xp' | 'streak' | 'stories' | 'goals';
 
@@ -20,7 +23,7 @@ export const fetchLeaderboard = async (type: LeaderboardType): Promise<Leaderboa
     const myId = user?.id || (user as any)?._id || (user as any)?.userId;
 
     // Apelează ruta nouă din Spring Boot care returnează List<LeaderboardEntryDTO>
-    const response = await api.get('/gamification/all');
+    const response = await api.get(ENDPOINTS.GAMIFICATION_ALL);
     
     if (!response.data || !Array.isArray(response.data)) {
         return [];
@@ -40,8 +43,7 @@ export const fetchLeaderboard = async (type: LeaderboardType): Promise<Leaderboa
     const myPhotoUrl = (user as any)?.avatar_url || (user as any)?.avatarUrl || (user as any)?.picture || undefined;
 
     // Generates a nice avatar image from the username — same trick as ProfileAvatar.tsx
-    const generatedAvatar = (name: string) =>
-      `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=ffd700&color=000&bold=true&size=128`;
+    const generatedAvatar = (name: string) => buildAvatarUrl(name, { size: 128 });
 
     // Sortăm descrescător în funcție de tab-ul selectat
     const sorted = [...response.data].sort((a, b) => (b[sortField] || 0) - (a[sortField] || 0));
@@ -88,7 +90,7 @@ export const fetchLeaderboard = async (type: LeaderboardType): Promise<Leaderboa
         userId: String(itemId),
         username,
         value: item[sortField] || 0,
-        level: Math.floor((item.totalXP || 0) / 100) + 1,
+        level: getLevelForXP(item.totalXP || 0).level,
         rank: index + 1,
         isCurrentUser,
         photoUrl,

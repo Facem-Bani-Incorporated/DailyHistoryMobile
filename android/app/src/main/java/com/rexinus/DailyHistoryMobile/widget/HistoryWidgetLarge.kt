@@ -11,4 +11,12 @@ class HistoryWidgetLarge : AppWidgetProvider() {
             HistoryWidget.updateWidgetWithLayout(context, appWidgetManager, appWidgetId, R.layout.widget_large)
         }
     }
+
+    override fun onEnabled(context: Context) {
+        val manager = AppWidgetManager.getInstance(context)
+        val ids = manager.getAppWidgetIds(
+            android.content.ComponentName(context, HistoryWidgetLarge::class.java)
+        )
+        for (id in ids) HistoryWidget.updateWidgetWithLayout(context, manager, id, R.layout.widget_large)
+    }
 }

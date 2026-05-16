@@ -1,16 +1,20 @@
 // api.ts
 import axios from 'axios';
+import { API_BASE_URL, API_TIMEOUT, PUBLIC_ENDPOINT_MARKERS } from './config/api';
 import { useAuthStore } from './store/useAuthStore';
 
+const isPublicEndpoint = (url?: string): boolean =>
+  !!url && PUBLIC_ENDPOINT_MARKERS.some(marker => url.includes(marker));
+
 const api = axios.create({
-  baseURL: 'https://daily-history-server-dev-development.up.railway.app/api/v1',
-  timeout: 10000,
+  baseURL: API_BASE_URL,
+  timeout: API_TIMEOUT,
 });
 
 // ── Request interceptor — attach JWT token ──
 api.interceptors.request.use(async (config) => {
   // Auth + guest endpoints — no token needed
-  if (config.url?.includes('/auth') || config.url?.includes('/guest')) {
+  if (isPublicEndpoint(config.url)) {
     return config;
   }
 
@@ -51,7 +55,7 @@ api.interceptors.response.use(
     // If backend returns 401 on a protected route, token is expired/invalid
     // Auto-logout so user gets redirected to login screen cleanly
     const hadToken = !!error.config?.headers?.Authorization;
-    if (status === 401 && hadToken && !url?.includes('/auth') && !url?.includes('/guest')) {
+    if (status === 401 && hadToken && !isPublicEndpoint(url)) {
       if (__DEV__) console.log('[API] Token expired — logging out');
       useAuthStore.getState().logout();
     }

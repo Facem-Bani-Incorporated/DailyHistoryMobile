@@ -67,7 +67,10 @@
       "Bash(/opt/homebrew/opt/libpq/bin/psql \"postgresql://postgres:UNCVrcluyUBsLTLwwFnjhcQZbDmdHHbR@autorack.proxy.rlwy.net:37585/railway\" -v ON_ERROR_STOP=1 -f daily-history-import.sql)",
       "Bash(/opt/homebrew/opt/libpq/bin/psql \"postgresql://postgres:UNCVrcluyUBsLTLwwFnjhcQZbDmdHHbR@autorack.proxy.rlwy.net:37585/railway\" -c \"SELECT COUNT\\(*\\) as events FROM public.events; SELECT COUNT\\(*\\) as users FROM public.users; SELECT COUNT\\(*\\) as daily_content FROM public.daily_content; SELECT COUNT\\(*\\) as user_gamification FROM public.user_gamification; SELECT COUNT\\(*\\) as translations FROM public.translations;\")",
       "Bash(curl -s \"https://daily-history-server-dev-development.up.railway.app/api/v1/daily-content/guest?date=2026-05-12\")",
-      "Bash(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' -A DailyHistoryWidget/1.0 https://upload.wikimedia.org/wikipedia/en/1/18/Wana_Decrypt0r_screenshot.png)"
+      "Bash(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' -A DailyHistoryWidget/1.0 https://upload.wikimedia.org/wikipedia/en/1/18/Wana_Decrypt0r_screenshot.png)",
+      "Bash(curl -s \"https://daily-history-server-production.up.railway.app/api/v1/daily-content/guest?date=2026-05-16\")",
+      "Bash(python3 -c ' *)",
+      "Bash(echo \"Exit: $?\")"
     ]
   }
 }

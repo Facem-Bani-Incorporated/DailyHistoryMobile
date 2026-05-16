@@ -1,4 +1,9 @@
 // utils/eventImages.ts
+import {
+  buildPicsumUrl,
+  WIKIMEDIA_COMMONS_API_URL,
+  WIKIPEDIA_API_URL,
+} from '../config/urls';
 
 const SKIP_PATTERNS = ['icon', 'logo', 'flag', 'map', 'symbol', 'coat', 'seal', 'blank', 'arrow', 'button'];
 
@@ -19,22 +24,17 @@ export interface EventForImages {
 }
 
 // One stable Picsum seed per category — last-resort fallback
-export const CATEGORY_FALLBACKS: Record<string, string> = {
-  war_conflict:      'https://picsum.photos/seed/war_conflict/800/600',
-  tech_innovation:   'https://picsum.photos/seed/tech_innovation/800/600',
-  science_discovery: 'https://picsum.photos/seed/science_discovery/800/600',
-  politics_state:    'https://picsum.photos/seed/politics_state/800/600',
-  culture_arts:      'https://picsum.photos/seed/culture_arts/800/600',
-  natural_disaster:  'https://picsum.photos/seed/natural_disaster/800/600',
-  exploration:       'https://picsum.photos/seed/exploration/800/600',
-  religion_phil:     'https://picsum.photos/seed/religion_phil/800/600',
-  personalities:     'https://picsum.photos/seed/personalities/800/600',
-  media:             'https://picsum.photos/seed/media/800/600',
-  sport:             'https://picsum.photos/seed/sport/800/600',
-  history:           'https://picsum.photos/seed/history/800/600',
-};
+const CATEGORY_SEEDS = [
+  'war_conflict', 'tech_innovation', 'science_discovery', 'politics_state',
+  'culture_arts', 'natural_disaster', 'exploration', 'religion_phil',
+  'personalities', 'media', 'sport', 'history',
+] as const;
 
-const DEFAULT_FALLBACK = 'https://picsum.photos/seed/dailyhistory/800/600';
+export const CATEGORY_FALLBACKS: Record<string, string> = Object.fromEntries(
+  CATEGORY_SEEDS.map(seed => [seed, buildPicsumUrl(seed)]),
+);
+
+const DEFAULT_FALLBACK = buildPicsumUrl('dailyhistory');
 
 // Module-level cache — persists for the whole app session
 const imageCache = new Map<string, string[]>();
@@ -57,9 +57,9 @@ export function getEventId(event: EventForImages): string {
 export function getPicsumFallbacks(event: EventForImages): string[] {
   const id = getEventId(event);
   return [
-    `https://picsum.photos/seed/${id}_0/800/600`,
-    `https://picsum.photos/seed/${id}_1/800/600`,
-    `https://picsum.photos/seed/${id}_2/800/600`,
+    buildPicsumUrl(`${id}_0`),
+    buildPicsumUrl(`${id}_1`),
+    buildPicsumUrl(`${id}_2`),
   ];
 }
 
@@ -105,7 +105,7 @@ async function resolveWikiFileUrl(fileTitle: string, apiBase: string): Promise<s
 // ─── Wikipedia ───────────────────────────────────────────────────────────────
 
 async function fetchFromWikipedia(title: string, year?: number | string): Promise<string[]> {
-  const API = 'https://en.wikipedia.org/w/api.php';
+  const API = WIKIPEDIA_API_URL;
   const query = year ? `${title} ${year}` : title;
 
   // Step 1 — find the page
@@ -154,7 +154,7 @@ async function fetchFromWikipedia(title: string, year?: number | string): Promis
 // ─── Wikimedia Commons fallback ───────────────────────────────────────────────
 
 async function fetchFromWikimediaCommons(query: string): Promise<string[]> {
-  const API = 'https://commons.wikimedia.org/w/api.php';
+  const API = WIKIMEDIA_COMMONS_API_URL;
   const searchResp = await fetchWithTimeout(
     `${API}?action=query&list=search&srnamespace=6&srsearch=${encodeURIComponent(query)}&format=json&srlimit=5&origin=*`,
   );

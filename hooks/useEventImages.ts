@@ -1,6 +1,7 @@
 // hooks/useEventImages.ts
 import { useEffect, useRef, useState } from 'react';
 
+import { isPicsumUrl } from '../config/urls';
 import {
   EventForImages,
   getCategoryFallback,
@@ -55,7 +56,7 @@ export function useEventImages(event: EventForImages): UseEventImagesResult {
         setImages(resolved);
         setIsLoading(false);
         // hasRealImages is true when at least the first URL is NOT a Picsum seed
-        setHasRealImages(!resolved[0]?.includes('picsum.photos'));
+        setHasRealImages(!isPicsumUrl(resolved[0]));
       })
       .catch(() => {
         if (cancelled) return;

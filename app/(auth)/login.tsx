@@ -23,6 +23,7 @@ import {
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import api from '../../api';
+import { ENDPOINTS } from '../../config/api';
 import { authService } from '../../services/authService';
 import { useAuthStore } from '../../store/useAuthStore';
 
@@ -153,7 +154,7 @@ export default function LoginScreen() {
     if (!form.email || !form.password) return;
     setIsLoading(true);
     try {
-      const res = await api.post('/auth/signin', {
+      const res = await api.post(ENDPOINTS.SIGN_IN, {
         username: form.email,
         password: form.password,
       });

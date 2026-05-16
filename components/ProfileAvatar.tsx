@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Image, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { buildAvatarUrl } from '../config/urls';
 import { useAuthStore } from '../store/useAuthStore';
 import ProfileModal from './ProfileModal';
 
@@ -16,10 +17,7 @@ export default function ProfileAvatar() {
     if (uri) return uri;
 
     const identifier = user.username || user.email || 'User';
-
-    return `https://ui-avatars.com/api/?name=${encodeURIComponent(
-      identifier
-    )}&background=ffd700&color=000`;
+    return buildAvatarUrl(identifier, { bold: false });
   };
 
   const imageUrl = getProfileImage();
