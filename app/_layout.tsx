@@ -83,8 +83,11 @@ function AppContent() {
 
   useEffect(() => {
     GoogleSignin.configure({
-      webClientId: '49902921378-4k5mjec67t0pnu0jrfti1bejpi1e5u3h.apps.googleusercontent.com',
-      iosClientId: '49902921378-bicgq9s907d0qegfjkvk8a3mqlhsmrt7.apps.googleusercontent.com',
+      // Web + iOS OAuth client IDs from the Firebase project (dailyhistory-a717e).
+      // Web client_id is the one used for backend idToken verification; must
+      // match GOOGLE_CLIENT_ID configured on the Railway backend.
+      webClientId: '146058417942-b63gth649kqijdf8avkh8fuhbgael563.apps.googleusercontent.com',
+      iosClientId: '146058417942-oulpjek0jpbbp6so5g0vj7vcn62qt1uj.apps.googleusercontent.com',
       offlineAccess: true,
     });
 
