@@ -88,7 +88,7 @@ function AppContent() {
       // match GOOGLE_CLIENT_ID configured on the Railway backend.
       webClientId: '146058417942-b63gth649kqijdf8avkh8fuhbgael563.apps.googleusercontent.com',
       iosClientId: '146058417942-oulpjek0jpbbp6so5g0vj7vcn62qt1uj.apps.googleusercontent.com',
-      offlineAccess: true,
+      scopes: ['email', 'profile'],
     });
 
     const init = async () => {
