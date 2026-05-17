@@ -89,7 +89,7 @@ export default function LoginScreen() {
         console.log('Operatiune in curs');
       } else {
         console.error('Google Sign-In Error:', error);
-        Alert.alert('Eroare Google', 'Asigură-te că rulezi pe un dispozitiv cu Google Play Services.');
+        Alert.alert('Eroare Google', `Cod: ${error.code}\n${error.message}`);
       }
     }
   };
