@@ -5,17 +5,10 @@
 // Source of truth for PRO subscription status. Exposes helpers for presenting
 // the paywall and customer center from the `react-native-purchases-ui` package.
 //
-// Dashboard setup required:
-//   - Entitlement identifier: "Daily History Pro" (exactly, incl. spaces)
-//   - Packages in the current offering: $rc_lifetime, $rc_annual, $rc_monthly
-//     (or custom identifiers "lifetime", "yearly", "monthly")
-//   - Paywall template configured in the RevenueCat dashboard
-//
-// NOTE: Replace the test key with platform-specific public SDK keys before
-// shipping — production keys are prefixed `appl_` (iOS) and `goog_` (Android).
+// Keys and the entitlement identifier live in config/revenuecat.ts.
 
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import Purchases, {
   CustomerInfo,
   LOG_LEVEL,
@@ -23,15 +16,12 @@ import Purchases, {
 } from 'react-native-purchases';
 import RevenueCatUI, { PAYWALL_RESULT } from 'react-native-purchases-ui';
 
+import { PRO_ENTITLEMENT_ID, REVENUECAT_API_KEYS } from '../config/revenuecat';
 import { refreshMe } from '../services/authService';
 import { useAuthStore } from '../store/useAuthStore';
 
-export const PRO_ENTITLEMENT = 'Daily History Pro';
-
-const API_KEYS = {
-  ios: 'appl_XRKZvKBUmDIamXBnkBaDSDPpVLG',
-  android: 'goog_taZgFRPRaDbDwkjWiPxSOvFylGh',
-} as const;
+// Re-exported for backwards compatibility with existing callers.
+export const PRO_ENTITLEMENT = PRO_ENTITLEMENT_ID;
 
 export type PaywallOutcome = 'PURCHASED' | 'RESTORED' | 'CANCELLED' | 'ERROR' | 'NOT_PRESENTED';
 
@@ -87,7 +77,7 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
     if (configuredRef.current) return;
     configuredRef.current = true;
 
-    const apiKey = Platform.select(API_KEYS) ?? API_KEYS.ios;
+    const apiKey = Platform.select(REVENUECAT_API_KEYS) ?? REVENUECAT_API_KEYS.ios;
 
     try {
       if (__DEV__) Purchases.setLogLevel(LOG_LEVEL.DEBUG);
@@ -133,8 +123,6 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
             const { customerInfo: info } = await Purchases.logIn(uid);
             setCustomerInfo(info);
           }
-          // Always refresh user from backend on identity sync so is_pro
-          // set by the RevenueCat webhook is picked up immediately.
           await refreshMe();
         } else {
           const anonymous = await Purchases.isAnonymous();
@@ -147,6 +135,22 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
         if (__DEV__) console.warn('[RC] identity sync failed', e);
       }
     })();
+  }, [ready, user?.id]);
+
+  // ── Refresh RC entitlement + backend is_pro when app comes to foreground ──
+  useEffect(() => {
+    if (!ready) return;
+    const sub = AppState.addEventListener('change', async (state) => {
+      if (state !== 'active') return;
+      try {
+        const info = await Purchases.getCustomerInfo();
+        setCustomerInfo(info);
+        if (user?.id) await refreshMe();
+      } catch (e) {
+        if (__DEV__) console.warn('[RC] foreground refresh failed', e);
+      }
+    });
+    return () => sub.remove();
   }, [ready, user?.id]);
 
   const refresh = useCallback(async () => {
@@ -165,11 +169,15 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
   const presentPaywall = useCallback(async (): Promise<PaywallOutcome> => {
     try {
       const res = await RevenueCatUI.presentPaywall();
+      const outcome = mapPaywallResult(res);
       try {
         const info = await Purchases.getCustomerInfo();
         setCustomerInfo(info);
       } catch { /* listener will catch it */ }
-      return mapPaywallResult(res);
+      if (outcome === 'PURCHASED' || outcome === 'RESTORED') {
+        await refreshMe();
+      }
+      return outcome;
     } catch (e) {
       if (__DEV__) console.warn('[RC] presentPaywall failed', e);
       return 'ERROR';
@@ -206,7 +214,9 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
     try {
       const info = await Purchases.restorePurchases();
       setCustomerInfo(info);
-      return !!info.entitlements.active[PRO_ENTITLEMENT];
+      const hasPro = !!info.entitlements.active[PRO_ENTITLEMENT];
+      if (hasPro) await refreshMe();
+      return hasPro;
     } catch (e) {
       if (__DEV__) console.warn('[RC] restore failed', e);
       return false;

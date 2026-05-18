@@ -21,22 +21,12 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import { WELCOME_IMAGES } from '../../config/urls';
+
 const { width, height } = Dimensions.get('window');
 
-const HISTORICAL_IMAGES = [
-  'https://res.cloudinary.com/dimwqrltb/image/upload/v1771668729/pexels-pixabay-53442_bwyr2e.jpg',
-  'https://res.cloudinary.com/dimwqrltb/image/upload/v1771668729/pexels-meperdinaviagem-2038361_q2nf23.jpg',
-  'https://res.cloudinary.com/dimwqrltb/image/upload/v1771668730/pexels-pixabay-159862_q0olii.jpg',
-  'https://res.cloudinary.com/dimwqrltb/image/upload/v1771668730/pexels-aquintanar-4448698_po20ba.jpg',
-  'https://res.cloudinary.com/dimwqrltb/image/upload/v1771668731/pexels-alexazabache-3290068_vkui5d.jpg',
-  'https://res.cloudinary.com/dimwqrltb/image/upload/v1771668731/pexels-robshumski-6102271_zylp73.jpg',
-  'https://res.cloudinary.com/dimwqrltb/image/upload/v1771668732/pexels-clickerhappy-615344_wps3tw.jpg',
-  'https://res.cloudinary.com/dimwqrltb/image/upload/v1771668733/pexels-andrea-albanese-130507-397431_vghzpi.jpg',
-  'https://res.cloudinary.com/dimwqrltb/image/upload/v1771668733/pexels-alexazabache-3185480_epcnhb.jpg',
-];
-
-const COLUMN_1 = HISTORICAL_IMAGES.slice(0, 5);
-const COLUMN_2 = HISTORICAL_IMAGES.slice(4, 9);
+const COLUMN_1 = WELCOME_IMAGES.slice(0, 5);
+const COLUMN_2 = WELCOME_IMAGES.slice(4, 9);
 
 const CARD_H = 200;
 const GAP = 8;

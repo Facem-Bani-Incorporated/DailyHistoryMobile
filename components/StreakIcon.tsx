@@ -21,6 +21,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Defs, Stop, LinearGradient as SvgLinearGradient } from 'react-native-svg';
+import { STREAK_LOTTIE_URI as LOTTIE_URI } from '../config/urls';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { useRewardedAd } from '../hooks/useRewardedAd';
@@ -28,7 +29,6 @@ import { useGamificationStore } from '../store/useGamificationStore';
 
 const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
 const GOAL = 5;
-const LOTTIE_URI = 'https://lottie.host/605591b9-00ac-4d2e-8fb8-fa339587ef8c/UuLbWlRAAw.lottie';
 
 // ── Tier system (Duolingo/Clash-style progression) ──
 type Tier = { threshold: number; key: string; color: string; glow: string; icon: string };

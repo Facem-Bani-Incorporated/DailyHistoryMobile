@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 
 import api from '../api';
+import { ENDPOINTS } from '../config/api';
 import {
   requestNotificationPermissions,
   schedulePersonalizedNotification,
@@ -133,7 +134,7 @@ export default function NotificationPrompt() {
           const tomorrow = new Date();
           tomorrow.setDate(tomorrow.getDate() + 1);
           const iso = tomorrow.toISOString().split('T')[0];
-          const res = await api.get('/daily-content/by-date', {
+          const res = await api.get(ENDPOINTS.DAILY_CONTENT, {
             params: { date: iso, _t: Date.now() },
           });
           const events: any[] = res.data?.events ?? [];

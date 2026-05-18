@@ -31,6 +31,14 @@ class HistoryWidget : AppWidgetProvider() {
         }
     }
 
+    override fun onEnabled(context: Context) {
+        val manager = AppWidgetManager.getInstance(context)
+        val ids = manager.getAppWidgetIds(
+            android.content.ComponentName(context, HistoryWidget::class.java)
+        )
+        for (id in ids) updateWidgetWithLayout(context, manager, id, R.layout.widget_small)
+    }
+
     companion object {
         const val PREFS_NAME    = "HistoryWidgetPrefs"
         const val KEY_TITLE     = "widget_title"
@@ -103,7 +111,7 @@ class HistoryWidget : AppWidgetProvider() {
             executor.execute {
                 try {
                     val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
-                    val conn = (URL("https://daily-history-server-dev-development.up.railway.app/api/v1/daily-content/guest?date=$today")
+                    val conn = (URL("https://daily-history-server-production.up.railway.app/api/v1/daily-content/guest?date=$today")
                         .openConnection() as HttpURLConnection).apply {
                         requestMethod = "GET"
                         connectTimeout = 8000

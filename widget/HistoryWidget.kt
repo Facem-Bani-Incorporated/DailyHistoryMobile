@@ -111,7 +111,7 @@ class HistoryWidget : AppWidgetProvider() {
                         .format(java.util.Date())
 
                     val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                    val apiBase = "https://daily-history-server-dev-development.up.railway.app/api/v1"
+                    val apiBase = "https://daily-history-server-production.up.railway.app/api/v1"
                     val url = URL("$apiBase/daily-content/by-date?date=$today")
 
                     val conn = url.openConnection() as HttpURLConnection

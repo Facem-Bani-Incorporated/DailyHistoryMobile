@@ -1,24 +1,29 @@
 // hooks/useTTS.ts
 import * as Speech from 'expo-speech';
 import { useCallback, useEffect, useState } from 'react';
+import { AppState } from 'react-native';
 
 const LANG_MAP: Record<string, string> = {
   en: 'en-US', ro: 'ro-RO', fr: 'fr-FR', de: 'de-DE', es: 'es-ES',
 };
 
-/**
- * Text-to-Speech hook for story narration.
- * 
- * Usage:
- *   const { speak, stop, isPlaying } = useTTS();
- *   speak(narrative, language);
- */
 export function useTTS() {
   const [isPlaying, setIsPlaying] = useState(false);
 
   // Stop on unmount
   useEffect(() => {
     return () => { Speech.stop(); };
+  }, []);
+
+  // Stop when app goes to background
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') {
+        Speech.stop();
+        setIsPlaying(false);
+      }
+    });
+    return () => sub.remove();
   }, []);
 
   const speak = useCallback((text: string, lang: string = 'en') => {

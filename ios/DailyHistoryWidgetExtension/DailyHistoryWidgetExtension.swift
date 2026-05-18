@@ -9,7 +9,8 @@ import WidgetKit
 import SwiftUI
 
 private enum WidgetAPI {
-    static let baseURL = "https://daily-history-server-dev-development.up.railway.app/api/v1"
+    // Must match API_BASE_URL in config/api.ts
+    static let baseURL = "https://daily-history-server-production.up.railway.app/api/v1"
     static let endpoint = "/daily-content/guest"
 }
 

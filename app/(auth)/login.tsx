@@ -23,6 +23,7 @@ import {
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import api from '../../api';
+import { ENDPOINTS } from '../../config/api';
 import { authService } from '../../services/authService';
 import { useAuthStore } from '../../store/useAuthStore';
 
@@ -66,14 +67,6 @@ export default function LoginScreen() {
         Animated.timing(formSlideAnim, { toValue: 0, duration: 450, useNativeDriver: true }),
       ]),
     ]).start();
-
-    const cfg = {
-      webClientId: '146058417942-b63gth649kqijdf8avkh8fuhbgael563.apps.googleusercontent.com',
-      iosClientId: '146058417942-oulpjek0jpbbp6so5g0vj7vcn62qt1uj.apps.googleusercontent.com',
-      offlineAccess: true,
-    };
-    console.log('[GoogleSignin] configure with:', JSON.stringify(cfg));
-    GoogleSignin.configure(cfg);
   }, []);
 
   const handleGoogleSignIn = async () => {
@@ -96,7 +89,7 @@ export default function LoginScreen() {
         console.log('Operatiune in curs');
       } else {
         console.error('Google Sign-In Error:', error);
-        Alert.alert('Eroare Google', 'Asigură-te că rulezi pe un dispozitiv cu Google Play Services.');
+        Alert.alert('Eroare Google', `Cod: ${error.code}\n${error.message}`);
       }
     }
   };
@@ -153,7 +146,7 @@ export default function LoginScreen() {
     if (!form.email || !form.password) return;
     setIsLoading(true);
     try {
-      const res = await api.post('/auth/signin', {
+      const res = await api.post(ENDPOINTS.SIGN_IN, {
         username: form.email,
         password: form.password,
       });

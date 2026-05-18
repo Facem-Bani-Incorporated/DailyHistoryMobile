@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '../api';
+import { ENDPOINTS } from '../config/api';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 
@@ -101,7 +102,7 @@ export default function SupportModal({ visible, onClose }: Props) {
     if (!cat || subj.trim().length === 0 || msg.trim().length === 0) { setErr(true); return; }
     setErr(false); setScreen('sending');
     try {
-      await api.post('/support', { category: cat, subject: subj.trim(), message: msg.trim() });
+      await api.post(ENDPOINTS.SUPPORT, { category: cat, subject: subj.trim(), message: msg.trim() });
       setScreen('success'); animateResult();
     } catch { setScreen('error'); animateResult(); }
   }, [cat, subj, msg, animateResult]);

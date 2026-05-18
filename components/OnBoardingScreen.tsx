@@ -37,6 +37,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '../api';
+import { ENDPOINTS } from '../config/api';
 
 const { width: W } = Dimensions.get('window');
 
@@ -288,7 +289,7 @@ export default function OnboardingScreen({ onComplete }: Props) {
 
   useEffect(() => {
     if (step !== 'subscription') return;
-    api.get('/daily-content/guest').then(res => {
+    api.get(ENDPOINTS.GUEST_CONTENT).then(res => {
       const data = res.data;
       const arr = data?.events
         ? data.events

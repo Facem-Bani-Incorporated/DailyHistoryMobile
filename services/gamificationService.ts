@@ -1,5 +1,6 @@
 // services/gamificationService.ts
 import api from '../api';
+import { ENDPOINTS } from '../config/api';
 
 export interface GamificationSyncDTO {
   totalXP: number;
@@ -17,7 +18,7 @@ export interface GamificationSyncDTO {
  * Server is source of truth at login / user switch.
  */
 export async function fetchGamification(): Promise<GamificationSyncDTO> {
-  const res = await api.get('/gamification');
+  const res = await api.get(ENDPOINTS.GAMIFICATION);
   return res.data;
 }
 
@@ -26,5 +27,5 @@ export async function fetchGamification(): Promise<GamificationSyncDTO> {
  * Sync local state → server. Called every 5 min during active session.
  */
 export async function syncGamification(dto: GamificationSyncDTO): Promise<void> {
-  await api.put('/gamification', dto);
+  await api.put(ENDPOINTS.GAMIFICATION, dto);
 }

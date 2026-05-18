@@ -22,6 +22,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { buildAvatarUrl, getStoreUrl, WEBSITE_URL } from '../config/urls';
 import { Language, useLanguage } from '../context/LanguageContext';
 import { useRevenueCat } from '../context/RevenueCatContext';
 import { ThemeMode, useTheme } from '../context/ThemeContext';
@@ -268,7 +269,7 @@ export default function ProfileModal({ visible, onClose }: Props) {
   const getProfileImage = () => {
     const uri = user.avatar_url || user.avatarUrl || user.picture;
     if (uri) return uri;
-    return `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=ffd700&color=000&size=256&bold=true`;
+    return buildAvatarUrl(displayName, { size: 256 });
   };
 
   const handleLogout = async () => {
@@ -278,16 +279,12 @@ export default function ProfileModal({ visible, onClose }: Props) {
   };
 
   const handleRateApp = () => {
-    Linking.openURL(
-      Platform.OS === 'ios'
-        ? 'https://apps.apple.com/app/id000000000'
-        : 'https://play.google.com/store/apps/details?id=com.dailyhistory'
-    ).catch(() => {});
+    Linking.openURL(getStoreUrl()).catch(() => {});
   };
 
   const handleShareApp = () => {
     const { Share } = require('react-native');
-    Share.share({ message: `${t('share_message')}https://dailyhistory.app` }).catch(() => {});
+    Share.share({ message: `${t('share_message')}${WEBSITE_URL}` }).catch(() => {});
   };
 
   const currentLang = LANGUAGES.find(l => l.code === language) ?? LANGUAGES[0];

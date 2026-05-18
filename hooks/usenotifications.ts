@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 
 import api from '../api';
+import { ENDPOINTS } from '../config/api';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuthStore } from '../store/useAuthStore';
 import {
@@ -137,7 +138,7 @@ export function useNotifications(): UseNotificationsReturn {
     try {
       // Fetch today's actual events from the API
       const today = new Date().toISOString().split('T')[0];
-      const res = await api.get('/daily-content/by-date', {
+      const res = await api.get(ENDPOINTS.DAILY_CONTENT, {
         params: { date: today, _t: Date.now() },
       });
       const events: any[] = res.data?.events ?? [];

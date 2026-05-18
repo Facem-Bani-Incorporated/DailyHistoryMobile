@@ -24,6 +24,7 @@ import {
 import Svg, { Path } from 'react-native-svg';
 
 import api from '../../api';
+import { ENDPOINTS } from '../../config/api';
 import { authService } from '../../services/authService';
 import { useAuthStore } from '../../store/useAuthStore';
 
@@ -159,7 +160,7 @@ export default function RegisterScreen() {
     }
     setIsLoading(true);
     try {
-      await api.post('/auth/register', {
+      await api.post(ENDPOINTS.REGISTER, {
         username: form.username,
         email: form.email,
         password: form.password,
@@ -171,7 +172,7 @@ export default function RegisterScreen() {
       await new Promise(resolve => setTimeout(resolve, 500));
 
       const trySignin = async (user: string) => {
-        const res = await api.post('/auth/signin', {
+        const res = await api.post(ENDPOINTS.SIGN_IN, {
           username: user,
           password: form.password,
         });

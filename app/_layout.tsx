@@ -12,7 +12,6 @@ import { RevenueCatProvider } from '../context/RevenueCatContext';
 import { ThemeProvider, useTheme } from '../context/ThemeContext';
 import { useAdsInit } from '../hooks/useAdsInit';
 import { useGamificationSync } from '../hooks/useGamificationSync';
-import api from '../api';
 import { useAuthStore } from '../store/useAuthStore';
 import { useNotificationEventStore } from '../store/useNotificationEventStore';
 
@@ -84,9 +83,12 @@ function AppContent() {
 
   useEffect(() => {
     GoogleSignin.configure({
+      // Web + iOS OAuth client IDs from the Firebase project (dailyhistory-a717e).
+      // Web client_id is the one used for backend idToken verification; must
+      // match GOOGLE_CLIENT_ID configured on the Railway backend.
       webClientId: '146058417942-b63gth649kqijdf8avkh8fuhbgael563.apps.googleusercontent.com',
       iosClientId: '146058417942-oulpjek0jpbbp6so5g0vj7vcn62qt1uj.apps.googleusercontent.com',
-      offlineAccess: true,
+      scopes: ['email', 'profile'],
     });
 
     const init = async () => {
@@ -97,18 +99,6 @@ function AppContent() {
             unsub();
           });
         });
-      }
-
-      const currentToken = useAuthStore.getState().token;
-      if (currentToken) {
-        try {
-          const res = await api.get('/users/me');
-          if (res.data) useAuthStore.getState().updateUser(res.data);
-        } catch (e: any) {
-          if (e?.response?.status === 401) {
-            await useAuthStore.getState().logout();
-          }
-        }
       }
 
       prevTokenRef.current = useAuthStore.getState().token || null;
