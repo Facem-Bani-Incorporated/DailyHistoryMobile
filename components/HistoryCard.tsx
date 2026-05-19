@@ -106,7 +106,7 @@ const HistoryCardComponent = ({ event, allEvents = [] }: { event: any; allEvents
   };
 
   const glowOpacity = glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 0.12] });
-  const premiumBorderOpacity = borderGlow.interpolate({ inputRange: [0, 1], outputRange: [0.18, 0.48] });
+  const premiumBorderOpacity = borderGlow.interpolate({ inputRange: [0, 1], outputRange: [0.55, 0.92] });
   const gold = isPremium ? '#D4A843' : '#E8B84D';
   const titleColor = isPremium ? '#F5ECD7' : '#FFFFFF';
 
@@ -121,14 +121,22 @@ const HistoryCardComponent = ({ event, allEvents = [] }: { event: any; allEvents
             transform: [{ scale: scaleAnim }],
           },
         ]}>
-          {/* Premium glowing border */}
+          {/* PRO event — static visible gold border */}
+          {isPro && !isPremium && (
+            <View
+              style={[StyleSheet.absoluteFill, { borderRadius: 28, borderWidth: 2, borderColor: '#D4A843' }]}
+              pointerEvents="none"
+            />
+          )}
+
+          {/* Premium user — animated glowing gold border */}
           {isPremium && (
             <Animated.View
               style={[
                 StyleSheet.absoluteFill,
                 {
                   borderRadius: 28,
-                  borderWidth: 1.5,
+                  borderWidth: 2,
                   borderColor: '#D4A843',
                   opacity: premiumBorderOpacity,
                 },
@@ -180,7 +188,7 @@ const HistoryCardComponent = ({ event, allEvents = [] }: { event: any; allEvents
                 <Text style={styles.kickerCat}>{catLabel}</Text>
                 {isPro && (
                   <View style={[styles.proPill, { marginLeft: 8 }]}>
-                    <View style={styles.proPillDot} />
+                    <Ionicons name="star" size={11} color="#1a1208" />
                     <Text style={styles.proPillT}>PRO</Text>
                   </View>
                 )}
@@ -351,13 +359,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
     backgroundColor: '#D4A843',
+    borderWidth: 1,
+    borderColor: 'rgba(255,235,140,0.6)',
+    shadowColor: '#D4A843',
+    shadowOpacity: 0.5,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
   },
-  proPillDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#000' },
-  proPillT: { fontSize: 8, fontWeight: '900', color: '#000', letterSpacing: 1.5 },
+  proPillT: { fontSize: 11, fontWeight: '900', color: '#1a1208', letterSpacing: 1.8 },
 
   /* ── Bottom content ── */
   bottom: {

@@ -60,7 +60,11 @@
       "Bash(export ANDROID_HOME=\"$HOME/Library/Android/sdk\")",
       "Bash(xxd)",
       "Bash(python3 -)",
-      "Bash(npx eas *)"
+      "Bash(npx eas *)",
+      "Bash(git push *)",
+      "Bash(node -e ' *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\stefan-razvan.dogaru\\\\DailyHistoryMobile\" -Directory)",
+      "Bash(Select-Object Name)"
     ]
   }
 }

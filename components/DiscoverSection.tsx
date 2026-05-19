@@ -156,7 +156,7 @@ const HeroCard = ({
   const pro = isProEvent(event);
 
   return (
-    <TouchableOpacity activeOpacity={0.94} onPress={onPress} style={[st.heroCard, { height }]}>
+    <TouchableOpacity activeOpacity={0.94} onPress={onPress} style={[st.heroCard, { height }, pro && st.cardProBorder]}>
       <EventImage event={event} style={StyleSheet.absoluteFill} showLoader={false} />
 
       <LinearGradient
@@ -229,7 +229,7 @@ const EditorialCard = ({
   const pro = isProEvent(event);
 
   return (
-    <TouchableOpacity activeOpacity={0.94} onPress={onPress} style={[st.editCard, { height }]}>
+    <TouchableOpacity activeOpacity={0.94} onPress={onPress} style={[st.editCard, { height }, pro && st.cardProBorder]}>
       {/* Left image panel */}
       <View style={st.editThumb}>
         <EventImage event={event} style={StyleSheet.absoluteFill} showLoader={false} />
@@ -289,7 +289,7 @@ const CuratedCard = ({
   const pro = isProEvent(event);
 
   return (
-    <TouchableOpacity activeOpacity={0.94} onPress={onPress} style={[st.curCard, { width, height }]}>
+    <TouchableOpacity activeOpacity={0.94} onPress={onPress} style={[st.curCard, { width, height }, pro && st.cardProBorder]}>
       <EventImage event={event} style={StyleSheet.absoluteFill} showLoader={false} />
 
       <LinearGradient
@@ -322,6 +322,216 @@ const CuratedCard = ({
         )}
       </View>
     </TouchableOpacity>
+  );
+};
+
+/* ═══════════════════════════════════════════
+   EXTRAS WIDE CARD — full-width horizontal
+   Image left 40%, editorial text right 60%
+   ═══════════════════════════════════════════ */
+const ExtrasWideCard = ({
+  event, lang, onPress,
+}: { event: any; lang: string; onPress: () => void }) => {
+  const title = event.titleTranslations?.[lang] ?? event.titleTranslations?.en ?? '';
+  const narrative = event.narrativeTranslations?.[lang] ?? event.narrativeTranslations?.en ?? '';
+  const category = (event.category ?? 'HISTORY').replace(/_/g, ' ');
+  const year = extractYear(event);
+  const accent = getCatColor(event.category);
+  const pro = isProEvent(event);
+
+  return (
+    <TouchableOpacity activeOpacity={0.93} onPress={onPress} style={[ew.card, pro && st.cardProBorder]}>
+      <View style={ew.imgWrap}>
+        <EventImage event={event} style={StyleSheet.absoluteFill} showLoader={false} />
+        <LinearGradient
+          colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.65)']}
+          style={StyleSheet.absoluteFill}
+        />
+        {year !== '' && (
+          <View style={ew.yearBox}>
+            <Text style={ew.yearText}>{year}</Text>
+            <View style={[ew.yearLine, { backgroundColor: accent }]} />
+          </View>
+        )}
+        {pro && (
+          <View style={ew.proTag}>
+            <Ionicons name="star" size={8} color="#1a1208" />
+            <Text style={ew.proTagT}>PRO</Text>
+          </View>
+        )}
+      </View>
+      <View style={ew.body}>
+        <View style={ew.catRow}>
+          <View style={[ew.catDot, { backgroundColor: accent }]} />
+          <Text style={[ew.catT, { color: accent }]}>{category.toUpperCase()}</Text>
+        </View>
+        <Text style={ew.title} numberOfLines={2}>{title}</Text>
+        {narrative !== '' && (
+          <Text style={ew.lead} numberOfLines={1}>{narrative}</Text>
+        )}
+        <View style={ew.ctaRow}>
+          <View style={[ew.ctaLine, { backgroundColor: accent + '60' }]} />
+          <Text style={ew.ctaT}>READ STORY</Text>
+          <Ionicons name="arrow-forward" size={9} color="rgba(255,255,255,0.55)" style={{ marginLeft: 4 }} />
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+};
+
+const ew = StyleSheet.create({
+  card: {
+    flexDirection: 'row', borderRadius: 16, overflow: 'hidden',
+    backgroundColor: '#0f1114', height: 138,
+  },
+  imgWrap: { width: '40%', overflow: 'hidden' },
+  yearBox: { position: 'absolute', bottom: 10, left: 11 },
+  yearText: {
+    color: '#fff', fontSize: 20, fontWeight: '900',
+    fontFamily: SERIF, lineHeight: 22,
+  },
+  yearLine: { width: 22, height: 2, borderRadius: 1, marginTop: 4 },
+  proTag: {
+    position: 'absolute', top: 9, right: 9,
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    backgroundColor: '#E8B84D', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 5,
+  },
+  proTagT: { fontSize: 8, fontWeight: '900', color: '#1a1208', letterSpacing: 1.4 },
+  body: { flex: 1, padding: 14, justifyContent: 'space-between' },
+  catRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  catDot: { width: 5, height: 5, borderRadius: 2.5 },
+  catT: { fontSize: 9, fontWeight: '800', letterSpacing: 1.8 },
+  title: {
+    color: '#fff', fontSize: 15, fontWeight: '700',
+    lineHeight: 20, letterSpacing: -0.2, fontFamily: SERIF,
+    marginVertical: 5,
+  },
+  lead: { color: 'rgba(255,255,255,0.42)', fontSize: 11, lineHeight: 15 },
+  ctaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  ctaLine: { width: 14, height: 1 },
+  ctaT: { color: 'rgba(255,255,255,0.6)', fontSize: 9, fontWeight: '800', letterSpacing: 1.8 },
+});
+
+/* ═══════════════════════════════════════════
+   EXTRAS TILE CARD — half-width vertical
+   Image top 55%, editorial text bottom 45%
+   ═══════════════════════════════════════════ */
+const ExtrasTileCard = ({
+  event, lang, onPress, width,
+}: { event: any; lang: string; onPress: () => void; width: number }) => {
+  const title = event.titleTranslations?.[lang] ?? event.titleTranslations?.en ?? '';
+  const category = (event.category ?? 'HISTORY').replace(/_/g, ' ');
+  const year = extractYear(event);
+  const accent = getCatColor(event.category);
+  const pro = isProEvent(event);
+
+  return (
+    <TouchableOpacity activeOpacity={0.93} onPress={onPress} style={[et.card, { width }, pro && st.cardProBorder]}>
+      <View style={et.imgWrap}>
+        <EventImage event={event} style={StyleSheet.absoluteFill} showLoader={false} />
+        <LinearGradient
+          colors={['rgba(0,0,0,0.18)', 'transparent', 'rgba(0,0,0,0.72)']}
+          locations={[0, 0.38, 1]}
+          style={StyleSheet.absoluteFill}
+        />
+        <View style={[et.catChip, { backgroundColor: accent + '22', borderColor: accent + '60' }]}>
+          <View style={[et.catChipDot, { backgroundColor: accent }]} />
+          <Text style={[et.catChipT, { color: accent }]}>{category.slice(0, 9).toUpperCase()}</Text>
+        </View>
+        {pro && (
+          <View style={et.proTag}>
+            <Ionicons name="star" size={8} color="#1a1208" />
+            <Text style={et.proTagT}>PRO</Text>
+          </View>
+        )}
+        {year !== '' && <Text style={et.yearOverlay}>{year}</Text>}
+      </View>
+      <View style={et.body}>
+        <Text style={et.title} numberOfLines={2}>{title}</Text>
+        <View style={et.ctaRow}>
+          <View style={[et.ctaAccent, { backgroundColor: accent }]} />
+          <Text style={et.ctaT}>READ</Text>
+          <Ionicons name="arrow-forward" size={9} color="rgba(255,255,255,0.5)" style={{ marginLeft: 4 }} />
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+};
+
+const et = StyleSheet.create({
+  card: { borderRadius: 14, overflow: 'hidden', backgroundColor: '#0f1114', height: 200 },
+  imgWrap: { width: '100%', height: 118, overflow: 'hidden' },
+  catChip: {
+    position: 'absolute', top: 9, left: 9,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 8, paddingVertical: 4,
+    borderRadius: 6, borderWidth: StyleSheet.hairlineWidth,
+  },
+  catChipDot: { width: 4, height: 4, borderRadius: 2 },
+  catChipT: { fontSize: 8, fontWeight: '800', letterSpacing: 1.4 },
+  proTag: {
+    position: 'absolute', top: 9, right: 9,
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    backgroundColor: '#E8B84D', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 5,
+  },
+  proTagT: { fontSize: 7.5, fontWeight: '900', color: '#1a1208', letterSpacing: 1.3 },
+  yearOverlay: {
+    position: 'absolute', bottom: 8, right: 10,
+    color: 'rgba(255,255,255,0.55)', fontSize: 11,
+    fontFamily: SERIF, fontWeight: '700', letterSpacing: 0.5,
+  },
+  body: { flex: 1, padding: 12, justifyContent: 'space-between' },
+  title: {
+    color: '#fff', fontSize: 13.5, fontWeight: '700',
+    lineHeight: 18, letterSpacing: -0.1, fontFamily: SERIF,
+  },
+  ctaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  ctaAccent: { width: 14, height: 2, borderRadius: 1 },
+  ctaT: { color: 'rgba(255,255,255,0.55)', fontSize: 9, fontWeight: '800', letterSpacing: 1.6 },
+});
+
+/* ═══════════════════════════════════════════
+   EXTRAS MAGAZINE GRID
+   Groups: [wide] + [tile, tile] repeating
+   ═══════════════════════════════════════════ */
+const ExtrasGrid = ({
+  extras, lang, cW, handleSelect,
+}: { extras: any[]; lang: string; cW: number; handleSelect: (e: any) => void }) => {
+  const TILE_GAP = 8;
+  const tileW = Math.floor((cW - TILE_GAP) / 2);
+
+  type Group = { type: 'wide'; event: any } | { type: 'duo'; events: [any, any] };
+  const groups: Group[] = [];
+  let i = 0;
+  while (i < extras.length) {
+    if (i + 2 < extras.length) {
+      groups.push({ type: 'wide', event: extras[i] });
+      groups.push({ type: 'duo', events: [extras[i + 1], extras[i + 2]] });
+      i += 3;
+    } else if (i + 1 < extras.length) {
+      groups.push({ type: 'duo', events: [extras[i], extras[i + 1]] });
+      i += 2;
+    } else {
+      groups.push({ type: 'wide', event: extras[i] });
+      i += 1;
+    }
+  }
+
+  return (
+    <>
+      {groups.map((group, gi) => (
+        <AnimatedCard key={gi} delay={Math.min(60 + gi * 50, 350)} style={{ marginBottom: TILE_GAP }}>
+          {group.type === 'wide' ? (
+            <ExtrasWideCard event={group.event} lang={lang} onPress={() => handleSelect(group.event)} />
+          ) : (
+            <View style={{ flexDirection: 'row', gap: TILE_GAP }}>
+              <ExtrasTileCard event={group.events[0]} lang={lang} onPress={() => handleSelect(group.events[0])} width={tileW} />
+              <ExtrasTileCard event={group.events[1]} lang={lang} onPress={() => handleSelect(group.events[1])} width={tileW} />
+            </View>
+          )}
+        </AnimatedCard>
+      ))}
+    </>
   );
 };
 
@@ -492,21 +702,7 @@ export const DiscoverSection = ({ events, theme, t, isPro = true, onPaywall }: D
                   <View style={[st.extrasLine, { backgroundColor: theme.gold + '35' }]} />
                 </View>
 
-                {extras.map((event, i) => (
-                  <AnimatedCard
-                    key={event.id ?? `extra-${i}`}
-                    delay={Math.min(60 + i * 50, 400)}
-                    style={{ marginBottom: GAP }}
-                  >
-                    <EditorialCard
-                      event={event}
-                      lang={language}
-                      number={5 + i}
-                      onPress={() => handleSelect(event)}
-                      height={128}
-                    />
-                  </AnimatedCard>
-                ))}
+                <ExtrasGrid extras={extras} lang={language} cW={cW} handleSelect={handleSelect} />
               </View>
             )}
           </>
@@ -704,6 +900,12 @@ const st = StyleSheet.create({
     letterSpacing: 1.2,
     fontFamily: SERIF,
     fontStyle: 'italic',
+  },
+
+  /* ── PRO gold border — applied to any card with isPro ── */
+  cardProBorder: {
+    borderWidth: 1.5,
+    borderColor: '#D4A017',
   },
 
   /* ── PRO pill — gold star badge ── */

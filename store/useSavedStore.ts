@@ -1,5 +1,7 @@
 // store/useSavedStore.ts
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
 import { useAuthStore } from './useAuthStore';
 
 // ── Helpers ──────────────────────────────────────────────
@@ -46,42 +48,51 @@ const buildState = (perUser: Record<string, any[]>) => {
   };
 };
 
-export const useSavedStore = create<SavedStore>()((set, get) => ({
-  _perUser: {},
-  savedEvents: [],
-  isLoading: true,
+export const useSavedStore = create<SavedStore>()(
+  persist(
+    (set, get) => ({
+      _perUser: {},
+      savedEvents: [],
+      isLoading: true,
 
-  saveEvent: (event: any) => {
-    const uid = getUserId();
-    const id = getEventId(event);
-    const current = get()._perUser[uid] ?? [];
-    if (current.some(e => getEventId(e) === id)) return;
-    const updated = { ...get()._perUser, [uid]: [event, ...current] };
-    set(buildState(updated));
-    try { require('../hooks/useGamificationSync').pushToServer(); } catch {}
-  },
+      saveEvent: (event: any) => {
+        const uid = getUserId();
+        const id = getEventId(event);
+        const current = get()._perUser[uid] ?? [];
+        if (current.some(e => getEventId(e) === id)) return;
+        const updated = { ...get()._perUser, [uid]: [event, ...current] };
+        set(buildState(updated));
+        try { require('../hooks/useGamificationSync').pushToServer(); } catch {}
+      },
 
-  removeEvent: (eventId: string) => {
-    const uid = getUserId();
-    const current = get()._perUser[uid] ?? [];
-    const updated = {
-      ...get()._perUser,
-      [uid]: current.filter(e => getEventId(e) !== eventId),
-    };
-    set(buildState(updated));
-    try { require('../hooks/useGamificationSync').pushToServer(); } catch {}
-  },
+      removeEvent: (eventId: string) => {
+        const uid = getUserId();
+        const current = get()._perUser[uid] ?? [];
+        const updated = {
+          ...get()._perUser,
+          [uid]: current.filter(e => getEventId(e) !== eventId),
+        };
+        set(buildState(updated));
+        try { require('../hooks/useGamificationSync').pushToServer(); } catch {}
+      },
 
-  isSaved: (eventId: string) => {
-    const uid = getUserId();
-    return (get()._perUser[uid] ?? []).some(e => getEventId(e) === eventId);
-  },
+      isSaved: (eventId: string) => {
+        const uid = getUserId();
+        return (get()._perUser[uid] ?? []).some(e => getEventId(e) === eventId);
+      },
 
-  clearForUser: (userId: string) => {
-    const updated = { ...get()._perUser, [userId]: [] };
-    set({ _perUser: updated, savedEvents: [] });
-  },
-}));
+      clearForUser: (userId: string) => {
+        const updated = { ...get()._perUser, [userId]: [] };
+        set({ _perUser: updated, savedEvents: [] });
+      },
+    }),
+    {
+      name: 'saved-events-store',
+      storage: createJSONStorage(() => AsyncStorage),
+      partialize: (state) => ({ _perUser: state._perUser }),
+    }
+  )
+);
 
 // ── Reactive hook for current user's saved events ────────
 export const useUserSavedEvents = (): any[] => {

@@ -109,19 +109,35 @@ class HistoryWidget : AppWidgetProvider() {
             val prefs    = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
             executor.execute {
-                try {
-                    val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
-                    val conn = (URL("https://daily-history-server-production.up.railway.app/api/v1/daily-content/guest?date=$today")
-                        .openConnection() as HttpURLConnection).apply {
-                        requestMethod = "GET"
-                        connectTimeout = 8000
-                        readTimeout = 8000
-                        setRequestProperty("Accept", "application/json")
-                    }
-                    if (conn.responseCode != 200) { conn.disconnect(); return@execute }
-                    val response = conn.inputStream.bufferedReader().readText()
-                    conn.disconnect()
+                val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+                val apiUrl = "https://daily-history-server-production.up.railway.app/api/v1/daily-content/guest?date=$today"
 
+                // Try up to 3 times — Railway cold start can take 20-30s
+                val maxAttempts = 3
+                var attempt = 0
+                var response: String? = null
+
+                while (attempt < maxAttempts && response == null) {
+                    attempt++
+                    try {
+                        val conn = (URL(apiUrl).openConnection() as HttpURLConnection).apply {
+                            requestMethod = "GET"
+                            connectTimeout = 20000
+                            readTimeout = 20000
+                            setRequestProperty("Accept", "application/json")
+                        }
+                        if (conn.responseCode == 200) {
+                            response = conn.inputStream.bufferedReader().readText()
+                        }
+                        conn.disconnect()
+                    } catch (_: Exception) {
+                        if (attempt < maxAttempts) Thread.sleep(3000)
+                    }
+                }
+
+                if (response == null) return@execute
+
+                try {
                     val events = parseEventsArray(response) ?: return@execute
                     if (events.length() == 0) return@execute
                     val event = pickTopEventWithImage(events) ?: events.getJSONObject(0)

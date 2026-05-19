@@ -96,11 +96,12 @@ interface PD { data: any[]; empty: boolean }
 const EMPTY: PD = { data: [], empty: true };
 const ck = (iso: string, tier: Tier = 'free') => tier === 'pro' ? `dh_v6_pro_${iso}` : `dh_v6_${iso}`;
 const mk = (tier: Tier, iso: string) => `${tier}_${iso}`;
-const rC = async (iso: string, tier: Tier = 'free') => {
+const rC = async (iso: string, tier: Tier = 'free', allowStale = false) => {
   try {
     const r = await AsyncStorage.getItem(ck(iso, tier)); if (!r) return null;
     const e = JSON.parse(r);
-    return Date.now() - e.ts > CACHE_TTL ? null : e as { ts: number; data: any[]; empty: boolean };
+    if (!allowStale && Date.now() - e.ts > CACHE_TTL) return null;
+    return e as { ts: number; data: any[]; empty: boolean };
   } catch { return null; }
 };
 const wC = async (iso: string, tier: Tier, d: any[], e: boolean) => {
@@ -782,6 +783,11 @@ export default function HomeScreen() {
       return tierArg === 'pro' ? proPg : freePg;
     } catch (e: any) {
       if (__DEV__) console.log(`[fetchOne] ${iso} ERROR:`, e?.response?.status, e?.message);
+      const stale = await rC(iso, tierArg, true);
+      if (stale && stale.data.length > 0) {
+        mem.current[key] = { data: stale.data, empty: stale.empty };
+        return mem.current[key];
+      }
       return EMPTY;
     }
   }, []);
@@ -1076,10 +1082,6 @@ export default function HomeScreen() {
               {/* Center — date navigation */}
               {tab !== 'search' ? (
                 <Animated.View style={[ms.dateCenterNav, { transform: [{ translateX: dateAnim }] }]}>
-                  <TouchableOpacity onPress={goBck} activeOpacity={0.6}
-                    hitSlop={{ top: 16, bottom: 16, left: 12, right: 12 }} style={ms.navArrow}>
-                    <Text style={[ms.navArrowIcon, { color: theme.subtext }]}>{'\u2039'}</Text>
-                  </TouchableOpacity>
 
                   <TouchableOpacity onPress={() => { haptic('light'); setCalVis(true); }}
                     activeOpacity={0.7} style={ms.dateCenter}>
@@ -1101,20 +1103,6 @@ export default function HomeScreen() {
                       </View>
                     </View>
                   </TouchableOpacity>
-
-                  {isNextDayLocked ? (
-                    <TouchableOpacity onPress={goFwd} activeOpacity={0.6}
-                      hitSlop={{ top: 16, bottom: 16, left: 12, right: 12 }}
-                      style={[ms.unlockArrow, { backgroundColor: goldColor + '15', borderColor: goldColor + '35' }]}>
-                      <Ionicons name="lock-closed" size={13} color={goldColor} />
-                    </TouchableOpacity>
-                  ) : (
-                    <TouchableOpacity onPress={goFwd} activeOpacity={0.6} disabled={!canFwd}
-                      hitSlop={{ top: 16, bottom: 16, left: 12, right: 12 }}
-                      style={[ms.navArrow, !canFwd && { opacity: 0.2 }]}>
-                      <Text style={[ms.navArrowIcon, { color: theme.subtext }]}>{'\u203A'}</Text>
-                    </TouchableOpacity>
-                  )}
                 </Animated.View>
               ) : (
                 <View style={{ flex: 1 }} />

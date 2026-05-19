@@ -801,6 +801,24 @@ export default function MapScreen() {
           visibleCityEvents.map((item, idx) => {
             const catKey = getCat(item.event);
             const color = CAT[catKey]?.color ?? FALLBACK_COLOR;
+            const isPro = !!(item.event?.isPro || item.event?.is_pro);
+            if (isPro) {
+              return (
+                <Marker
+                  key={`city-${idx}-${item.lat}-${item.lng}`}
+                  coordinate={{ latitude: item.lat, longitude: item.lng }}
+                  onPress={() => openPreview(item)}
+                  tracksViewChanges={false}
+                  anchor={{ x: 0.5, y: 1 }}
+                >
+                  <View style={mapProMarker.pin}>
+                    <Text style={mapProMarker.star}>★</Text>
+                    <Text style={mapProMarker.label}>PRO</Text>
+                  </View>
+                  <View style={mapProMarker.needle} />
+                </Marker>
+              );
+            }
             return (
               <Marker
                 key={`city-${idx}-${item.lat}-${item.lng}`}
@@ -985,6 +1003,36 @@ export default function MapScreen() {
     </View>
   );
 }
+
+const mapProMarker = StyleSheet.create({
+  pin: {
+    backgroundColor: '#D4A017',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderWidth: 1.5,
+    borderColor: '#fff',
+    shadowColor: '#D4A017',
+    shadowOpacity: 0.7,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 6,
+  },
+  star: { fontSize: 11, color: '#1a1208' },
+  label: { fontSize: 10, fontWeight: '900', color: '#1a1208', letterSpacing: 1.4 },
+  needle: {
+    width: 2,
+    height: 7,
+    backgroundColor: '#D4A017',
+    alignSelf: 'center',
+    marginTop: -1,
+    borderBottomLeftRadius: 1,
+    borderBottomRightRadius: 1,
+  },
+});
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Styles
