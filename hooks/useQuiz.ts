@@ -4,28 +4,38 @@ import api from '../api';
 import { ENDPOINTS } from '../config/api';
 
 export interface QuizOption {
-  id: string;
+  optionId: string;
   text: string;
 }
 
 export interface QuizQuestion {
-  id: string;
+  questionKey: string;
   question: string;
+  explanation?: string;
   options: QuizOption[];
 }
 
 export interface QuizData {
-  quizId: string;
+  eventId: number;
+  language: string;
   questions: QuizQuestion[];
 }
 
-export type AnswerMap = Record<string, string>; // questionId → optionId
+export type AnswerMap = Record<string, string>; // questionKey → selectedOptionId
+
+export interface AnswerResult {
+  questionKey: string;
+  selectedOptionId: string;
+  correctOptionId: string;
+  isCorrect: boolean;
+}
 
 export interface SubmitResult {
-  correct: number;
-  total: number;
+  correctAnswers: number;
+  totalQuestions: number;
   xpEarned: number;
-  answers: Record<string, { correct: boolean; correctOptionId: string }>;
+  perfectScore: boolean;
+  answerResults: AnswerResult[];
 }
 
 type Phase = 'loading' | 'unavailable' | 'ready' | 'submitting' | 'done';
@@ -40,8 +50,11 @@ export function useQuiz(eventId: string | null, language = 'en') {
   const fetchedRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!eventId || fetchedRef.current === eventId) return;
-    fetchedRef.current = eventId;
+    const id = eventId;
+    const key = id ? `${id}:${language}` : null;
+    console.log('[useQuiz] effect', { eventId: id, language, fetched: fetchedRef.current });
+    if (!id || !key || fetchedRef.current === key) return;
+    fetchedRef.current = key;
 
     let cancelled = false;
     setPhase('loading');
@@ -51,45 +64,50 @@ export function useQuiz(eventId: string | null, language = 'en') {
 
     (async () => {
       try {
-        // Step 1: Fetch questions — 404 here means no quiz for this event
-        const quizRes = await api.get(base(eventId), { params: { lang: language } });
+        // Step 1: Fetch questions — 404 means no quiz for this event
+        const quizRes = await api.get(base(id), { params: { lang: language } });
         if (cancelled) return;
 
         const data = quizRes.data;
         if (!data || !Array.isArray(data.questions) || data.questions.length === 0) {
+          console.log('[useQuiz] no questions in response for', eventId, data);
           setPhase('unavailable');
           return;
         }
 
         const quizData: QuizData = {
-          quizId: data.id ?? data.quizId ?? eventId,
+          eventId: data.eventId,
+          language: data.language ?? language,
           questions: data.questions,
         };
         setQuiz(quizData);
 
-        // Step 2: Check if this user already submitted
+        // Step 2: Check if already submitted
         try {
-          const statusRes = await api.get(`${base(eventId)}/status`);
+          const statusRes = await api.get(`${base(id)}/status`);
           if (cancelled) return;
 
           const s = statusRes.data;
-          // Backend may use: { completed, attempted, result, score, ... }
-          const completed = s?.completed ?? s?.attempted ?? false;
-          if (completed) {
-            // Normalise result across possible response shapes
-            const r = s?.result ?? s?.score ?? s ?? null;
-            setResult(r && typeof r === 'object' && 'total' in r ? r : null);
+          if (s?.attempted) {
+            setResult({
+              correctAnswers: s.correctAnswers ?? 0,
+              totalQuestions: s.totalQuestions ?? 0,
+              xpEarned: s.xpEarned ?? 0,
+              perfectScore: (s.correctAnswers ?? 0) === (s.totalQuestions ?? 0) && (s.totalQuestions ?? 0) > 0,
+              answerResults: [],
+            });
             setPhase('done');
             return;
           }
         } catch {
-          // Status endpoint failed (e.g. user never attempted) — show the quiz
+          // Status endpoint failed — user never attempted, show the quiz
         }
 
         if (!cancelled) setPhase('ready');
       } catch (e: any) {
         if (cancelled) return;
-        // 404 → no quiz; any other error → hide quiz silently
+        const status = e?.response?.status;
+        console.log('[useQuiz] fetch failed for', eventId, 'status:', status, e?.message);
         setPhase('unavailable');
       }
     })();
@@ -97,8 +115,8 @@ export function useQuiz(eventId: string | null, language = 'en') {
     return () => { cancelled = true; };
   }, [eventId, language]);
 
-  const selectAnswer = useCallback((questionId: string, optionId: string) => {
-    setAnswers(prev => ({ ...prev, [questionId]: optionId }));
+  const selectAnswer = useCallback((questionKey: string, selectedOptionId: string) => {
+    setAnswers(prev => ({ ...prev, [questionKey]: selectedOptionId }));
   }, []);
 
   const submit = useCallback(async (): Promise<SubmitResult | null> => {
@@ -106,7 +124,11 @@ export function useQuiz(eventId: string | null, language = 'en') {
     setPhase('submitting');
     try {
       const payload = {
-        answers: Object.entries(answers).map(([questionId, optionId]) => ({ questionId, optionId })),
+        language,
+        answers: Object.entries(answers).map(([questionKey, selectedOptionId]) => ({
+          questionKey,
+          selectedOptionId,
+        })),
       };
       const res = await api.post(`${base(eventId)}/submit`, payload);
       const submitResult: SubmitResult = res.data;
@@ -115,16 +137,15 @@ export function useQuiz(eventId: string | null, language = 'en') {
       return submitResult;
     } catch (e: any) {
       if (e?.response?.status === 409) {
-        // Already submitted — mark done without result details
         setPhase('done');
       } else {
         setPhase('ready');
       }
       return null;
     }
-  }, [eventId, quiz, phase, answers]);
+  }, [eventId, quiz, phase, answers, language]);
 
-  const allAnswered = phase === 'ready' && !!quiz && quiz.questions.every(q => answers[q.id]);
+  const allAnswered = phase === 'ready' && !!quiz && quiz.questions.every(q => answers[q.questionKey]);
 
   return { phase, quiz, answers, result, allAnswered, selectAnswer, submit };
 }

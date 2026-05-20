@@ -72,7 +72,10 @@
       "Bash(python -c ' *)",
       "Bash(node -e \"const pkg = require\\('./node_modules/@hugeicons/react-native/dist/index.js'\\); console.log\\(Object.keys\\(pkg\\).slice\\(0,5\\)\\);\")",
       "Bash(node -e \"const d = require\\('fs'\\).readFileSync\\('/dev/stdin','utf8'\\); const p = JSON.parse\\(d\\); console.log\\('main:', p.main, 'module:', p.module, 'exports:', JSON.stringify\\(p.exports, null, 2\\)\\)\")",
-      "Bash(node -e \"const pkg = require\\('./node_modules/@hugeicons/react-native/dist/cjs/index.js'\\); console.log\\(Object.keys\\(pkg\\).slice\\(0,5\\)\\);\")"
+      "Bash(node -e \"const pkg = require\\('./node_modules/@hugeicons/react-native/dist/cjs/index.js'\\); console.log\\(Object.keys\\(pkg\\).slice\\(0,5\\)\\);\")",
+      "Bash(grep -rn \"[\\\\x{1F300}-\\\\x{1F9FF}]\" --include=\"*.tsx\" --include=\"*.ts\" -l)",
+      "Bash(grep -rn \"🏆\\\\|🔥\\\\|💎\\\\|⭐\\\\|🥇\\\\|🥈\\\\|🥉\\\\|👑\\\\|📊\\\\|🌱\\\\|✨\\\\|📅\\\\|⚡\\\\|🎬\\\\|🎯\\\\|📖\\\\|🛡\\\\|🗓\\\\|🏅\\\\|🎖\\\\|🌟\\\\|🌍\\\\|🏰\\\\|🎓\\\\|🔬\\\\|⚔\\\\|🧲\\\\|🧭\\\\|🎭\\\\|🎬\\\\|🏀\\\\|💫\\\\|🌠\\\\|✦\\\\|★\" --include=\"*.tsx\" --include=\"*.ts\" -l)",
+      "Bash(python3 -c ' *)"
     ]
   }
 }

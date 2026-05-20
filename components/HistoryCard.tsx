@@ -2,7 +2,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Share2 } from 'lucide-react-native';
+import { Check, Share2 } from 'lucide-react-native';
 import { memo, useEffect, useRef, useState } from 'react';
 import {
   Animated,
@@ -151,7 +151,7 @@ const HistoryCardComponent = ({ event, allEvents = [] }: { event: any; allEvents
             {/* Already Read badge */}
             {isRead && (
               <View style={styles.readBadge} pointerEvents="none">
-                <Text style={styles.readBadgeCheck}>✓</Text>
+                <Check size={10} color="#4ade80" strokeWidth={3} />
                 <View style={styles.readBadgeSep} />
                 <Text style={styles.readBadgeText}>Already Read</Text>
               </View>
@@ -193,7 +193,7 @@ const HistoryCardComponent = ({ event, allEvents = [] }: { event: any; allEvents
             {/* ═════ TOP BAR ═════ */}
             <View style={styles.topBar}>
               <View style={styles.kickerRow}>
-                <Text style={[styles.kickerOrn, { color: gold }]}>✦</Text>
+                <Ionicons name="diamond-outline" size={8} color={gold} style={styles.kickerOrn} />
                 <Text style={[styles.kickerLabel, { color: gold }]}>FEATURE</Text>
                 <View style={[styles.kickerDivider, { backgroundColor: gold + '70' }]} />
                 <Text style={styles.kickerCat}>{catLabel}</Text>

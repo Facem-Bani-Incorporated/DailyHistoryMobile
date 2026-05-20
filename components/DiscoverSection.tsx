@@ -1,6 +1,7 @@
 // components/DiscoverSection.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Check } from 'lucide-react-native';
 import EventImage from './EventImage';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -119,7 +120,7 @@ const ProPill = ({ compact }: { compact?: boolean }) => (
 /* ── Already Read badge — small pill overlay ─ */
 const ReadBadge = () => (
   <View style={rb.badge} pointerEvents="none">
-    <Text style={rb.check}>✓</Text>
+    <Check size={10} color="#4ade80" strokeWidth={3} />
     <View style={rb.sep} />
     <Text style={rb.text}>Already Read</Text>
   </View>
@@ -133,7 +134,6 @@ const rb = StyleSheet.create({
     borderRadius: 20, paddingHorizontal: 9, paddingVertical: 5,
     borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.22)',
   },
-  check: { color: '#4ade80', fontSize: 10, fontWeight: '800' },
   sep:   { width: 1, height: 9, backgroundColor: 'rgba(255,255,255,0.25)' },
   text:  { color: 'rgba(255,255,255,0.88)', fontSize: 9, fontWeight: '700', letterSpacing: 0.8 },
 });
