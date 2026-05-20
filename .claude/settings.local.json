@@ -64,7 +64,15 @@
       "Bash(git push *)",
       "Bash(node -e ' *)",
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\stefan-razvan.dogaru\\\\DailyHistoryMobile\" -Directory)",
-      "Bash(Select-Object Name)"
+      "Bash(Select-Object Name)",
+      "Bash(node -e \"const icons = require\\('@hugeicons/core-free-icons'\\); const keys = Object.keys\\(icons\\).filter\\(k => !k.startsWith\\('_'\\)\\); console.log\\('Total:', keys.length\\); console.log\\(keys.filter\\(k => /fire|trophy|crown|star|diamond|book|flash|lightning|bolt|medal|target|shield/i.test\\(k\\)\\).slice\\(0,40\\).join\\('\\\\n'\\)\\);\")",
+      "Bash(node -e \"const icons = require\\('@hugeicons/core-free-icons/dist/cjs'\\); const keys = Object.keys\\(icons\\); console.log\\('Total:', keys.length\\); console.log\\(keys.filter\\(k => /fire|trophy|crown|star|diamond|book|flash|light|bolt|medal|target|shield|sparkl|zap|flame|search|scroll|map|compass|award|grad|grad/i.test\\(k\\)\\).slice\\(0,60\\).join\\('\\\\n'\\)\\);\")",
+      "Bash(node -e \"const icons = require\\('./node_modules/@hugeicons/core-free-icons/dist/cjs/index.js'\\); const keys = Object.keys\\(icons\\); console.log\\('Total:', keys.length\\); const want = keys.filter\\(k => /fire|trophy|crown|star|diamond|book|flash|light|bolt|medal|target|shield|sparkl|zap|flame|search|scroll|compass|award|grad|flame|sword|read|library|magnif|globe|earth|check|tick|muscle|plant|leaf|seedl/i.test\\(k\\)\\); console.log\\(want.join\\('\\\\n'\\)\\);\")",
+      "Bash(node -e \"const mod = require\\('./node_modules/@hugeicons/core-free-icons/dist/cjs/index.js'\\); console.log\\(typeof mod, Object.keys\\(mod\\).slice\\(0,10\\)\\);\")",
+      "Bash(python -c ' *)",
+      "Bash(node -e \"const pkg = require\\('./node_modules/@hugeicons/react-native/dist/index.js'\\); console.log\\(Object.keys\\(pkg\\).slice\\(0,5\\)\\);\")",
+      "Bash(node -e \"const d = require\\('fs'\\).readFileSync\\('/dev/stdin','utf8'\\); const p = JSON.parse\\(d\\); console.log\\('main:', p.main, 'module:', p.module, 'exports:', JSON.stringify\\(p.exports, null, 2\\)\\)\")",
+      "Bash(node -e \"const pkg = require\\('./node_modules/@hugeicons/react-native/dist/cjs/index.js'\\); console.log\\(Object.keys\\(pkg\\).slice\\(0,5\\)\\);\")"
     ]
   }
 }

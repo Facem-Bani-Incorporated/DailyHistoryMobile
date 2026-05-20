@@ -35,9 +35,9 @@ export interface LevelDef {
 
 // Milestone tiers — special titles every 10 levels
 const MILESTONE_ICONS: Record<number, string> = {
-  1: '📜', 2: '📖', 3: '🔍', 4: '📚', 5: '🎓',
-  10: '🔥', 20: '⚡', 30: '💎', 40: '🏛️', 50: '👑',
-  60: '🌟', 70: '🔮', 80: '🌌', 90: '⚜️', 100: '🏆',
+  1: 'scroll', 2: 'book', 3: 'search', 4: 'books', 5: 'graduate',
+  10: 'fire', 20: 'flash', 30: 'diamond', 40: 'castle', 50: 'crown',
+  60: 'stars', 70: 'globe', 80: 'globe', 90: 'shield', 100: 'award',
 };
 
 // Generate all 100 levels
@@ -57,17 +57,17 @@ function _generateLevels(): LevelDef[] {
 }
 
 function _iconForLevel(lv: number): string {
-  if (lv <= 5) return ['📜', '📖', '🔍', '📚', '🎓'][lv - 1];
-  if (lv <= 10) return '🔥';
-  if (lv <= 20) return '⚡';
-  if (lv <= 30) return '💎';
-  if (lv <= 40) return '🏛️';
-  if (lv <= 50) return '👑';
-  if (lv <= 60) return '🌟';
-  if (lv <= 70) return '🔮';
-  if (lv <= 80) return '🌌';
-  if (lv <= 90) return '⚜️';
-  return '🏆';
+  if (lv <= 5) return ['scroll', 'book', 'search', 'books', 'graduate'][lv - 1];
+  if (lv <= 10) return 'fire';
+  if (lv <= 20) return 'flash';
+  if (lv <= 30) return 'diamond';
+  if (lv <= 40) return 'castle';
+  if (lv <= 50) return 'crown';
+  if (lv <= 60) return 'stars';
+  if (lv <= 70) return 'globe';
+  if (lv <= 80) return 'globe';
+  if (lv <= 90) return 'shield';
+  return 'award';
 }
 
 export const LEVELS: LevelDef[] = _generateLevels();
@@ -146,45 +146,45 @@ function _uniqueCategories(s: GamificationState): number {
 
 export const ACHIEVEMENTS: AchievementDef[] = [
   // Reading
-  { id: 'first_story', icon: '📖', category: 'reading', condition: (s) => s.totalEventsRead >= 1 },
-  { id: 'bookworm_10', icon: '📚', category: 'reading', condition: (s) => s.totalEventsRead >= 10 },
-  { id: 'scholar_50', icon: '🎓', category: 'reading', condition: (s) => s.totalEventsRead >= 50 },
-  { id: 'historian_100', icon: '🏛️', category: 'reading', condition: (s) => s.totalEventsRead >= 100 },
-  { id: 'master_500', icon: '👑', category: 'reading', condition: (s) => s.totalEventsRead >= 500 },
-  { id: 'legend_1000', icon: '🌟', category: 'reading', condition: (s) => s.totalEventsRead >= 1000 },
+  { id: 'first_story', icon: 'book', category: 'reading', condition: (s) => s.totalEventsRead >= 1 },
+  { id: 'bookworm_10', icon: 'books', category: 'reading', condition: (s) => s.totalEventsRead >= 10 },
+  { id: 'scholar_50', icon: 'graduate', category: 'reading', condition: (s) => s.totalEventsRead >= 50 },
+  { id: 'historian_100', icon: 'castle', category: 'reading', condition: (s) => s.totalEventsRead >= 100 },
+  { id: 'master_500', icon: 'crown', category: 'reading', condition: (s) => s.totalEventsRead >= 500 },
+  { id: 'legend_1000', icon: 'stars', category: 'reading', condition: (s) => s.totalEventsRead >= 1000 },
 
   // Streaks
-  { id: 'streak_3', icon: '🔥', category: 'streak', condition: (s) => s.longestStreak >= 3 },
-  { id: 'streak_7', icon: '⚡', category: 'streak', condition: (s) => s.longestStreak >= 7 },
-  { id: 'streak_14', icon: '💎', category: 'streak', condition: (s) => s.longestStreak >= 14 },
-  { id: 'streak_30', icon: '🌟', category: 'streak', condition: (s) => s.longestStreak >= 30 },
-  { id: 'streak_100', icon: '🏆', category: 'streak', condition: (s) => s.longestStreak >= 100 },
-  { id: 'streak_365', icon: '💫', category: 'streak', condition: (s) => s.longestStreak >= 365 },
+  { id: 'streak_3', icon: 'fire', category: 'streak', condition: (s) => s.longestStreak >= 3 },
+  { id: 'streak_7', icon: 'flash', category: 'streak', condition: (s) => s.longestStreak >= 7 },
+  { id: 'streak_14', icon: 'diamond', category: 'streak', condition: (s) => s.longestStreak >= 14 },
+  { id: 'streak_30', icon: 'stars', category: 'streak', condition: (s) => s.longestStreak >= 30 },
+  { id: 'streak_100', icon: 'award', category: 'streak', condition: (s) => s.longestStreak >= 100 },
+  { id: 'streak_365', icon: 'fallingstar', category: 'streak', condition: (s) => s.longestStreak >= 365 },
 
   // Explorer
-  { id: 'explorer_3', icon: '🧭', category: 'explorer', condition: (s) => _uniqueCategories(s) >= 3 },
-  { id: 'explorer_all', icon: '🌍', category: 'explorer', condition: (s) => _uniqueCategories(s) >= 7 },
+  { id: 'explorer_3', icon: 'compass', category: 'explorer', condition: (s) => _uniqueCategories(s) >= 3 },
+  { id: 'explorer_all', icon: 'globe', category: 'explorer', condition: (s) => _uniqueCategories(s) >= 7 },
 
   // Dedication
-  { id: 'daily_goal_1', icon: '✅', category: 'dedication', condition: (s) => s.dailyGoalsCompleted >= 1 },
-  { id: 'daily_goal_7', icon: '🎯', category: 'dedication', condition: (s) => s.dailyGoalsCompleted >= 7 },
-  { id: 'daily_goal_30', icon: '💪', category: 'dedication', condition: (s) => s.dailyGoalsCompleted >= 30 },
-  { id: 'daily_goal_100', icon: '🔱', category: 'dedication', condition: (s) => s.dailyGoalsCompleted >= 100 },
-  { id: 'daily_goal_365', icon: '⭐', category: 'dedication', condition: (s) => s.dailyGoalsCompleted >= 365 },
+  { id: 'daily_goal_1', icon: 'check', category: 'dedication', condition: (s) => s.dailyGoalsCompleted >= 1 },
+  { id: 'daily_goal_7', icon: 'target', category: 'dedication', condition: (s) => s.dailyGoalsCompleted >= 7 },
+  { id: 'daily_goal_30', icon: 'muscle', category: 'dedication', condition: (s) => s.dailyGoalsCompleted >= 30 },
+  { id: 'daily_goal_100', icon: 'crown', category: 'dedication', condition: (s) => s.dailyGoalsCompleted >= 100 },
+  { id: 'daily_goal_365', icon: 'star', category: 'dedication', condition: (s) => s.dailyGoalsCompleted >= 365 },
 
   // XP milestones
-  { id: 'xp_500', icon: '⭐', category: 'milestone', condition: (s) => s.totalXP >= 500 },
-  { id: 'xp_2500', icon: '🌠', category: 'milestone', condition: (s) => s.totalXP >= 2500 },
-  { id: 'xp_10000', icon: '💫', category: 'milestone', condition: (s) => s.totalXP >= 10000 },
-  { id: 'xp_50000', icon: '🌌', category: 'milestone', condition: (s) => s.totalXP >= 50000 },
-  { id: 'xp_100000', icon: '✨', category: 'milestone', condition: (s) => s.totalXP >= 100000 },
+  { id: 'xp_500', icon: 'star', category: 'milestone', condition: (s) => s.totalXP >= 500 },
+  { id: 'xp_2500', icon: 'fallingstar', category: 'milestone', condition: (s) => s.totalXP >= 2500 },
+  { id: 'xp_10000', icon: 'fallingstar', category: 'milestone', condition: (s) => s.totalXP >= 10000 },
+  { id: 'xp_50000', icon: 'globe', category: 'milestone', condition: (s) => s.totalXP >= 50000 },
+  { id: 'xp_100000', icon: 'sparkles', category: 'milestone', condition: (s) => s.totalXP >= 100000 },
 
   // Level milestones
-  { id: 'level_10', icon: '🔥', category: 'milestone', condition: (s) => getLevelForXP(s.totalXP).level >= 10 },
-  { id: 'level_25', icon: '⚡', category: 'milestone', condition: (s) => getLevelForXP(s.totalXP).level >= 25 },
-  { id: 'level_50', icon: '👑', category: 'milestone', condition: (s) => getLevelForXP(s.totalXP).level >= 50 },
-  { id: 'level_75', icon: '🔮', category: 'milestone', condition: (s) => getLevelForXP(s.totalXP).level >= 75 },
-  { id: 'level_100', icon: '🏆', category: 'milestone', condition: (s) => getLevelForXP(s.totalXP).level >= 100 },
+  { id: 'level_10', icon: 'fire', category: 'milestone', condition: (s) => getLevelForXP(s.totalXP).level >= 10 },
+  { id: 'level_25', icon: 'flash', category: 'milestone', condition: (s) => getLevelForXP(s.totalXP).level >= 25 },
+  { id: 'level_50', icon: 'crown', category: 'milestone', condition: (s) => getLevelForXP(s.totalXP).level >= 50 },
+  { id: 'level_75', icon: 'globe', category: 'milestone', condition: (s) => getLevelForXP(s.totalXP).level >= 75 },
+  { id: 'level_100', icon: 'award', category: 'milestone', condition: (s) => getLevelForXP(s.totalXP).level >= 100 },
 ];
 
 export const ACHIEVEMENT_NAMES: Record<string, Record<string, string>> = {

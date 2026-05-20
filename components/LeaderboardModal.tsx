@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Crown, Trophy, X } from 'lucide-react-native';
+import { GameIcon } from '../utils/GameIcon';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -45,13 +46,13 @@ const TAB_META: Record<LeaderboardType, {
 // ── Rank tier system ──
 type RankTier = { max: number; key: string; color: string; icon: string };
 const RANK_TIERS: RankTier[] = [
-  { max: 1,    key: 'champion', color: '#FFD700', icon: '👑' },
-  { max: 3,    key: 'elite',    color: '#E8B84D', icon: '🏆' },
-  { max: 10,   key: 'gold',     color: '#FFB300', icon: '🥇' },
-  { max: 25,   key: 'silver',   color: '#C0C0C0', icon: '🥈' },
-  { max: 50,   key: 'bronze',   color: '#CD7F32', icon: '🥉' },
-  { max: 100,  key: 'rising',   color: '#818CF8', icon: '⭐' },
-  { max: 9999, key: 'explorer', color: '#78716C', icon: '✦' },
+  { max: 1,    key: 'champion', color: '#FFD700', icon: 'crown' },
+  { max: 3,    key: 'elite',    color: '#E8B84D', icon: 'award' },
+  { max: 10,   key: 'gold',     color: '#FFB300', icon: 'medal1' },
+  { max: 25,   key: 'silver',   color: '#C0C0C0', icon: 'medal2' },
+  { max: 50,   key: 'bronze',   color: '#CD7F32', icon: 'medal3' },
+  { max: 100,  key: 'rising',   color: '#818CF8', icon: 'honourstar' },
+  { max: 9999, key: 'explorer', color: '#78716C', icon: 'compass' },
 ];
 const getRankTier = (rank: number): RankTier =>
   RANK_TIERS.find(t => rank <= t.max) ?? RANK_TIERS[RANK_TIERS.length - 1];
@@ -192,7 +193,7 @@ const UserHero = ({ me, nextUser, data, tabColor, isDark, language, theme, t }: 
         {/* Top row: tier badge + YOU pill */}
         <View style={uh.topRow}>
           <View style={[uh.tierBadge, { backgroundColor: tier.color + '20', borderColor: tier.color + '55' }]}>
-            <Text style={{ fontSize: 13 }}>{tier.icon}</Text>
+            <GameIcon iconKey={tier.icon} size={14} color={tier.color} />
             <Text style={[uh.tierText, { color: tier.color }]}>{tierName}</Text>
           </View>
           <View style={[uh.youPill, { backgroundColor: tabColor }]}>
@@ -415,7 +416,7 @@ const Podium = ({ top3, tabColor, isDark, theme, language, t }: {
           {position === 1 ? (
             <Crown size={crownSize} color="#FFD700" strokeWidth={2.5} fill="#FFD700" />
           ) : (
-            <Text style={{ fontSize: position === 2 ? 18 : 16 }}>{tier.icon}</Text>
+            <GameIcon iconKey={tier.icon} size={position === 2 ? 18 : 16} color={tier.color} />
           )}
         </View>
 
@@ -562,7 +563,7 @@ const ListRow = ({ entry, tabColor, isDark, theme, t, index, language }: {
         <Text style={[lr.rankText, {
           color: isMe ? tabColor : theme.subtext,
         }]}>{entry.rank}</Text>
-        <Text style={{ fontSize: 11 }}>{tier.icon}</Text>
+        <GameIcon iconKey={tier.icon} size={12} color={tier.color} />
       </View>
 
       {/* Avatar */}

@@ -36,6 +36,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { haptic } from '../utils/haptics';
 import { extractLocation } from '../utils/locationExtractor';
+import { GameIcon } from '../utils/GameIcon';
 import { StoryModal } from './StoryModal';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental)
@@ -117,17 +118,17 @@ const T: Record<string, Record<string, string>> = {
 
 // ─── Categories ────────────────────────────────────────────────────────────────
 const CAT: Record<string, { color: string; tKey: string; emoji: string }> = {
-  war_conflict:      { color: '#DC2626', tKey: 'war_conflict',      emoji: '⚔️' },
-  tech_innovation:   { color: '#2563EB', tKey: 'tech_innovation',   emoji: '⚡' },
-  science_discovery: { color: '#7C3AED', tKey: 'science_discovery', emoji: '🔬' },
-  politics_state:    { color: '#D97706', tKey: 'politics_state',    emoji: '🏛️' },
-  culture_arts:      { color: '#059669', tKey: 'culture_arts',      emoji: '🎭' },
-  natural_disaster:  { color: '#EA580C', tKey: 'natural_disaster',  emoji: '🌋' },
-  exploration:       { color: '#0891B2', tKey: 'exploration',       emoji: '🧭' },
-  religion_phil:     { color: '#92400E', tKey: 'religion_phil',     emoji: '📜' },
-  personalities:     { color: '#BE185D', tKey: 'personalities',     emoji: '⭐' },
-  media:             { color: '#0F766E', tKey: 'media',             emoji: '🎬' },
-  sport:             { color: '#15803D', tKey: 'sport',             emoji: '🏆' },
+  war_conflict:      { color: '#DC2626', tKey: 'war_conflict',      emoji: 'sword' },
+  tech_innovation:   { color: '#2563EB', tKey: 'tech_innovation',   emoji: 'flash' },
+  science_discovery: { color: '#7C3AED', tKey: 'science_discovery', emoji: 'microscope' },
+  politics_state:    { color: '#D97706', tKey: 'politics_state',    emoji: 'castle' },
+  culture_arts:      { color: '#059669', tKey: 'culture_arts',      emoji: 'theater' },
+  natural_disaster:  { color: '#EA580C', tKey: 'natural_disaster',  emoji: 'globe' },
+  exploration:       { color: '#0891B2', tKey: 'exploration',       emoji: 'compass' },
+  religion_phil:     { color: '#92400E', tKey: 'religion_phil',     emoji: 'scroll' },
+  personalities:     { color: '#BE185D', tKey: 'personalities',     emoji: 'star' },
+  media:             { color: '#0F766E', tKey: 'media',             emoji: 'film' },
+  sport:             { color: '#15803D', tKey: 'sport',             emoji: 'sport' },
 };
 const FALLBACK_COLOR = '#6B7280';
 
@@ -213,7 +214,7 @@ const buildClusters = (eventsWithLoc: EventWithLocation[]): Cluster[] => {
       .map(([key, evts]) => ({
         key,
         color: CAT[key]?.color ?? FALLBACK_COLOR,
-        emoji: CAT[key]?.emoji ?? '📌',
+        emoji: CAT[key]?.emoji ?? 'star',
         labelKey: CAT[key]?.tKey ?? key,
         events: evts.sort((a, b) => (b.event.impactScore ?? 0) - (a.event.impactScore ?? 0)),
       }))
@@ -273,7 +274,7 @@ const PreviewCard = ({
   const catKey = getCat(item.event);
   const catInfo = CAT[catKey];
   const color = catInfo?.color ?? FALLBACK_COLOR;
-  const emoji = catInfo?.emoji ?? '📌';
+  const emoji = catInfo?.emoji ?? 'star';
 
   const title =
     item.event.titleTranslations?.[language] ??
@@ -301,7 +302,7 @@ const PreviewCard = ({
       >
         <View style={[styles.previewHeader, { borderBottomColor: borderCol }]}>
           <View style={[styles.previewBadge, { backgroundColor: color + '15' }]}>
-            <Text style={styles.previewEmoji}>{emoji}</Text>
+            <GameIcon iconKey={emoji} size={16} color={color} />
             <Text style={[styles.previewCatText, { color }]}>
               {tm(catInfo?.tKey ?? catKey)}
             </Text>
@@ -435,7 +436,7 @@ const CategorySection = ({
         style={[styles.catHeader, { backgroundColor: cat.color + '08' }]}
       >
         <View style={styles.catLeft}>
-          <Text style={styles.catEmoji}>{cat.emoji}</Text>
+          <GameIcon iconKey={cat.emoji} size={16} color={cat.color} />
           <Text style={[styles.catLabel, { color: cat.color }]}>{tm(cat.labelKey)}</Text>
           <View style={[styles.catBadge, { backgroundColor: cat.color + '18' }]}>
             <Text style={[styles.catCount, { color: cat.color }]}>{cat.events.length}</Text>
@@ -744,7 +745,7 @@ export default function MapScreen() {
         .map(([key, evts]) => ({
           key,
           color: CAT[key]?.color ?? FALLBACK_COLOR,
-          emoji: CAT[key]?.emoji ?? '📌',
+          emoji: CAT[key]?.emoji ?? 'star',
           labelKey: CAT[key]?.tKey ?? key,
           events: evts.sort((a, b) => (b.event.impactScore ?? 0) - (a.event.impactScore ?? 0)),
         }))
@@ -812,7 +813,7 @@ export default function MapScreen() {
                   anchor={{ x: 0.5, y: 1 }}
                 >
                   <View style={mapProMarker.pin}>
-                    <Text style={mapProMarker.star}>★</Text>
+                    <GameIcon iconKey="star" size={10} color="#FFD700" />
                     <Text style={mapProMarker.label}>PRO</Text>
                   </View>
                   <View style={mapProMarker.needle} />

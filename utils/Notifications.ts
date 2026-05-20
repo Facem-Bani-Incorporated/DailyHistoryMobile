@@ -305,11 +305,11 @@ export function buildPersonalizedNotification(
   language: string,
 ): { title: string; body: string; event: any | null } {
   const fallbacks: Record<string, { title: string; body: string }> = {
-    en: { title: '📅 Daily History', body: 'A new historical event awaits you!' },
-    ro: { title: '📅 Daily History', body: 'Un nou eveniment istoric te așteaptă!' },
-    es: { title: '📅 Daily History', body: '¡Un nuevo evento histórico te espera!' },
-    fr: { title: '📅 Daily History', body: 'Un nouvel événement historique vous attend!' },
-    de: { title: '📅 Daily History', body: 'Ein neues historisches Ereignis wartet auf dich!' },
+    en: { title: 'Daily History', body: 'A new historical event awaits you!' },
+    ro: { title: 'Daily History', body: 'Un nou eveniment istoric te așteaptă!' },
+    es: { title: 'Daily History', body: '¡Un nuevo evento histórico te espera!' },
+    fr: { title: 'Daily History', body: 'Un nouvel événement historique vous attend!' },
+    de: { title: 'Daily History', body: 'Ein neues historisches Ereignis wartet auf dich!' },
   };
 
   const fallback = fallbacks[language] ?? fallbacks.en;
@@ -343,7 +343,7 @@ export function buildPersonalizedNotification(
   // ── Pick engaging template for this language ──
   const template = pickTemplate(language);
 
-  const title = template.title(year, emoji, shortTitle);
+  const title = template.title(year, emoji, shortTitle).trim();
   const rawBody = template.body(year, narrative, shortTitle);
 
   return {
@@ -393,19 +393,8 @@ function extractYearFromEvent(event: any): string {
   return match ? match[1] : '';
 }
 
-function getCategoryEmoji(category?: string): string {
-  const cat = (category ?? '').toLowerCase().replace(/\s+/g, '_');
-  const map: Record<string, string> = {
-    war_conflict: '⚔️',
-    tech_innovation: '💡',
-    science_discovery: '🔬',
-    politics_state: '🏛️',
-    culture_arts: '🎨',
-    natural_disaster: '🌋',
-    exploration: '🧭',
-    religion_phil: '📿',
-  };
-  return map[cat] ?? '📅';
+function getCategoryEmoji(_category?: string): string {
+  return '';
 }
 
 // ── Android notification channel ──

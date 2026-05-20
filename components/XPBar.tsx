@@ -12,6 +12,7 @@ import {
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { LEVEL_NAMES, useGamificationStore } from '../store/useGamificationStore';
+import { GameIcon } from '../utils/GameIcon';
 
 const T: Record<string, Record<string, string>> = {
   en: { xp: 'XP', today: 'Today', level: 'Lvl', multiplier: 'Streak bonus', nextLevel: 'Next level' },
@@ -99,7 +100,7 @@ export default function XPBar() {
           borderColor: accentColor + '40',
           ...(isPremium && { borderColor: '#D4A84360' }),
         }]}>
-          <Text style={s.levelIcon}>{level.icon}</Text>
+          <GameIcon iconKey={level.icon} size={14} color={accentColor} />
           <Text style={[s.levelNum, { color: accentColor }]}>{level.level}</Text>
         </View>
 

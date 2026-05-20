@@ -5,6 +5,7 @@
 
 import { LinearGradient } from 'expo-linear-gradient';
 import { Award, BookOpen, Compass, Flame, Lock, Sparkles, Trophy, X } from 'lucide-react-native';
+import { GameIcon } from '../utils/GameIcon';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
@@ -189,7 +190,7 @@ const AchievementBadge = ({
           backgroundColor: isUnlocked ? meta.color + '15' : (isDark ? '#14110D' : '#F0EBE0'),
         }]}>
           {isUnlocked ? (
-            <Text style={bs.icon}>{achievement.icon}</Text>
+            <GameIcon iconKey={achievement.icon} size={22} color={meta.color} />
           ) : (
             <Lock size={18} color={isDark ? '#3D3325' : '#BDB4A0'} strokeWidth={1.8} />
           )}

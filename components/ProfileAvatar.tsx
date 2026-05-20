@@ -11,7 +11,7 @@ export default function ProfileAvatar() {
   if (!user) return null;
 
   const getProfileImage = () => {
-    // 🔥 FIX: Verificăm avatarUrl (Java) prima dată, apoi restul
+    // FIX: Verificăm avatarUrl (Java) prima dată, apoi restul
     const uri = user.avatar_url || user.avatarUrl || user.picture;
     
     if (uri) return uri;

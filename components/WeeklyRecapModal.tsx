@@ -4,6 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { Flame, Sparkles, Target, TrendingUp, X } from 'lucide-react-native';
+import { GameIcon } from '../utils/GameIcon';
 import React, { useEffect, useRef } from 'react';
 import {
     Animated,
@@ -199,7 +200,7 @@ export default function WeeklyRecapModal({
           <ScrollView contentContainerStyle={[ms.scroll, { paddingBottom: insets.bottom + 30 }]} showsVerticalScrollIndicator={false}>
             {/* Title */}
             <Animated.View style={[ms.titleWrap, { opacity: titleFade, transform: [{ scale: titleScale }] }]}>
-              <Text style={ms.titleEmoji}>📊</Text>
+              <GameIcon iconKey="chart" size={40} color={gold} />
               <Text style={[ms.title, { color: theme.text }]}>{tx(language, 'title')}</Text>
               <Text style={[ms.subtitle, { color: gold }]}>{tx(language, 'subtitle')}</Text>
             </Animated.View>
@@ -267,7 +268,7 @@ export default function WeeklyRecapModal({
 
                 {/* Level card */}
                 <View style={[ms.levelCard, { backgroundColor: gold + '10', borderColor: gold + '30' }]}>
-                  <Text style={ms.levelIcon}>{level.icon}</Text>
+                  <GameIcon iconKey={level.icon} size={28} color={gold} />
                   <View style={{ flex: 1, gap: 2 }}>
                     <Text style={[ms.levelName, { color: theme.text }]}>{levelName}</Text>
                     <Text style={[ms.levelLabel, { color: gold }]}>{tx(language, 'level')} {level.level}</Text>

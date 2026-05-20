@@ -13,6 +13,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { GameIcon } from '../utils/GameIcon';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { useGamificationStore } from '../store/useGamificationStore';
@@ -100,7 +101,7 @@ const StatPill = ({ value, label, icon, theme, isDark }: {
   value: string | number; label: string; icon: string; theme: any; isDark: boolean;
 }) => (
   <View style={[hs.statPill, { backgroundColor: isDark ? '#1C1810' : '#FFF9EF', borderColor: isDark ? '#2A2218' : '#F0E6D4' }]}>
-    <Text style={hs.statIcon}>{icon}</Text>
+    <GameIcon iconKey={icon} size={14} color={isDark ? '#E8B84D' : '#C77E08'} />
     <Text style={[hs.statValue, { color: theme.text }]}>{value}</Text>
     <Text style={[hs.statLabel, { color: theme.subtext }]}>{label}</Text>
   </View>
@@ -227,9 +228,9 @@ export default function ReadingHeatmap() {
       {/* ── Stats Row ── */}
       {hasActivity && (
         <View style={hs.statsRow}>
-          <StatPill value={totalDays} label={tx(language, 'days')} icon="📅" theme={theme} isDark={isDark} />
-          <StatPill value={avgPerDay} label={tx(language, 'avgPerDay')} icon="⚡" theme={theme} isDark={isDark} />
-          <StatPill value={bestDayCount} label={tx(language, 'bestDay')} icon="🏆" theme={theme} isDark={isDark} />
+          <StatPill value={totalDays} label={tx(language, 'days')} icon="calendar" theme={theme} isDark={isDark} />
+          <StatPill value={avgPerDay} label={tx(language, 'avgPerDay')} icon="flash" theme={theme} isDark={isDark} />
+          <StatPill value={bestDayCount} label={tx(language, 'bestDay')} icon="award" theme={theme} isDark={isDark} />
         </View>
       )}
 

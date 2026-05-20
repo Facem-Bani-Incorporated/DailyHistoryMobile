@@ -24,6 +24,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { buildAvatarUrl, getStoreUrl, WEBSITE_URL } from '../config/urls';
 import { Language, useLanguage } from '../context/LanguageContext';
+import { GameIcon } from '../utils/GameIcon';
 import { useRevenueCat } from '../context/RevenueCatContext';
 import { ThemeMode, useTheme } from '../context/ThemeContext';
 import { useNotifications } from '../hooks/usenotifications';
@@ -53,11 +54,11 @@ const THEME_OPTIONS: {
 ];
 
 const LANGUAGES: { code: Language; label: string; native: string; flag: string }[] = [
-  { code: 'en', label: 'English',   native: 'English',   flag: '🇬🇧' },
-  { code: 'ro', label: 'Romanian',  native: 'Română',    flag: '🇷🇴' },
-  { code: 'fr', label: 'French',    native: 'Français',  flag: '🇫🇷' },
-  { code: 'de', label: 'German',    native: 'Deutsch',   flag: '🇩🇪' },
-  { code: 'es', label: 'Spanish',   native: 'Español',   flag: '🇪🇸' },
+  { code: 'en', label: 'English',   native: 'English',   flag: 'EN' },
+  { code: 'ro', label: 'Romanian',  native: 'Română',    flag: 'RO' },
+  { code: 'fr', label: 'French',    native: 'Français',  flag: 'FR' },
+  { code: 'de', label: 'German',    native: 'Deutsch',   flag: 'DE' },
+  { code: 'es', label: 'Spanish',   native: 'Español',   flag: 'ES' },
 ];
 
 const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
@@ -352,7 +353,7 @@ export default function ProfileModal({ visible, onClose }: Props) {
                   backgroundColor: isPremium ? '#1A1525' : isDark ? '#1A1610' : '#FFFBF2',
                   borderColor: isPremium ? '#2E2640' : isDark ? '#2A2015' : '#F0E4D0',
                 }]}>
-                  <Text style={s.levelEmoji}>{xpInfo.level.icon}</Text>
+                  <GameIcon iconKey={xpInfo.level.icon} size={24} color={gold} />
                   <View style={{ flex: 1 }}>
                     <View style={s.levelTopRow}>
                       <Text style={[s.levelName, { color: theme.text }]}>{levelName}</Text>
@@ -407,7 +408,9 @@ export default function ProfileModal({ visible, onClose }: Props) {
                       return (
                         <TouchableOpacity key={lang.code} onPress={() => { setLanguage(lang.code); setLangExpanded(false); }} activeOpacity={0.6}
                           style={[s.langItem, { backgroundColor: active ? `${gold}12` : 'transparent', borderColor: active ? `${gold}35` : theme.border }]}>
-                          <Text style={s.langFlag}>{lang.flag}</Text>
+                          <View style={[s.langFlagBadge, { borderColor: active ? `${gold}60` : theme.border }]}>
+                            <Text style={[s.langFlag, { color: active ? gold : theme.subtext }]}>{lang.flag}</Text>
+                          </View>
                           <View style={{ flex: 1 }}>
                             <Text style={[s.langNative, { color: active ? gold : theme.text }]}>{lang.native}</Text>
                             <Text style={[s.langEnglish, { color: theme.subtext }]}>{lang.label}</Text>
@@ -626,7 +629,8 @@ const makeStyles = (theme: any, isDark: boolean, gold: string, isPremium: boolea
   card: { borderRadius: 18, borderWidth: 1, overflow: 'hidden', marginBottom: 20 },
   langList: { paddingHorizontal: 12, paddingBottom: 12, gap: 5 },
   langItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, borderWidth: 1.5 },
-  langFlag: { fontSize: 19 },
+  langFlagBadge: { width: 34, height: 22, borderRadius: 6, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  langFlag: { fontSize: 9.5, fontWeight: '900', letterSpacing: 1.2 },
   langNative: { fontSize: 13, fontWeight: '600' },
   langEnglish: { fontSize: 10.5, fontWeight: '400', opacity: 0.45, marginTop: 1 },
   themeRow: { flexDirection: 'row', gap: 7, padding: 11 },

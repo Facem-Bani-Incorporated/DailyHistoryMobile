@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { GameIcon } from '../utils/GameIcon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
@@ -187,7 +188,7 @@ export default function AchievementToast() {
             }]}>
               <View style={[s.medalMid, { borderColor: gold + '80', backgroundColor: gold + '15' }]}>
                 <View style={[s.medalInner, { backgroundColor: isDark ? '#2A1F0E' : '#FFF6E0' }]}>
-                  <Text style={s.icon}>{achievement.icon}</Text>
+                  <GameIcon iconKey={achievement.icon} size={22} color={gold} />
                 </View>
                 {/* Shimmer swipe */}
                 <Animated.View style={[s.shimmer, {

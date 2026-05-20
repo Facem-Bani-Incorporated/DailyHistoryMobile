@@ -12,7 +12,6 @@ export interface QuizQuestion {
   id: string;
   question: string;
   options: QuizOption[];
-  correctOptionId?: string;
 }
 
 export interface QuizData {
@@ -30,6 +29,8 @@ export interface SubmitResult {
 }
 
 type Phase = 'loading' | 'unavailable' | 'ready' | 'submitting' | 'done';
+
+const base = (eventId: string) => `${ENDPOINTS.QUIZ_EVENT}/${eventId}`;
 
 export function useQuiz(eventId: string | null, language = 'en') {
   const [phase, setPhase] = useState<Phase>('loading');
@@ -50,19 +51,8 @@ export function useQuiz(eventId: string | null, language = 'en') {
 
     (async () => {
       try {
-        // Check if already completed
-        const statusRes = await api.get(`${ENDPOINTS.QUIZ_STATUS}/${eventId}`);
-        if (cancelled) return;
-        if (statusRes.data?.completed) {
-          setPhase('done');
-          setResult(statusRes.data.result ?? null);
-          return;
-        }
-
-        // Fetch questions
-        const quizRes = await api.get(`${ENDPOINTS.QUIZ_BY_EVENT}/${eventId}`, {
-          params: { language },
-        });
+        // Step 1: Fetch questions — 404 here means no quiz for this event
+        const quizRes = await api.get(base(eventId), { params: { lang: language } });
         if (cancelled) return;
 
         const data = quizRes.data;
@@ -71,11 +61,35 @@ export function useQuiz(eventId: string | null, language = 'en') {
           return;
         }
 
-        setQuiz({ quizId: data.id ?? data.quizId ?? eventId, questions: data.questions });
-        setPhase('ready');
+        const quizData: QuizData = {
+          quizId: data.id ?? data.quizId ?? eventId,
+          questions: data.questions,
+        };
+        setQuiz(quizData);
+
+        // Step 2: Check if this user already submitted
+        try {
+          const statusRes = await api.get(`${base(eventId)}/status`);
+          if (cancelled) return;
+
+          const s = statusRes.data;
+          // Backend may use: { completed, attempted, result, score, ... }
+          const completed = s?.completed ?? s?.attempted ?? false;
+          if (completed) {
+            // Normalise result across possible response shapes
+            const r = s?.result ?? s?.score ?? s ?? null;
+            setResult(r && typeof r === 'object' && 'total' in r ? r : null);
+            setPhase('done');
+            return;
+          }
+        } catch {
+          // Status endpoint failed (e.g. user never attempted) — show the quiz
+        }
+
+        if (!cancelled) setPhase('ready');
       } catch (e: any) {
         if (cancelled) return;
-        // 404 → no quiz for this event; any other error → hide quiz silently
+        // 404 → no quiz; any other error → hide quiz silently
         setPhase('unavailable');
       }
     })();
@@ -88,26 +102,29 @@ export function useQuiz(eventId: string | null, language = 'en') {
   }, []);
 
   const submit = useCallback(async (): Promise<SubmitResult | null> => {
-    if (!quiz || phase !== 'ready') return null;
+    if (!eventId || !quiz || phase !== 'ready') return null;
     setPhase('submitting');
     try {
       const payload = {
-        quizId: quiz.quizId,
-        eventId,
         answers: Object.entries(answers).map(([questionId, optionId]) => ({ questionId, optionId })),
       };
-      const res = await api.post(ENDPOINTS.QUIZ_SUBMIT, payload);
+      const res = await api.post(`${base(eventId)}/submit`, payload);
       const submitResult: SubmitResult = res.data;
       setResult(submitResult);
       setPhase('done');
       return submitResult;
-    } catch {
-      setPhase('ready');
+    } catch (e: any) {
+      if (e?.response?.status === 409) {
+        // Already submitted — mark done without result details
+        setPhase('done');
+      } else {
+        setPhase('ready');
+      }
       return null;
     }
-  }, [quiz, phase, answers, eventId]);
+  }, [eventId, quiz, phase, answers]);
 
-  const allAnswered = quiz ? quiz.questions.every(q => answers[q.id]) : false;
+  const allAnswered = phase === 'ready' && !!quiz && quiz.questions.every(q => answers[q.id]);
 
   return { phase, quiz, answers, result, allAnswered, selectAnswer, submit };
 }

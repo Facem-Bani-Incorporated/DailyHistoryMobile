@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import LottieView from 'lottie-react-native';
 import { AlertTriangle, Flame, X } from 'lucide-react-native';
+import { GameIcon } from '../utils/GameIcon';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
@@ -33,14 +34,14 @@ const GOAL = 5;
 // ── Tier system (Duolingo/Clash-style progression) ──
 type Tier = { threshold: number; key: string; color: string; glow: string; icon: string };
 const TIERS: Tier[] = [
-  { threshold: 0,   key: 'ready',   color: '#78716C', glow: '#78716C', icon: '🌱' },
-  { threshold: 1,   key: 'spark',   color: '#FBA525', glow: '#FFA726', icon: '✨' },
-  { threshold: 3,   key: 'fire',    color: '#FB7435', glow: '#FF6B35', icon: '🔥' },
-  { threshold: 7,   key: 'bronze',  color: '#CD7F32', glow: '#D4884E', icon: '🥉' },
-  { threshold: 14,  key: 'silver',  color: '#C0C0C0', glow: '#D8D8D8', icon: '🥈' },
-  { threshold: 30,  key: 'gold',    color: '#FFB300', glow: '#FFC43D', icon: '🏆' },
-  { threshold: 50,  key: 'diamond', color: '#00D4FF', glow: '#3DDCFF', icon: '💎' },
-  { threshold: 100, key: 'legend',  color: '#FFD700', glow: '#FFE55C', icon: '👑' },
+  { threshold: 0,   key: 'ready',   color: '#78716C', glow: '#78716C', icon: 'plant' },
+  { threshold: 1,   key: 'spark',   color: '#FBA525', glow: '#FFA726', icon: 'sparkles' },
+  { threshold: 3,   key: 'fire',    color: '#FB7435', glow: '#FF6B35', icon: 'fire' },
+  { threshold: 7,   key: 'bronze',  color: '#CD7F32', glow: '#D4884E', icon: 'medal3' },
+  { threshold: 14,  key: 'silver',  color: '#C0C0C0', glow: '#D8D8D8', icon: 'medal2' },
+  { threshold: 30,  key: 'gold',    color: '#FFB300', glow: '#FFC43D', icon: 'award' },
+  { threshold: 50,  key: 'diamond', color: '#00D4FF', glow: '#3DDCFF', icon: 'diamond' },
+  { threshold: 100, key: 'legend',  color: '#FFD700', glow: '#FFE55C', icon: 'crown' },
 ];
 
 const getTier = (streak: number) => {
@@ -220,9 +221,10 @@ const ProgressRing = ({ read, total, theme, isDark, color }: {
           rotation="-90" origin={`${RS/2}, ${RS/2}`} />
       </Svg>
       <View style={{ position: 'absolute', alignItems: 'center' }}>
-        <Text style={{ fontSize: 17, fontWeight: '900', color: ok ? '#34D399' : theme.text, letterSpacing: -0.5 }}>
-          {ok ? '✓' : `${read}`}
-        </Text>
+        {ok
+          ? <GameIcon iconKey="check" size={17} color="#34D399" />
+          : <Text style={{ fontSize: 17, fontWeight: '900', color: theme.text, letterSpacing: -0.5 }}>{read}</Text>
+        }
         <Text style={{ fontSize: 8, fontWeight: '700', color: theme.subtext, opacity: 0.4, letterSpacing: 0.5, marginTop: 1 }}>
           /{total}
         </Text>
@@ -366,9 +368,10 @@ const StreakModal = ({ visible, onClose }: { visible: boolean; onClose: () => vo
             <Text style={[sms.hdrKicker, { color: heatColor }]}>
               {tx(language, 'title').toUpperCase()}
             </Text>
-            <Text style={[sms.hdrTitle, { color: theme.text }]}>
-              {tierName} · {tier.icon}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+              <Text style={[sms.hdrTitle, { color: theme.text }]}>{tierName}</Text>
+              <GameIcon iconKey={tier.icon} size={14} color={heatColor} />
+            </View>
           </View>
           <TouchableOpacity onPress={onClose}
             hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
@@ -430,7 +433,7 @@ const StreakModal = ({ visible, onClose }: { visible: boolean; onClose: () => vo
               // ── NEW USER ──
               <View style={[sms.heroCard, { backgroundColor: '#0A0806', borderColor: brd }]}>
                 <View style={sms.freshIconWrap}>
-                  <Text style={{ fontSize: 56 }}>🌱</Text>
+                  <GameIcon iconKey="plant" size={56} color="#78716C" />
                 </View>
                 <Text style={[sms.heroLabel, { color: heatColor, marginTop: 8 }]}>
                   {tx(language, 'newJourney').toUpperCase()}
@@ -468,7 +471,7 @@ const StreakModal = ({ visible, onClose }: { visible: boolean; onClose: () => vo
                       {streak === 1 ? tx(language, 'day') : tx(language, 'days')}
                     </Text>
                     <View style={[sms.heroBadge, { backgroundColor: tier.color + '20', borderColor: tier.color + '50' }]}>
-                      <Text style={{ fontSize: 9 }}>{tier.icon}</Text>
+                      <GameIcon iconKey={tier.icon} size={11} color={tier.color} />
                       <Text style={[sms.heroBadgeText, { color: tier.color }]}>{tierName.toUpperCase()}</Text>
                     </View>
                   </View>
@@ -483,7 +486,7 @@ const StreakModal = ({ visible, onClose }: { visible: boolean; onClose: () => vo
                           {daysToNext} {tx(language, 'nextTier')}
                         </Text>
                         <View style={sms.milestoneNextBadge}>
-                          <Text style={{ fontSize: 10 }}>{nextTier.icon}</Text>
+                          <GameIcon iconKey={nextTier.icon} size={12} color={nextTier.color} />
                           <Text style={[sms.milestoneNext, { color: nextTier.color }]}>
                             {tx(language, nextTier.key).toUpperCase()}
                           </Text>
@@ -500,7 +503,7 @@ const StreakModal = ({ visible, onClose }: { visible: boolean; onClose: () => vo
                     </>
                   ) : (
                     <View style={sms.maxTierWrap}>
-                      <Text style={{ fontSize: 14 }}>👑</Text>
+                      <GameIcon iconKey="crown" size={16} color="#FFD700" />
                       <Text style={sms.maxTierText}>{tx(language, 'maxTier')}</Text>
                     </View>
                   )}
@@ -618,7 +621,7 @@ const StreakModal = ({ visible, onClose }: { visible: boolean; onClose: () => vo
               }]}
             >
               <View style={sms.bonusIcon}>
-                <Text style={{ fontSize: 20 }}>🎬</Text>
+                <GameIcon iconKey="film" size={22} color={heatColor} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={[sms.bonusText, { color: isRewardedReady ? heatColor : theme.subtext }]}>
