@@ -15,6 +15,7 @@ import { useEventImages } from '../hooks/useEventImages';
 import { useTTS } from '../hooks/useTTS';
 import { useGamificationStore } from '../store/useGamificationStore';
 import { getEventId, useSavedStore } from '../store/useSavedStore';
+import { QuizSection } from './QuizSection';
 import RelatedEvents from './RelatedEvents';
 import { SharePickerModal } from './SharePickerModal';
 
@@ -472,6 +473,9 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
 
               {/* Narrative text */}
               <Paragraphs text={narrative || 'No story available.'} theme={theme} isDark={isDark} />
+
+              {/* Quiz */}
+              <QuizSection eventId={eventId} language={language} theme={theme} isDark={isDark} />
 
               {/* Same year events */}
               <SameYearEvents

@@ -59,6 +59,7 @@ const HistoryCardComponent = ({ event, allEvents = [] }: { event: any; allEvents
   const [storyVisible, setStoryVisible] = useState(false);
   const [sharePickerVisible, setSharePickerVisible] = useState(false);
   const markEventRead = useGamificationStore(s => s.markEventRead);
+  const readEventIds  = useGamificationStore(s => s.readEventIds);
 
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
@@ -84,7 +85,8 @@ const HistoryCardComponent = ({ event, allEvents = [] }: { event: any; allEvents
   const { images } = useEventImages(event);
   const imageUri = images[0];
   const gallery = images;
-  const isPro = !!(event.isPro || event.pro);
+  const isPro  = !!(event.isPro || event.pro);
+  const isRead = readEventIds.has(getEventId(event));
 
   const onPressIn = () => {
     Animated.parallel([
@@ -146,6 +148,15 @@ const HistoryCardComponent = ({ event, allEvents = [] }: { event: any; allEvents
           )}
 
           <View style={[styles.inner, { borderColor: isPremium ? '#D4A84325' : 'rgba(255,255,255,0.08)' }]}>
+            {/* Already Read badge */}
+            {isRead && (
+              <View style={styles.readBadge} pointerEvents="none">
+                <Text style={styles.readBadgeCheck}>✓</Text>
+                <View style={styles.readBadgeSep} />
+                <Text style={styles.readBadgeText}>Already Read</Text>
+              </View>
+            )}
+
             {/* Background image */}
             <Image source={{ uri: imageUri }} style={styles.image} contentFit="cover" transition={650} />
 
@@ -306,6 +317,26 @@ const styles = StyleSheet.create({
   },
   image: { ...StyleSheet.absoluteFillObject },
   gradient: { ...StyleSheet.absoluteFillObject },
+
+  /* ── Already Read badge ── */
+  readBadge: {
+    position: 'absolute',
+    bottom: 74,
+    right: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(0,0,0,0.52)',
+    borderRadius: 20,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.22)',
+    zIndex: 10,
+  },
+  readBadgeCheck: { color: '#4ade80', fontSize: 11, fontWeight: '800' },
+  readBadgeSep: { width: 1, height: 10, backgroundColor: 'rgba(255,255,255,0.25)' },
+  readBadgeText: { color: 'rgba(255,255,255,0.88)', fontSize: 10, fontWeight: '700', letterSpacing: 0.8 },
   innerFrame: {
     position: 'absolute',
     top: 14,

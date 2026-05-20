@@ -27,6 +27,11 @@ export const ENDPOINTS = {
   GAMIFICATION:     '/gamification',
   GAMIFICATION_ALL: '/gamification/all',
 
+  // Quiz
+  QUIZ_BY_EVENT:  '/quizzes/event',   // GET /quizzes/event/{eventId}
+  QUIZ_STATUS:    '/quizzes/status',  // GET /quizzes/status/{eventId}
+  QUIZ_SUBMIT:    '/quizzes/submit',  // POST /quizzes/submit
+
   // Support
   SUPPORT:       '/support',
 } as const;

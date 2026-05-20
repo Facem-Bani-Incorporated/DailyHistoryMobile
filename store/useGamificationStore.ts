@@ -288,9 +288,11 @@ interface GamificationState {
   dailyGoalsCompleted: number; dailyGoalDates: string[];
   weeklyRecaps: Record<string, WeeklyRecap>; currentWeekKey: string | null;
   calendarLog: Record<string, DayLog>; _userId: string | null;
+  readEventIds: Set<string>;
   restoreStreak: () => void;
   recordDailyVisit: () => void;
   markEventRead: (eventId: string, category?: string, year?: string) => void;
+  addQuizXP: (xp: number) => void;
   resetDailyProgress: () => void;
   getStreakStatus: () => { streak: number; longest: number; isActiveToday: boolean };
   getTodayProgress: () => { read: number; total: number };
@@ -316,6 +318,7 @@ const initialState = {
   dailyGoalsCompleted: 0, dailyGoalDates: [] as string[],
   weeklyRecaps: {} as Record<string, WeeklyRecap>, currentWeekKey: null as string | null,
   calendarLog: {} as Record<string, DayLog>, _userId: null as string | null,
+  readEventIds: new Set<string>(),
 };
 
 let _activeUserId: string | null = null;
@@ -383,14 +386,23 @@ restoreStreak: () => set((state) => ({
           xpEarned: (existingDay.xpEarned ?? 0) + xpGained,
         };
 
+        const newReadEventIds = new Set(get().readEventIds);
+        newReadEventIds.add(eventId);
+
         set({
           readEventsToday: updatedDayEvents, readDate: today,
           totalEventsRead: totalEventsRead + 1,
           totalXP: totalXP + xpGained, todayXP: currentDayXP + xpGained, xpDate: today,
           calendarLog: newLog, categoriesRead: newCategoriesRead, categoryCount: newCategoryCount,
           dailyGoalsCompleted: newDailyGoals, dailyGoalDates: newDailyGoalDates,
+          readEventIds: newReadEventIds,
         });
         setTimeout(() => { try { get().checkAchievements(); } catch {} }, 50);
+      },
+
+      addQuizXP: (xp: number) => {
+        const { totalXP, todayXP } = get();
+        set({ totalXP: totalXP + xp, todayXP: todayXP + xp });
       },
 
       resetDailyProgress: () => { const today = todayISO(); if (get().readDate !== today) set({ readEventsToday: [], readDate: today, todayXP: 0, xpDate: today }); },
@@ -527,6 +539,12 @@ restoreStreak: () => set((state) => ({
       onRehydrateStorage: () => (state, error) => {
         if (error || !state) return;
         state.categoriesRead = _ensureSet(state.categoriesRead);
+        // Rebuild readEventIds from calendarLog (not persisted, derived)
+        const allIds = new Set<string>();
+        Object.values(state.calendarLog ?? {}).forEach((day: any) => {
+          if (Array.isArray(day.eventIds)) day.eventIds.forEach((id: string) => allIds.add(id));
+        });
+        state.readEventIds = allIds;
       },
     },
   ),

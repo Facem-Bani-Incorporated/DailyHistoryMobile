@@ -15,6 +15,8 @@ import {
 } from 'react-native';
 
 import { useLanguage } from '../context/LanguageContext';
+import { useGamificationStore } from '../store/useGamificationStore';
+import { getEventId } from '../store/useSavedStore';
 import { StoryModal } from './StoryModal';
 
 const GAP = 8;
@@ -114,6 +116,28 @@ const ProPill = ({ compact }: { compact?: boolean }) => (
   </View>
 );
 
+/* ── Already Read badge — small pill overlay ─ */
+const ReadBadge = () => (
+  <View style={rb.badge} pointerEvents="none">
+    <Text style={rb.check}>✓</Text>
+    <View style={rb.sep} />
+    <Text style={rb.text}>Already Read</Text>
+  </View>
+);
+
+const rb = StyleSheet.create({
+  badge: {
+    position: 'absolute', bottom: 10, right: 10, zIndex: 10,
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: 'rgba(0,0,0,0.52)',
+    borderRadius: 20, paddingHorizontal: 9, paddingVertical: 5,
+    borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.22)',
+  },
+  check: { color: '#4ade80', fontSize: 10, fontWeight: '800' },
+  sep:   { width: 1, height: 9, backgroundColor: 'rgba(255,255,255,0.25)' },
+  text:  { color: 'rgba(255,255,255,0.88)', fontSize: 9, fontWeight: '700', letterSpacing: 0.8 },
+});
+
 /* ═══════════════════════════════════════════
    MASTHEAD — Magazine-style header with
    hairline rules and Roman-numeral issue no.
@@ -145,8 +169,8 @@ const Masthead = ({ issue, count, theme, t }: {
    lede line, hairline CTA
    ═══════════════════════════════════════════ */
 const HeroCard = ({
-  event, lang, number, onPress, height,
-}: { event: any; lang: string; number: number; onPress: () => void; height: number }) => {
+  event, lang, number, onPress, height, isRead,
+}: { event: any; lang: string; number: number; onPress: () => void; height: number; isRead?: boolean }) => {
   const title = event.titleTranslations?.[lang] ?? event.titleTranslations?.en ?? '';
   const narrative = event.narrativeTranslations?.[lang] ?? event.narrativeTranslations?.en ?? '';
   const category = (event.category ?? 'HISTORY').replace(/_/g, ' ');
@@ -167,6 +191,8 @@ const HeroCard = ({
 
       {/* Inner hairline frame — a touch of editorial polish */}
       <View style={st.heroInnerFrame} pointerEvents="none" />
+
+      {isRead && <ReadBadge />}
 
       {/* Top bar */}
       <View style={st.heroTopBar}>
@@ -219,8 +245,8 @@ const HeroCard = ({
    hairline CTA. Article-style composition.
    ═══════════════════════════════════════════ */
 const EditorialCard = ({
-  event, lang, number, onPress, height,
-}: { event: any; lang: string; number: number; onPress: () => void; height: number }) => {
+  event, lang, number, onPress, height, isRead,
+}: { event: any; lang: string; number: number; onPress: () => void; height: number; isRead?: boolean }) => {
   const title = event.titleTranslations?.[lang] ?? event.titleTranslations?.en ?? '';
   const category = (event.category ?? 'HISTORY').replace(/_/g, ' ');
   const year = extractYear(event);
@@ -246,6 +272,8 @@ const EditorialCard = ({
           </View>
         )}
       </View>
+
+      {isRead && <ReadBadge />}
 
       {/* Right editorial body */}
       <View style={st.editBody}>
@@ -280,8 +308,8 @@ const EditorialCard = ({
    editorial bottom with category, title, year
    ═══════════════════════════════════════════ */
 const CuratedCard = ({
-  event, lang, number, onPress, width, height,
-}: { event: any; lang: string; number: number; onPress: () => void; width: number; height: number }) => {
+  event, lang, number, onPress, width, height, isRead,
+}: { event: any; lang: string; number: number; onPress: () => void; width: number; height: number; isRead?: boolean }) => {
   const title = event.titleTranslations?.[lang] ?? event.titleTranslations?.en ?? '';
   const category = (event.category ?? 'HISTORY').replace(/_/g, ' ');
   const year = extractYear(event);
@@ -310,6 +338,8 @@ const CuratedCard = ({
         </View>
       )}
 
+      {isRead && <ReadBadge />}
+
       {/* Bottom */}
       <View style={st.curBot}>
         <Text style={[st.curCat, { color: accent }]}>{category}</Text>
@@ -330,8 +360,8 @@ const CuratedCard = ({
    Image left 40%, editorial text right 60%
    ═══════════════════════════════════════════ */
 const ExtrasWideCard = ({
-  event, lang, onPress,
-}: { event: any; lang: string; onPress: () => void }) => {
+  event, lang, onPress, isRead,
+}: { event: any; lang: string; onPress: () => void; isRead?: boolean }) => {
   const title = event.titleTranslations?.[lang] ?? event.titleTranslations?.en ?? '';
   const narrative = event.narrativeTranslations?.[lang] ?? event.narrativeTranslations?.en ?? '';
   const category = (event.category ?? 'HISTORY').replace(/_/g, ' ');
@@ -360,6 +390,7 @@ const ExtrasWideCard = ({
           </View>
         )}
       </View>
+      {isRead && <ReadBadge />}
       <View style={ew.body}>
         <View style={ew.catRow}>
           <View style={[ew.catDot, { backgroundColor: accent }]} />
@@ -417,8 +448,8 @@ const ew = StyleSheet.create({
    Image top 55%, editorial text bottom 45%
    ═══════════════════════════════════════════ */
 const ExtrasTileCard = ({
-  event, lang, onPress, width,
-}: { event: any; lang: string; onPress: () => void; width: number }) => {
+  event, lang, onPress, width, isRead,
+}: { event: any; lang: string; onPress: () => void; width: number; isRead?: boolean }) => {
   const title = event.titleTranslations?.[lang] ?? event.titleTranslations?.en ?? '';
   const category = (event.category ?? 'HISTORY').replace(/_/g, ' ');
   const year = extractYear(event);
@@ -446,6 +477,7 @@ const ExtrasTileCard = ({
         )}
         {year !== '' && <Text style={et.yearOverlay}>{year}</Text>}
       </View>
+      {isRead && <ReadBadge />}
       <View style={et.body}>
         <Text style={et.title} numberOfLines={2}>{title}</Text>
         <View style={et.ctaRow}>
@@ -495,8 +527,8 @@ const et = StyleSheet.create({
    Groups: [wide] + [tile, tile] repeating
    ═══════════════════════════════════════════ */
 const ExtrasGrid = ({
-  extras, lang, cW, handleSelect,
-}: { extras: any[]; lang: string; cW: number; handleSelect: (e: any) => void }) => {
+  extras, lang, cW, handleSelect, readIds,
+}: { extras: any[]; lang: string; cW: number; handleSelect: (e: any) => void; readIds: Set<string> }) => {
   const TILE_GAP = 8;
   const tileW = Math.floor((cW - TILE_GAP) / 2);
 
@@ -522,11 +554,11 @@ const ExtrasGrid = ({
       {groups.map((group, gi) => (
         <AnimatedCard key={gi} delay={Math.min(60 + gi * 50, 350)} style={{ marginBottom: TILE_GAP }}>
           {group.type === 'wide' ? (
-            <ExtrasWideCard event={group.event} lang={lang} onPress={() => handleSelect(group.event)} />
+            <ExtrasWideCard event={group.event} lang={lang} onPress={() => handleSelect(group.event)} isRead={readIds.has(getEventId(group.event))} />
           ) : (
             <View style={{ flexDirection: 'row', gap: TILE_GAP }}>
-              <ExtrasTileCard event={group.events[0]} lang={lang} onPress={() => handleSelect(group.events[0])} width={tileW} />
-              <ExtrasTileCard event={group.events[1]} lang={lang} onPress={() => handleSelect(group.events[1])} width={tileW} />
+              <ExtrasTileCard event={group.events[0]} lang={lang} onPress={() => handleSelect(group.events[0])} width={tileW} isRead={readIds.has(getEventId(group.events[0]))} />
+              <ExtrasTileCard event={group.events[1]} lang={lang} onPress={() => handleSelect(group.events[1])} width={tileW} isRead={readIds.has(getEventId(group.events[1]))} />
             </View>
           )}
         </AnimatedCard>
@@ -558,9 +590,11 @@ const ExtrasGrid = ({
    ═══════════════════════════════════════════ */
 export const DiscoverSection = ({ events, theme, t, isPro = true, onPaywall }: DiscoverSectionProps) => {
   const { language } = useLanguage();
+  const readEventIds = useGamificationStore(s => s.readEventIds);
   const [selected, setSelected] = useState<any>(null);
   const [cW, setCW] = useState(0);
   const [cH, setCH] = useState(0);
+  const isRead = (event: any) => readEventIds.has(getEventId(event));
 
   const secondary = events.length > 1 ? events.slice(1, 5) : [];
   const extras = events.length > 5 ? events.slice(5) : [];
@@ -633,6 +667,7 @@ export const DiscoverSection = ({ events, theme, t, isPro = true, onPaywall }: D
                 number={1}
                 onPress={() => handleSelect(hero)}
                 height={heroH}
+                isRead={isRead(hero)}
               />
             </AnimatedCard>
 
@@ -644,6 +679,7 @@ export const DiscoverSection = ({ events, theme, t, isPro = true, onPaywall }: D
                   number={2}
                   onPress={() => handleSelect(rest[0])}
                   height={editH}
+                  isRead={isRead(rest[0])}
                 />
               </AnimatedCard>
             )}
@@ -658,6 +694,7 @@ export const DiscoverSection = ({ events, theme, t, isPro = true, onPaywall }: D
                     onPress={() => handleSelect(rest[1])}
                     width={mosaicLeftW}
                     height={mosaicH}
+                    isRead={isRead(rest[1])}
                   />
                 </AnimatedCard>
                 <AnimatedCard delay={440} style={{ width: mosaicRightW }}>
@@ -668,6 +705,7 @@ export const DiscoverSection = ({ events, theme, t, isPro = true, onPaywall }: D
                     onPress={() => handleSelect(rest[2])}
                     width={mosaicRightW}
                     height={mosaicH}
+                    isRead={isRead(rest[2])}
                   />
                 </AnimatedCard>
               </View>
@@ -682,6 +720,7 @@ export const DiscoverSection = ({ events, theme, t, isPro = true, onPaywall }: D
                   onPress={() => handleSelect(rest[1])}
                   width={cW}
                   height={Math.floor(usable * 0.32)}
+                  isRead={isRead(rest[1])}
                 />
               </AnimatedCard>
             )}
@@ -702,7 +741,7 @@ export const DiscoverSection = ({ events, theme, t, isPro = true, onPaywall }: D
                   <View style={[st.extrasLine, { backgroundColor: theme.gold + '35' }]} />
                 </View>
 
-                <ExtrasGrid extras={extras} lang={language} cW={cW} handleSelect={handleSelect} />
+                <ExtrasGrid extras={extras} lang={language} cW={cW} handleSelect={handleSelect} readIds={readEventIds} />
               </View>
             )}
           </>

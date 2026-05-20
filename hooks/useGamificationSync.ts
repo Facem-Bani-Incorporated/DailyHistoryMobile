@@ -116,14 +116,28 @@ function hydrateFromServer(dto: GamificationSyncDTO, userId: string) {
   }
 
   try {
-    const serverEvents = Array.isArray(blob.savedEventsData) ? blob.savedEventsData : [];
     const perUser = useSavedStore.getState()._perUser;
-    useSavedStore.setState({
-      _perUser: { ...perUser, [userId]: serverEvents },
-      savedEvents: serverEvents,
-      isLoading: false,
-    });
-    if (__DEV__) console.log('[GamSync] restored savedEvents from server:', serverEvents.length);
+    const localEvents = perUser[userId] ?? [];
+    const serverEvents: any[] | null = Array.isArray(blob.savedEventsData) && blob.savedEventsData.length > 0
+      ? blob.savedEventsData
+      : null;
+
+    if (serverEvents !== null) {
+      // Server has data → it's the source of truth (handles cross-device sync)
+      useSavedStore.setState({
+        _perUser: { ...perUser, [userId]: serverEvents },
+        savedEvents: serverEvents,
+        isLoading: false,
+      });
+      if (__DEV__) console.log('[GamSync] restored savedEvents from server:', serverEvents.length);
+    } else {
+      // Server returned nothing → keep local events, push them to server
+      useSavedStore.setState({ isLoading: false });
+      if (__DEV__) console.log('[GamSync] no savedEvents on server, keeping local:', localEvents.length);
+      if (localEvents.length > 0) {
+        setTimeout(() => pushToServer().catch(() => {}), 1000);
+      }
+    }
   } catch (e) {
     console.warn('[GamSync] savedEvents hydrate error:', e);
     useSavedStore.setState({ isLoading: false });
