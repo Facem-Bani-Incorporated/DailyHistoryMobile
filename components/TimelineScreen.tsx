@@ -1,13 +1,15 @@
 // components/TimelineScreen.tsx
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Clock, Sparkles } from 'lucide-react-native';
+import { BrainCircuit, Clock, Crown, Lock, Search, Sparkles, Users, X } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Dimensions,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -20,8 +22,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
+import { useRevenueCat } from '../context/RevenueCatContext';
 import { haptic } from '../utils/haptics';
+import { useGamificationStore } from '../store/useGamificationStore';
 import { StoryModal } from './StoryModal';
+import TimelineQuizModal from './TimelineQuizModal';
+import HistoricalFiguresModal from './HistoricalFiguresModal';
 
 const { width: W, height: H } = Dimensions.get('window');
 const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
@@ -40,6 +46,8 @@ const SPINE_X     = 52;
 const YEAR_W      = 62;
 const YEAR_H      = 26;
 const HEADER_H    = 56;
+const QUIZ_BANNER_H     = 88;
+const QUIZ_BANNER_TOTAL = QUIZ_BANNER_H + ITEM_GAP;
 
 // ── Category system ────────────────────────────────────────────────────────
 const CAT: Record<string, { color: string; tag: string; tKey: string }> = {
@@ -58,23 +66,46 @@ const getCat = (c?: string) => CAT[(c ?? '').toLowerCase()] ?? DEF_CAT;
 // ── Local translations ─────────────────────────────────────────────────────
 type TKeys = 'events' | 'event' | 'centuries' | 'century' |
              'empty_title' | 'empty_desc' | 'ancient' | 'chapter' |
-             'bc' | 'of' | 'jump_top';
+             'bc' | 'of' | 'jump_top' |
+             'quiz' | 'era_ancient' | 'era_medieval' | 'era_renaissance' | 'era_industrial' | 'era_modern' |
+             'search_placeholder' | 'all_eras' |
+             'quiz_start' | 'quiz_hint' | 'quiz_done' | 'quiz_done_hint';
 const TL: Record<string, Record<TKeys, string>> = {
   en: { events: 'events', event: 'event', centuries: 'centuries', century: 'century',
         empty_title: 'Your timeline awaits', empty_desc: 'Events you explore will be woven into history here.',
-        ancient: 'Ancient Era', chapter: 'Chapter', bc: 'BC', of: 'of', jump_top: 'Back to start' },
+        ancient: 'Ancient Era', chapter: 'Chapter', bc: 'BC', of: 'of', jump_top: 'Back to start',
+        quiz: 'Quiz', era_ancient: 'Ancient', era_medieval: 'Medieval', era_renaissance: 'Renaissance',
+        era_industrial: 'Industrial', era_modern: 'Modern', search_placeholder: 'Search people & events…', all_eras: 'All',
+        quiz_start: 'Daily History Quiz', quiz_hint: '5 questions · Earn XP · Updated daily',
+        quiz_done: 'Completed Today ✓', quiz_done_hint: 'Come back tomorrow for a new quiz!' },
   ro: { events: 'evenimente', event: 'eveniment', centuries: 'secole', century: 'secol',
         empty_title: 'Cronologia te așteaptă', empty_desc: 'Evenimentele pe care le explorezi vor fi adăugate aici.',
-        ancient: 'Era Antică', chapter: 'Capitolul', bc: 'î.Hr.', of: 'din', jump_top: 'Sus' },
+        ancient: 'Era Antică', chapter: 'Capitolul', bc: 'î.Hr.', of: 'din', jump_top: 'Sus',
+        quiz: 'Quiz', era_ancient: 'Antic', era_medieval: 'Medieval', era_renaissance: 'Renaștere',
+        era_industrial: 'Industrial', era_modern: 'Modern', search_placeholder: 'Caută persoane & evenimente…', all_eras: 'Toate',
+        quiz_start: 'Quiz Zilnic de Istorie', quiz_hint: '5 întrebări · Câștigă XP · Zilnic',
+        quiz_done: 'Completat Azi ✓', quiz_done_hint: 'Revino mâine pentru un quiz nou!' },
   fr: { events: 'événements', event: 'événement', centuries: 'siècles', century: 'siècle',
         empty_title: 'Votre chronologie attend', empty_desc: 'Les événements que vous explorez apparaîtront ici.',
-        ancient: 'Ère Ancienne', chapter: 'Chapitre', bc: 'av. J.-C.', of: 'de', jump_top: 'Haut' },
+        ancient: 'Ère Ancienne', chapter: 'Chapitre', bc: 'av. J.-C.', of: 'de', jump_top: 'Haut',
+        quiz: 'Quiz', era_ancient: 'Antique', era_medieval: 'Médiéval', era_renaissance: 'Renaissance',
+        era_industrial: 'Industriel', era_modern: 'Moderne', search_placeholder: 'Rechercher…', all_eras: 'Tous',
+        quiz_start: 'Quiz Historique Quotidien', quiz_hint: '5 questions · Gagnez des XP',
+        quiz_done: 'Complété Aujourd\'hui ✓', quiz_done_hint: 'Revenez demain !' },
   de: { events: 'Ereignisse', event: 'Ereignis', centuries: 'Jahrhunderte', century: 'Jahrhundert',
         empty_title: 'Deine Zeitleiste wartet', empty_desc: 'Erkundete Ereignisse erscheinen hier in der Geschichte.',
-        ancient: 'Antike', chapter: 'Kapitel', bc: 'v. Chr.', of: 'von', jump_top: 'Nach oben' },
+        ancient: 'Antike', chapter: 'Kapitel', bc: 'v. Chr.', of: 'von', jump_top: 'Nach oben',
+        quiz: 'Quiz', era_ancient: 'Antike', era_medieval: 'Mittelalter', era_renaissance: 'Renaissance',
+        era_industrial: 'Industriell', era_modern: 'Modern', search_placeholder: 'Suchen…', all_eras: 'Alle',
+        quiz_start: 'Tägliches Geschichtsquiz', quiz_hint: '5 Fragen · XP verdienen · Täglich',
+        quiz_done: 'Heute Abgeschlossen ✓', quiz_done_hint: 'Komm morgen wieder!' },
   es: { events: 'eventos', event: 'evento', centuries: 'siglos', century: 'siglo',
         empty_title: 'Tu cronología espera', empty_desc: 'Los eventos que explores aparecerán aquí.',
-        ancient: 'Era Antigua', chapter: 'Capítulo', bc: 'a.C.', of: 'de', jump_top: 'Arriba' },
+        ancient: 'Era Antigua', chapter: 'Capítulo', bc: 'a.C.', of: 'de', jump_top: 'Arriba',
+        quiz: 'Quiz', era_ancient: 'Antiguo', era_medieval: 'Medieval', era_renaissance: 'Renacimiento',
+        era_industrial: 'Industrial', era_modern: 'Moderno', search_placeholder: 'Buscar…', all_eras: 'Todos',
+        quiz_start: 'Quiz Histórico Diario', quiz_hint: '5 preguntas · Gana XP · Diario',
+        quiz_done: 'Completado Hoy ✓', quiz_done_hint: '¡Vuelve mañana para un nuevo quiz!' },
 };
 const tl = (lang: string, k: TKeys) => (TL[lang] ?? TL.en)[k] ?? TL.en[k];
 
@@ -122,11 +153,22 @@ const centuryRange = (century: number): string => {
   return `${start}–${end}`;
 };
 
+// ── Era filter ranges ────────────────────────────────────────────────────────
+type EraFilter = null | 'ancient' | 'medieval' | 'renaissance' | 'industrial' | 'modern';
+const ERA_RANGES: Record<Exclude<EraFilter, null>, [number, number]> = {
+  ancient:     [-9999,  500],
+  medieval:    [  500, 1500],
+  renaissance: [ 1500, 1800],
+  industrial:  [ 1800, 1950],
+  modern:      [ 1950, 9999],
+};
+
 // ── Types ───────────────────────────────────────────────────────────────────
 type TItem =
-  | { k: 'era'; century: number; count: number; y: number; h: number }
-  | { k: 'ev';  event: any;      y: number; h: number };
-interface Props { allEvents: any[] }
+  | { k: 'era';  century: number; count: number; y: number; h: number }
+  | { k: 'ev';   event: any;      y: number; h: number }
+  | { k: 'quiz'; y: number; h: number };
+interface Props { allEvents: any[]; onInterstitial?: () => void; }
 
 // ══════════════════════════════════════════════════════════════════════════════
 // EVENT ROW — no per-frame worklets, fully static styling
@@ -236,6 +278,127 @@ const rs = StyleSheet.create({
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
+// PRO LOCKED ROW — shown in place of PRO events for free users
+// ══════════════════════════════════════════════════════════════════════════════
+const ProLockedRow = React.memo(({
+  event, theme, isDark, language, onUnlock,
+}: {
+  event: any; theme: any; isDark: boolean; language: string; onUnlock: () => void;
+}) => {
+  const year = extractYear(event);
+  const yearStr = formatYear(year, language);
+  const { color: cc } = getCat(event.category);
+  const gold = '#D97706';
+
+  return (
+    <View style={[rs.row, { height: ITEM_H, marginBottom: ITEM_GAP }]}>
+      <View style={[rs.spineLine, { backgroundColor: theme.border, left: SPINE_X - 0.75 }]} />
+      <View style={[rs.yearWrap, {
+        left: SPINE_X - YEAR_W / 2,
+        backgroundColor: isDark ? '#15130F' : '#FFFFFF',
+        borderColor: gold + '55',
+      }]}>
+        <View style={[rs.yearAccent, { backgroundColor: gold }]} />
+        <Text style={[rs.yearText, { color: gold, fontSize: yearStr.length > 5 ? 10 : 12 }]} numberOfLines={1}>
+          {yearStr}
+        </Text>
+      </View>
+      <View style={[rs.conn, { backgroundColor: gold + '30', left: SPINE_X + YEAR_W / 2 - 2 }]} />
+      <View style={[rs.cardWrap, { left: SPINE_X + YEAR_W / 2 + 14 }]}>
+        <TouchableOpacity onPress={() => { haptic('medium'); onUnlock(); }} activeOpacity={0.82} style={rs.cardTouch}>
+          <View style={[rs.card, {
+            backgroundColor: isDark ? '#1A1510' : '#FDF9F0',
+            borderColor: gold + '40',
+            shadowColor: gold,
+          }]}>
+            <View style={[rs.imgBox, { backgroundColor: gold + '15', alignItems: 'center', justifyContent: 'center' }]}>
+              <Lock size={22} color={gold} strokeWidth={2} />
+            </View>
+            <View style={rs.body}>
+              <View style={[prl.badge, { backgroundColor: gold + '18' }]}>
+                <Crown size={9} color={gold} strokeWidth={2.5} />
+                <Text style={[prl.badgeText, { color: gold }]}>PRO</Text>
+              </View>
+              <Text style={[rs.title, { color: theme.subtext, opacity: 0.55 }]} numberOfLines={2}>
+                {event.titleTranslations?.[language] ?? event.titleTranslations?.en ?? ''}
+              </Text>
+            </View>
+            <View style={[rs.sideBar, { backgroundColor: gold }]} />
+          </View>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+});
+
+const prl = StyleSheet.create({
+  badge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6, alignSelf: 'flex-start' },
+  badgeText: { fontSize: 9, fontWeight: '900', letterSpacing: 1 },
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// QUIZ BANNER — prominent daily quiz call-to-action
+// ══════════════════════════════════════════════════════════════════════════════
+const QuizBanner = React.memo(({
+  gold, isDark, theme, language, doneToday, onPress,
+}: {
+  gold: string; isDark: boolean; theme: any; language: string;
+  doneToday: boolean; onPress: () => void;
+}) => {
+  if (doneToday) {
+    return (
+      <View style={[qb.wrap, { backgroundColor: isDark ? '#0A1F0A' : '#F0FDF4', borderColor: '#10B98130' }]}>
+        <View style={[qb.iconBox, { backgroundColor: '#10B98115', borderColor: '#10B98130' }]}>
+          <BrainCircuit size={22} color="#10B981" strokeWidth={2} />
+        </View>
+        <View style={qb.texts}>
+          <Text style={[qb.title, { color: '#10B981' }]}>{tl(language, 'quiz_done')}</Text>
+          <Text style={[qb.sub, { color: theme.subtext }]}>{tl(language, 'quiz_done_hint')}</Text>
+        </View>
+      </View>
+    );
+  }
+  return (
+    <TouchableOpacity onPress={onPress} activeOpacity={0.82}
+      style={[qb.wrap, { backgroundColor: isDark ? '#140F06' : '#FFFBF0', borderColor: gold + '45' }]}>
+      <LinearGradient colors={[gold + '18', 'transparent']}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+        style={StyleSheet.absoluteFill} pointerEvents="none" />
+      <View style={[qb.iconBox, { backgroundColor: gold + '18', borderColor: gold + '35' }]}>
+        <BrainCircuit size={24} color={gold} strokeWidth={2} />
+      </View>
+      <View style={qb.texts}>
+        <Text style={[qb.title, { color: theme.text }]}>{tl(language, 'quiz_start')}</Text>
+        <Text style={[qb.sub, { color: theme.subtext }]}>{tl(language, 'quiz_hint')}</Text>
+      </View>
+      <View style={[qb.badge, { backgroundColor: gold }]}>
+        <Text style={qb.badgeText}>START</Text>
+      </View>
+    </TouchableOpacity>
+  );
+});
+
+const qb = StyleSheet.create({
+  wrap: {
+    height: QUIZ_BANNER_H, borderRadius: 18, borderWidth: 1,
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    paddingHorizontal: 16, marginBottom: ITEM_GAP, overflow: 'hidden',
+  },
+  iconBox: {
+    width: 52, height: 52, borderRadius: 15, borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+  },
+  texts: { flex: 1, gap: 4 },
+  title: { fontSize: 15, fontWeight: '800', letterSpacing: -0.2, fontFamily: SERIF },
+  sub: { fontSize: 11.5, fontWeight: '500', opacity: 0.65, letterSpacing: 0.1 },
+  badge: {
+    paddingHorizontal: 12, paddingVertical: 7, borderRadius: 11,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  badgeText: { fontSize: 10, fontWeight: '900', color: '#000', letterSpacing: 1.2 },
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
 // ERA ROW — static, no per-frame worklets
 // ══════════════════════════════════════════════════════════════════════════════
 const EraRow = React.memo(({
@@ -334,17 +497,51 @@ const es = StyleSheet.create({
 // ══════════════════════════════════════════════════════════════════════════════
 // MAIN
 // ══════════════════════════════════════════════════════════════════════════════
-export default function TimelineScreen({ allEvents }: Props) {
+export default function TimelineScreen({ allEvents, onInterstitial }: Props) {
   const { theme, isDark, isPremium } = useTheme();
   const { language, t } = useLanguage();
+  const { isPro, presentPaywall } = useRevenueCat();
   const insets = useSafeAreaInsets();
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
+  const [quizVisible, setQuizVisible] = useState(false);
+  const [figuresVisible, setFiguresVisible] = useState(false);
+  const [eraFilter, setEraFilter] = useState<EraFilter>(null);
+  const [personSearch, setPersonSearch] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
   const scrollY = useSharedValue(0);
   const gold = isPremium ? '#D4A843' : (theme.gold ?? '#C77E08');
+  const quizDate = useGamificationStore(s => s.quizDate);
+  const quizDoneToday = quizDate === new Date().toISOString().split('T')[0];
+
+  // Fire interstitial once, right after the quiz is completed (not re-triggered on re-mount)
+  const prevQuizDone = useRef(quizDoneToday);
+  useEffect(() => {
+    if (quizDoneToday && !prevQuizDone.current) {
+      onInterstitial?.();
+    }
+    prevQuizDone.current = quizDoneToday;
+  }, [quizDoneToday]);
+
+  const filteredEvents = useMemo(() => {
+    let evs = allEvents;
+    if (eraFilter) {
+      const [lo, hi] = ERA_RANGES[eraFilter];
+      evs = evs.filter(e => { const y = extractYear(e); return y >= lo && y <= hi; });
+    }
+    if (personSearch.trim().length >= 2) {
+      const q = personSearch.toLowerCase();
+      evs = evs.filter(e => {
+        const title = (e.titleTranslations?.[language] ?? e.titleTranslations?.en ?? '').toLowerCase();
+        const summary = (e.summaryTranslations?.[language] ?? e.summaryTranslations?.en ?? '').toLowerCase();
+        return title.includes(q) || summary.includes(q);
+      });
+    }
+    return evs;
+  }, [allEvents, eraFilter, personSearch, language]);
 
   // Build items with pre-computed Y offsets
   const { items, nEvents, nEras, totalHeight, yearRange } = useMemo(() => {
-    const sorted = allEvents.filter(x => extractYear(x) !== 0).sort((a, b) => extractYear(a) - extractYear(b));
+    const sorted = filteredEvents.filter(x => extractYear(x) !== 0).sort((a, b) => extractYear(a) - extractYear(b));
     const out: TItem[] = [];
     let lastC = -Infinity, y = 0, eras = 0;
     const cc = new Map<number, number>();
@@ -367,8 +564,10 @@ export default function TimelineScreen({ allEvents }: Props) {
     }
     const first = sorted.length ? extractYear(sorted[0]) : 0;
     const last  = sorted.length ? extractYear(sorted[sorted.length - 1]) : 0;
-    return { items: out, nEvents: sorted.length, nEras: eras, totalHeight: y, yearRange: { first, last } };
-  }, [allEvents]);
+    const quizItem: TItem = { k: 'quiz', y: 0, h: QUIZ_BANNER_H };
+  const allItems: TItem[] = [quizItem, ...out.map(item => ({ ...item, y: item.y + QUIZ_BANNER_TOTAL }))];
+  return { items: allItems, nEvents: sorted.length, nEras: eras, totalHeight: y + QUIZ_BANNER_TOTAL, yearRange: { first, last } };
+  }, [filteredEvents]);
 
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (ev) => { scrollY.value = ev.contentOffset.y; },
@@ -404,6 +603,18 @@ export default function TimelineScreen({ allEvents }: Props) {
 
   // renderItem passes stable `press` ref — EvRow/EraRow React.memo works correctly
   const renderItem = useCallback(({ item }: { item: TItem }) => {
+    if (item.k === 'quiz') {
+      return (
+        <QuizBanner
+          gold={gold}
+          isDark={isDark}
+          theme={theme}
+          language={language}
+          doneToday={quizDoneToday}
+          onPress={() => { haptic('medium'); setQuizVisible(true); }}
+        />
+      );
+    }
     if (item.k === 'era') {
       return (
         <EraRow
@@ -416,6 +627,18 @@ export default function TimelineScreen({ allEvents }: Props) {
         />
       );
     }
+    const eventIsPro = !!(item.event?.isPro || item.event?.is_pro);
+    if (eventIsPro && !isPro) {
+      return (
+        <ProLockedRow
+          event={item.event}
+          theme={theme}
+          isDark={isDark}
+          language={language}
+          onUnlock={presentPaywall}
+        />
+      );
+    }
     return (
       <EvRow
         event={item.event}
@@ -425,7 +648,7 @@ export default function TimelineScreen({ allEvents }: Props) {
         onPress={press}
       />
     );
-  }, [theme, isDark, language, gold, press]);
+  }, [theme, isDark, language, gold, press, quizDoneToday, isPro, presentPaywall]);
 
   const getLayout = useCallback((_: any, i: number) => {
     const item = items[i];
@@ -434,6 +657,7 @@ export default function TimelineScreen({ allEvents }: Props) {
   }, [items]);
 
   const keyEx = useCallback((item: TItem, i: number) =>
+    item.k === 'quiz' ? 'quiz-banner' :
     item.k === 'era' ? `e${item.century}` : `v${i}-${extractYear(item.event)}`, []);
 
   return (
@@ -444,7 +668,7 @@ export default function TimelineScreen({ allEvents }: Props) {
       <View style={[m.hdrWrap, { paddingTop: insets.top }]}>
         <LinearGradient
           colors={[theme.background, theme.background + 'F0', theme.background + '00']}
-          style={[StyleSheet.absoluteFill, { height: insets.top + HEADER_H + 20 }]}
+          style={[StyleSheet.absoluteFill, { height: insets.top + HEADER_H + 80 }]}
           pointerEvents="none"
         />
         <View style={m.hdr}>
@@ -460,12 +684,77 @@ export default function TimelineScreen({ allEvents }: Props) {
             </View>
           </View>
 
-          {displayCentury !== 0 && (
-            <View style={[m.eraBadge, { backgroundColor: gold + '14', borderColor: gold + '30' }]}>
-              <Text style={[m.eraBadgeText, { color: gold }]}>{toRoman(Math.abs(displayCentury))}</Text>
-            </View>
-          )}
+          <View style={m.hdrActions}>
+            <TouchableOpacity
+              onPress={() => { haptic('medium'); isPro ? setFiguresVisible(true) : presentPaywall(); }}
+              style={[m.hdrBtn, { backgroundColor: isDark ? '#1C1917' : '#F5F5F4', borderColor: isPro ? 'transparent' : '#D97706' + '40' }]}
+            >
+              {isPro
+                ? <Users size={15} color={theme.subtext} strokeWidth={2.2} />
+                : <Crown size={15} color="#D97706" strokeWidth={2.2} />}
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => { haptic('light'); setSearchOpen(v => !v); if (searchOpen) setPersonSearch(''); }}
+              style={[m.hdrBtn, { backgroundColor: searchOpen ? gold + '18' : (isDark ? '#1C1917' : '#F5F5F4'), borderColor: searchOpen ? gold + '50' : 'transparent' }]}
+            >
+              {searchOpen
+                ? <X size={15} color={gold} strokeWidth={2.5} />
+                : <Search size={15} color={theme.subtext} strokeWidth={2.2} />
+              }
+            </TouchableOpacity>
+            {displayCentury !== 0 && !searchOpen && (
+              <View style={[m.eraBadge, { backgroundColor: gold + '14', borderColor: gold + '30' }]}>
+                <Text style={[m.eraBadgeText, { color: gold }]}>{toRoman(Math.abs(displayCentury))}</Text>
+              </View>
+            )}
+          </View>
         </View>
+
+        {/* Search input */}
+        {searchOpen && (
+          <View style={[m.searchRow, { backgroundColor: isDark ? '#1C1917' : '#F5F5F4', borderColor: isDark ? '#292524' : '#E5E5E5' }]}>
+            <Search size={13} color={theme.subtext} strokeWidth={2} style={{ opacity: 0.5 }} />
+            <TextInput
+              autoFocus
+              value={personSearch}
+              onChangeText={setPersonSearch}
+              placeholder={tl(language, 'search_placeholder')}
+              placeholderTextColor={theme.subtext + '70'}
+              style={[m.searchInput, { color: theme.text }]}
+            />
+            {personSearch.length > 0 && (
+              <TouchableOpacity onPress={() => setPersonSearch('')}>
+                <X size={13} color={theme.subtext} strokeWidth={2} />
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        {/* Era filter chips */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={m.eraChips}
+          style={m.eraChipsRow}
+        >
+          {([null, 'ancient', 'medieval', 'renaissance', 'industrial', 'modern'] as EraFilter[]).map(era => {
+            const active = eraFilter === era;
+            const label = era ? tl(language, `era_${era}` as TKeys) : tl(language, 'all_eras');
+            return (
+              <TouchableOpacity
+                key={era ?? 'all'}
+                onPress={() => { haptic('selection'); setEraFilter(era); }}
+                style={[m.eraChip, {
+                  backgroundColor: active ? gold + '20' : 'transparent',
+                  borderColor: active ? gold + '60' : (isDark ? '#2A2825' : '#E5E5E5'),
+                }]}
+              >
+                <Text style={[m.eraChipText, { color: active ? gold : theme.subtext }]}>{label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
         <View style={[m.sep, { backgroundColor: theme.border }]} />
       </View>
 
@@ -519,7 +808,7 @@ export default function TimelineScreen({ allEvents }: Props) {
             scrollEventThrottle={16}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{
-              paddingTop: insets.top + HEADER_H + 16,
+              paddingTop: insets.top + HEADER_H + 72,
               paddingBottom: insets.bottom + 60,
               paddingRight: 24,
             }}
@@ -533,6 +822,8 @@ export default function TimelineScreen({ allEvents }: Props) {
       )}
 
       <StoryModal visible={!!selectedEvent} event={selectedEvent} onClose={() => setSelectedEvent(null)} theme={theme} />
+      <TimelineQuizModal visible={quizVisible} onClose={() => setQuizVisible(false)} allEvents={allEvents} />
+      <HistoricalFiguresModal visible={figuresVisible} onClose={() => setFiguresVisible(false)} allEvents={allEvents} />
     </View>
   );
 }
@@ -546,6 +837,11 @@ const m = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
   },
   hdrLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  hdrActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  hdrBtn: {
+    width: 32, height: 32, borderRadius: 10, borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center',
+  },
   hdrIcon: {
     width: 32, height: 32, borderRadius: 10, borderWidth: 1,
     alignItems: 'center', justifyContent: 'center',
@@ -558,6 +854,21 @@ const m = StyleSheet.create({
   },
   eraBadgeText: { fontSize: 12, fontWeight: '900', letterSpacing: 0.5, fontFamily: SERIF },
   sep: { height: StyleSheet.hairlineWidth, opacity: 0.6 },
+
+  searchRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    marginHorizontal: 20, marginBottom: 8,
+    paddingHorizontal: 12, paddingVertical: 10,
+    borderRadius: 12, borderWidth: 1,
+  },
+  searchInput: { flex: 1, fontSize: 13, fontWeight: '500', paddingVertical: 0 },
+
+  eraChipsRow: { marginBottom: 8 },
+  eraChips: { paddingHorizontal: 20, gap: 6, flexDirection: 'row', alignItems: 'center' },
+  eraChip: {
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1,
+  },
+  eraChipText: { fontSize: 10.5, fontWeight: '700', letterSpacing: 0.3 },
 
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 40 },
   emptyRing: {

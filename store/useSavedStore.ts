@@ -29,15 +29,30 @@ const getUserId = (): string => {
 };
 
 // ── Types ────────────────────────────────────────────────
+export interface Collection {
+  id: string;
+  name: string;
+  emoji: string;
+  eventIds: string[];
+  createdAt: number;
+}
+
 interface SavedStore {
   _perUser: Record<string, any[]>;
   savedEvents: any[];
   isLoading: boolean;
+  _collections_perUser: Record<string, Collection[]>;
 
   saveEvent: (event: any) => void;
   removeEvent: (eventId: string) => void;
   isSaved: (eventId: string) => boolean;
   clearForUser: (userId: string) => void;
+
+  createCollection: (name: string, emoji: string) => void;
+  deleteCollection: (id: string) => void;
+  addEventToCollection: (collectionId: string, eventId: string) => void;
+  removeEventFromCollection: (collectionId: string, eventId: string) => void;
+  getCollections: () => Collection[];
 }
 
 const buildState = (perUser: Record<string, any[]>) => {
@@ -54,6 +69,7 @@ export const useSavedStore = create<SavedStore>()(
       _perUser: {},
       savedEvents: [],
       isLoading: true,
+      _collections_perUser: {},
 
       saveEvent: (event: any) => {
         const uid = getUserId();
@@ -85,21 +101,77 @@ export const useSavedStore = create<SavedStore>()(
         const updated = { ...get()._perUser, [userId]: [] };
         set({ _perUser: updated, savedEvents: [] });
       },
+
+      createCollection: (name: string, emoji: string) => {
+        const uid = getUserId();
+        const col: Collection = {
+          id: `col_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+          name,
+          emoji,
+          eventIds: [],
+          createdAt: Date.now(),
+        };
+        const current = get()._collections_perUser[uid] ?? [];
+        set({ _collections_perUser: { ...get()._collections_perUser, [uid]: [col, ...current] } });
+      },
+
+      deleteCollection: (id: string) => {
+        const uid = getUserId();
+        const current = get()._collections_perUser[uid] ?? [];
+        set({ _collections_perUser: { ...get()._collections_perUser, [uid]: current.filter(c => c.id !== id) } });
+      },
+
+      addEventToCollection: (collectionId: string, eventId: string) => {
+        const uid = getUserId();
+        const current = get()._collections_perUser[uid] ?? [];
+        const updated = current.map(c =>
+          c.id === collectionId && !c.eventIds.includes(eventId)
+            ? { ...c, eventIds: [...c.eventIds, eventId] }
+            : c,
+        );
+        set({ _collections_perUser: { ...get()._collections_perUser, [uid]: updated } });
+      },
+
+      removeEventFromCollection: (collectionId: string, eventId: string) => {
+        const uid = getUserId();
+        const current = get()._collections_perUser[uid] ?? [];
+        const updated = current.map(c =>
+          c.id === collectionId
+            ? { ...c, eventIds: c.eventIds.filter(id => id !== eventId) }
+            : c,
+        );
+        set({ _collections_perUser: { ...get()._collections_perUser, [uid]: updated } });
+      },
+
+      getCollections: () => {
+        const uid = getUserId();
+        return get()._collections_perUser[uid] ?? [];
+      },
     }),
     {
       name: 'saved-events-store',
       storage: createJSONStorage(() => AsyncStorage),
-      partialize: (state) => ({ _perUser: state._perUser }),
+      partialize: (state) => ({
+        _perUser: state._perUser,
+        _collections_perUser: state._collections_perUser,
+      }),
     }
   )
 );
 
-// ── Reactive hook for current user's saved events ────────
+// ── Reactive hooks ────────────────────────────────────────
 export const useUserSavedEvents = (): any[] => {
   const user = useAuthStore(s => s.user);
   const perUser = useSavedStore(s => s._perUser);
   const uid = user?.id ?? 'guest';
   return perUser[uid] ?? [];
+};
+
+export const useUserCollections = (): Collection[] => {
+  const user = useAuthStore(s => s.user);
+  const colsPerUser = useSavedStore(s => s._collections_perUser);
+  const uid = user?.id ?? 'guest';
+  return colsPerUser[uid] ?? [];
 };
 
 // ── Legacy compat ────────────────────────────────────────

@@ -18,6 +18,7 @@ import {
 import { useLanguage } from '../context/LanguageContext';
 import { SharePickerModal } from './SharePickerModal';
 import { useTheme } from '../context/ThemeContext';
+import { haptic } from '../utils/haptics';
 import { useEventImages } from '../hooks/useEventImages';
 import { useGamificationStore } from '../store/useGamificationStore';
 import { getEventId } from '../store/useSavedStore';
@@ -102,6 +103,7 @@ const HistoryCardComponent = ({ event, allEvents = [] }: { event: any; allEvents
   };
 
   const onPress = () => {
+    haptic('light');
     setStoryVisible(true);
     const eventId = getEventId(event);
     markEventRead(eventId, event.category ?? 'history', year);

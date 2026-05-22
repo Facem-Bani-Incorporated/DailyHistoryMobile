@@ -5,6 +5,8 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 
 const todayISO = () => new Date().toISOString().split('T')[0];
 const yesterdayISO = () => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().split('T')[0]; };
+const getMonthKey = (date?: Date) => { const d = date ?? new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
+const getPrevMonthKey = () => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return getMonthKey(d); };
 const getWeekKey = (date?: Date) => { const d = date ?? new Date(); const jan1 = new Date(d.getFullYear(), 0, 1); const days = Math.floor((d.getTime() - jan1.getTime()) / 86400000); const week = Math.ceil((days + jan1.getDay() + 1) / 7); return `${d.getFullYear()}-W${String(week).padStart(2, '0')}`; };
 const getMonday = (date?: Date) => { const d = date ? new Date(date) : new Date(); const day = d.getDay(); const diff = d.getDate() - day + (day === 0 ? -6 : 1); d.setDate(diff); d.setHours(0, 0, 0, 0); return d; };
 
@@ -19,6 +21,13 @@ const XP_STREAK_MULTIPLIER_BASE = 0.1;
 const XP_STREAK_MULTIPLIER_CAP = 3.0;
 const XP_DAILY_GOAL_BONUS = 50;
 const XP_ACHIEVEMENT_BONUS = 100;
+const XP_MISSION_STORIES_BONUS = 100;   // complete 5 stories daily
+const XP_MISSION_QUIZZES_BONUS = 75;    // complete 3 quizzes daily
+const XP_MISSION_BOTH_BONUS = 25;       // both missions done
+const XP_EXPLORER_BONUS = 50;           // 3+ categories in one day
+const XP_PRO_MULTIPLIER = 1.25;         // PRO users XP boost
+const MISSION_STORIES_TARGET = 5;
+const MISSION_QUIZZES_TARGET = 3;
 
 // ═══════════════════════════════════════════════════════════
 //  100-LEVEL SYSTEM
@@ -277,30 +286,46 @@ export const ACHIEVEMENT_DESCS: Record<string, Record<string, string>> = {
 //  INTERFACES & STATE
 // ═══════════════════════════════════════════════════════════
 export interface WeeklyRecap { weekKey: string; storiesRead: number; xpEarned: number; streakDays: number; topCategory: string; categoriesExplored: number; dailyGoalsHit: number; centuriesExplored: string[]; levelReached: number; seen: boolean; }
-interface DayLog { eventIds: string[]; categories?: string[]; xpEarned?: number; }
+export interface MonthlyRecap { monthKey: string; storiesRead: number; xpEarned: number; activeDays: number; topCategory: string; categoriesExplored: number; missionsCompleted: number; quizzesCompleted: number; levelReached: number; seen: boolean; }
+interface DayLog { eventIds: string[]; categories?: string[]; xpEarned?: number; quizzes?: number; }
 
 interface GamificationState {
   currentStreak: number; longestStreak: number; lastActiveDate: string | null;
   readEventsToday: string[]; readDate: string | null; totalEventsRead: number;
   totalXP: number; todayXP: number; xpDate: string | null;
+  monthlyXP: number; monthlyXPResetDate: string | null;
   unlockedAchievements: string[]; achievementDates: Record<string, string>; newAchievements: string[];
   categoriesRead: Set<string>; categoryCount: Record<string, number>;
   dailyGoalsCompleted: number; dailyGoalDates: string[];
+  // missions
+  quizzesToday: number; quizDate: string | null;
+  missionStoriesDone: boolean; missionQuizzesDone: boolean; missionsDate: string | null;
+  missionStreakCount: number; missionStreakLastDate: string | null;
+  explorerBonusDates: string[];
+  // streak shield
+  streakShieldUsedWeek: string | null;
+  // recaps
+  monthlyRecaps: Record<string, MonthlyRecap>;
   weeklyRecaps: Record<string, WeeklyRecap>; currentWeekKey: string | null;
   calendarLog: Record<string, DayLog>; _userId: string | null;
   readEventIds: Set<string>;
   restoreStreak: () => void;
   recordDailyVisit: () => void;
-  markEventRead: (eventId: string, category?: string, year?: string) => void;
-  addQuizXP: (xp: number) => void;
+  markEventRead: (eventId: string, category?: string, year?: string, isPro?: boolean) => void;
+  addQuizXP: (xp: number, isPro?: boolean) => void;
+  recordQuizDone: () => void;
   resetDailyProgress: () => void;
   getStreakStatus: () => { streak: number; longest: number; isActiveToday: boolean };
   getTodayProgress: () => { read: number; total: number };
+  getMissionsProgress: () => { storiesRead: number; quizzesDone: number; storiesDone: boolean; quizzesDone2: boolean; missionsDate: string | null };
   getCalendarLog: () => Record<string, DayLog>;
   getXPInfo: () => { totalXP: number; todayXP: number; level: LevelDef; progress: { current: number; needed: number; percent: number }; multiplier: number };
   checkAchievements: () => string[];
   markAchievementsSeen: () => void;
   getAchievements: () => { unlocked: AchievementDef[]; locked: AchievementDef[]; newIds: string[] };
+  generateMonthlyRecap: () => MonthlyRecap | null;
+  getUnseenMonthlyRecap: () => MonthlyRecap | null;
+  markMonthlyRecapSeen: (monthKey: string) => void;
   generateWeeklyRecap: () => WeeklyRecap | null;
   getLatestRecap: () => WeeklyRecap | null;
   getUnseenRecap: () => WeeklyRecap | null;
@@ -313,9 +338,16 @@ const initialState = {
   currentStreak: 0, longestStreak: 0, lastActiveDate: null as string | null,
   readEventsToday: [] as string[], readDate: null as string | null, totalEventsRead: 0,
   totalXP: 0, todayXP: 0, xpDate: null as string | null,
+  monthlyXP: 0, monthlyXPResetDate: null as string | null,
   unlockedAchievements: [] as string[], achievementDates: {} as Record<string, string>, newAchievements: [] as string[],
   categoriesRead: new Set<string>(), categoryCount: {} as Record<string, number>,
   dailyGoalsCompleted: 0, dailyGoalDates: [] as string[],
+  quizzesToday: 0, quizDate: null as string | null,
+  missionStoriesDone: false, missionQuizzesDone: false, missionsDate: null as string | null,
+  missionStreakCount: 0, missionStreakLastDate: null as string | null,
+  explorerBonusDates: [] as string[],
+  streakShieldUsedWeek: null as string | null,
+  monthlyRecaps: {} as Record<string, MonthlyRecap>,
   weeklyRecaps: {} as Record<string, WeeklyRecap>, currentWeekKey: null as string | null,
   calendarLog: {} as Record<string, DayLog>, _userId: null as string | null,
   readEventIds: new Set<string>(),
@@ -335,11 +367,23 @@ export const useGamificationStore = create<GamificationState>()(
 
       recordDailyVisit: () => {
         const today = todayISO(); const yesterday = yesterdayISO();
-        const { lastActiveDate, currentStreak, longestStreak, readDate, xpDate } = get();
+        const { lastActiveDate, currentStreak, longestStreak, readDate, xpDate, streakShieldUsedWeek } = get();
         if (lastActiveDate === today) return;
-        let newStreak = lastActiveDate === yesterday ? currentStreak + 1 : 1;
+
+        const currentWeek = getWeekKey();
+        let newStreak: number;
+        if (lastActiveDate === yesterday) {
+          newStreak = currentStreak + 1;
+        } else if (lastActiveDate && streakShieldUsedWeek !== currentWeek) {
+          // Streak shield: absorb one missed day once per week
+          newStreak = currentStreak > 0 ? currentStreak : 1;
+          set({ streakShieldUsedWeek: currentWeek });
+        } else {
+          newStreak = 1;
+        }
+
         const newLongest = Math.max(longestStreak, newStreak);
-        const updates: Partial<GamificationState> = { currentStreak: newStreak, longestStreak: newLongest, lastActiveDate: today, currentWeekKey: getWeekKey() };
+        const updates: Partial<GamificationState> = { currentStreak: newStreak, longestStreak: newLongest, lastActiveDate: today, currentWeekKey: currentWeek };
         if (readDate !== today) { updates.readEventsToday = []; updates.readDate = today; }
         if (xpDate !== today) { updates.todayXP = 0; updates.xpDate = today; }
         set(updates);
@@ -349,26 +393,45 @@ restoreStreak: () => set((state) => ({
   currentStreak: state.longestStreak,
   lastActiveDate: todayISO(),
 })),
-      markEventRead: (eventId: string, category?: string, _year?: string) => {
+      markEventRead: (eventId: string, category?: string, _year?: string, isPro?: boolean) => {
         const today = todayISO();
-        const { readEventsToday, readDate, totalEventsRead, calendarLog, totalXP, todayXP, xpDate, currentStreak, categoriesRead, categoryCount, dailyGoalsCompleted, dailyGoalDates } = get();
+        const state = get();
+        const { readEventsToday, readDate, totalEventsRead, calendarLog, totalXP, todayXP, xpDate, currentStreak, categoriesRead, categoryCount, dailyGoalsCompleted, dailyGoalDates, missionStoriesDone, missionsDate, missionQuizzesDone, missionStreakCount, missionStreakLastDate, explorerBonusDates, monthlyXP, monthlyXPResetDate } = state;
         const isNewDay = readDate !== today;
         const currentDayEvents = isNewDay ? [] : readEventsToday;
         const currentDayXP = (isNewDay || xpDate !== today) ? 0 : todayXP;
         if (currentDayEvents.includes(eventId)) return;
 
-        const multiplier = getStreakMultiplier(currentStreak);
-        let xpGained = Math.round(XP_PER_STORY * multiplier);
+        const streakMult = getStreakMultiplier(currentStreak);
+        const proMult = isPro ? XP_PRO_MULTIPLIER : 1;
+        let xpGained = Math.round(XP_PER_STORY * streakMult * proMult);
         const updatedDayEvents = [...currentDayEvents, eventId];
 
+        // mission stories
+        const todayMissionsActive = missionsDate === today;
+        let newMissionStoriesDone = todayMissionsActive ? missionStoriesDone : false;
+        let newMissionQuizzesDone = todayMissionsActive ? missionQuizzesDone : false;
         let newDailyGoals = dailyGoalsCompleted;
         let newDailyGoalDates = dailyGoalDates;
-        if (updatedDayEvents.length === 5 && !dailyGoalDates.includes(today)) {
-          xpGained += XP_DAILY_GOAL_BONUS;
-          newDailyGoals = dailyGoalsCompleted + 1;
-          newDailyGoalDates = [...dailyGoalDates, today];
+        let newMissionStreak = missionStreakCount;
+        let newMissionStreakLastDate = missionStreakLastDate;
+
+        if (!newMissionStoriesDone && updatedDayEvents.length >= MISSION_STORIES_TARGET) {
+          newMissionStoriesDone = true;
+          xpGained += Math.round(XP_MISSION_STORIES_BONUS * proMult);
         }
 
+        // both missions complete → daily goal
+        if (newMissionStoriesDone && newMissionQuizzesDone && !dailyGoalDates.includes(today)) {
+          xpGained += Math.round(XP_MISSION_BOTH_BONUS * proMult);
+          newDailyGoals = dailyGoalsCompleted + 1;
+          newDailyGoalDates = [...dailyGoalDates, today];
+          const yesterday = yesterdayISO();
+          newMissionStreak = (missionStreakLastDate === yesterday || missionStreakLastDate === today) ? missionStreakCount + 1 : 1;
+          newMissionStreakLastDate = today;
+        }
+
+        // category tracking + explorer bonus
         const safeCats = _ensureSet(categoriesRead);
         const newCategoriesRead = new Set(safeCats);
         const newCategoryCount = { ...categoryCount };
@@ -378,12 +441,34 @@ restoreStreak: () => set((state) => ({
           newCategoryCount[normalizedCat] = (newCategoryCount[normalizedCat] ?? 0) + 1;
         }
 
+        // explorer bonus: 3+ distinct categories today
+        const newExplorerDates = [...explorerBonusDates];
+        if (!newExplorerDates.includes(today)) {
+          const todayCats = new Set<string>(calendarLog[today]?.categories ?? []);
+          if (normalizedCat) todayCats.add(normalizedCat);
+          if (todayCats.size >= 3) {
+            xpGained += Math.round(XP_EXPLORER_BONUS * proMult);
+            newExplorerDates.push(today);
+          }
+        }
+
+        // legacy daily goal (5 stories) kept for backwards compat
+        if (updatedDayEvents.length === 5 && !dailyGoalDates.includes(today) && newDailyGoals === dailyGoalsCompleted) {
+          xpGained += XP_DAILY_GOAL_BONUS;
+        }
+
+        // monthlyXP reset check
+        const firstOfMonth = new Date(); firstOfMonth.setDate(1); const firstOfMonthISO = firstOfMonth.toISOString().split('T')[0];
+        const newMonthlyXP = (!monthlyXPResetDate || monthlyXPResetDate < firstOfMonthISO) ? xpGained : monthlyXP + xpGained;
+        const newMonthlyXPResetDate = (!monthlyXPResetDate || monthlyXPResetDate < firstOfMonthISO) ? firstOfMonthISO : monthlyXPResetDate;
+
         const newLog = { ...calendarLog };
-        const existingDay = newLog[today] ?? { eventIds: [], categories: [], xpEarned: 0 };
+        const existingDay = newLog[today] ?? { eventIds: [], categories: [], xpEarned: 0, quizzes: 0 };
         newLog[today] = {
           eventIds: updatedDayEvents,
           categories: [...(existingDay.categories ?? []), ...(normalizedCat ? [normalizedCat] : [])],
           xpEarned: (existingDay.xpEarned ?? 0) + xpGained,
+          quizzes: existingDay.quizzes ?? 0,
         };
 
         const newReadEventIds = new Set(get().readEventIds);
@@ -393,16 +478,81 @@ restoreStreak: () => set((state) => ({
           readEventsToday: updatedDayEvents, readDate: today,
           totalEventsRead: totalEventsRead + 1,
           totalXP: totalXP + xpGained, todayXP: currentDayXP + xpGained, xpDate: today,
+          monthlyXP: newMonthlyXP, monthlyXPResetDate: newMonthlyXPResetDate,
           calendarLog: newLog, categoriesRead: newCategoriesRead, categoryCount: newCategoryCount,
           dailyGoalsCompleted: newDailyGoals, dailyGoalDates: newDailyGoalDates,
+          missionStoriesDone: newMissionStoriesDone, missionQuizzesDone: newMissionQuizzesDone,
+          missionsDate: today,
+          missionStreakCount: newMissionStreak, missionStreakLastDate: newMissionStreakLastDate,
+          explorerBonusDates: newExplorerDates,
           readEventIds: newReadEventIds,
         });
         setTimeout(() => { try { get().checkAchievements(); } catch {} }, 50);
       },
 
-      addQuizXP: (xp: number) => {
-        const { totalXP, todayXP } = get();
-        set({ totalXP: totalXP + xp, todayXP: todayXP + xp });
+      addQuizXP: (xp: number, isPro?: boolean) => {
+        const today = todayISO();
+        const state = get();
+        const proMult = isPro ? XP_PRO_MULTIPLIER : 1;
+        const xpGained = Math.round(xp * proMult);
+        const firstOfMonth = new Date(); firstOfMonth.setDate(1); const firstOfMonthISO = firstOfMonth.toISOString().split('T')[0];
+        const newMonthlyXP = (!state.monthlyXPResetDate || state.monthlyXPResetDate < firstOfMonthISO) ? xpGained : state.monthlyXP + xpGained;
+        const newMonthlyXPResetDate = (!state.monthlyXPResetDate || state.monthlyXPResetDate < firstOfMonthISO) ? firstOfMonthISO : state.monthlyXPResetDate;
+        set({
+          totalXP: state.totalXP + xpGained,
+          todayXP: state.todayXP + xpGained,
+          monthlyXP: newMonthlyXP,
+          monthlyXPResetDate: newMonthlyXPResetDate,
+        });
+      },
+
+      recordQuizDone: () => {
+        const today = todayISO();
+        const state = get();
+        const isNewDay = state.quizDate !== today;
+        const newQuizzesToday = isNewDay ? 1 : state.quizzesToday + 1;
+        const todayMissionsActive = state.missionsDate === today;
+        let newMissionQuizzesDone = todayMissionsActive ? state.missionQuizzesDone : false;
+        let newMissionStoriesDone = todayMissionsActive ? state.missionStoriesDone : false;
+        let newDailyGoals = state.dailyGoalsCompleted;
+        let newDailyGoalDates = state.dailyGoalDates;
+        let newMissionStreak = state.missionStreakCount;
+        let newMissionStreakLastDate = state.missionStreakLastDate;
+        let bonusXP = 0;
+
+        const calLog = { ...state.calendarLog };
+        const existingDay = calLog[today] ?? { eventIds: [], categories: [], xpEarned: 0, quizzes: 0 };
+        calLog[today] = { ...existingDay, quizzes: (existingDay.quizzes ?? 0) + 1 };
+
+        if (!newMissionQuizzesDone && newQuizzesToday >= MISSION_QUIZZES_TARGET) {
+          newMissionQuizzesDone = true;
+          bonusXP += XP_MISSION_QUIZZES_BONUS;
+        }
+
+        if (newMissionStoriesDone && newMissionQuizzesDone && !state.dailyGoalDates.includes(today)) {
+          bonusXP += XP_MISSION_BOTH_BONUS;
+          newDailyGoals = state.dailyGoalsCompleted + 1;
+          newDailyGoalDates = [...state.dailyGoalDates, today];
+          const yesterday = yesterdayISO();
+          newMissionStreak = (state.missionStreakLastDate === yesterday || state.missionStreakLastDate === today) ? state.missionStreakCount + 1 : 1;
+          newMissionStreakLastDate = today;
+        }
+
+        const firstOfMonth = new Date(); firstOfMonth.setDate(1); const firstOfMonthISO = firstOfMonth.toISOString().split('T')[0];
+        const newMonthlyXP = (!state.monthlyXPResetDate || state.monthlyXPResetDate < firstOfMonthISO) ? bonusXP : state.monthlyXP + bonusXP;
+        const newMonthlyXPResetDate = (!state.monthlyXPResetDate || state.monthlyXPResetDate < firstOfMonthISO) ? firstOfMonthISO : state.monthlyXPResetDate;
+
+        set({
+          quizzesToday: newQuizzesToday, quizDate: today,
+          missionQuizzesDone: newMissionQuizzesDone, missionStoriesDone: newMissionStoriesDone,
+          missionsDate: today,
+          dailyGoalsCompleted: newDailyGoals, dailyGoalDates: newDailyGoalDates,
+          missionStreakCount: newMissionStreak, missionStreakLastDate: newMissionStreakLastDate,
+          totalXP: state.totalXP + bonusXP, todayXP: state.todayXP + bonusXP,
+          monthlyXP: newMonthlyXP, monthlyXPResetDate: newMonthlyXPResetDate,
+          calendarLog: calLog,
+        });
+        if (bonusXP > 0) setTimeout(() => { try { get().checkAchievements(); } catch {} }, 50);
       },
 
       resetDailyProgress: () => { const today = todayISO(); if (get().readDate !== today) set({ readEventsToday: [], readDate: today, todayXP: 0, xpDate: today }); },
@@ -415,7 +565,22 @@ restoreStreak: () => set((state) => ({
         return { streak: effectiveStreak, longest: longestStreak, isActiveToday };
       },
 
-      getTodayProgress: () => { const today = todayISO(); const { readEventsToday, readDate } = get(); if (readDate !== today) return { read: 0, total: 5 }; return { read: readEventsToday.length, total: 5 }; },
+      getTodayProgress: () => { const today = todayISO(); const { readEventsToday, readDate } = get(); if (readDate !== today) return { read: 0, total: MISSION_STORIES_TARGET }; return { read: readEventsToday.length, total: MISSION_STORIES_TARGET }; },
+
+      getMissionsProgress: () => {
+        const today = todayISO();
+        const { readEventsToday, readDate, quizzesToday, quizDate, missionStoriesDone, missionQuizzesDone, missionsDate } = get();
+        const storiesRead = readDate === today ? readEventsToday.length : 0;
+        const quizzesDone = quizDate === today ? quizzesToday : 0;
+        return {
+          storiesRead,
+          quizzesDone,
+          storiesDone: missionsDate === today ? missionStoriesDone : storiesRead >= MISSION_STORIES_TARGET,
+          quizzesDone2: missionsDate === today ? missionQuizzesDone : quizzesDone >= MISSION_QUIZZES_TARGET,
+          missionsDate,
+        };
+      },
+
       getCalendarLog: () => get().calendarLog,
 
       getXPInfo: () => { const { totalXP, todayXP, currentStreak } = get(); return { totalXP, todayXP, level: getLevelForXP(totalXP), progress: getXPProgress(totalXP), multiplier: getStreakMultiplier(currentStreak) }; },
@@ -475,6 +640,48 @@ restoreStreak: () => set((state) => ({
         return { unlocked: ACHIEVEMENTS.filter(a => unlockedAchievements.includes(a.id)), locked: ACHIEVEMENTS.filter(a => !unlockedAchievements.includes(a.id)), newIds: [...newAchievements] };
       },
 
+      generateMonthlyRecap: () => {
+        const { calendarLog, monthlyRecaps, totalXP, dailyGoalDates } = get();
+        const prevKey = getPrevMonthKey();
+        if (monthlyRecaps[prevKey]) return monthlyRecaps[prevKey];
+        const [year, month] = prevKey.split('-').map(Number);
+        const daysInMonth = new Date(year, month, 0).getDate();
+        const days: string[] = [];
+        for (let d = 1; d <= daysInMonth; d++) {
+          days.push(`${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+        }
+        let storiesRead = 0, xpEarned = 0, activeDays = 0, quizzesCompleted = 0, missionsCompleted = 0;
+        const catCounts: Record<string, number> = {};
+        for (const day of days) {
+          const log = calendarLog[day]; if (!log) continue;
+          const count = log.eventIds?.length ?? 0;
+          storiesRead += count; xpEarned += log.xpEarned ?? 0;
+          if (count > 0) activeDays++;
+          quizzesCompleted += log.quizzes ?? 0;
+          if (dailyGoalDates.includes(day)) missionsCompleted++;
+          for (const cat of (log.categories ?? [])) catCounts[cat] = (catCounts[cat] ?? 0) + 1;
+        }
+        if (storiesRead === 0 && xpEarned === 0) return null;
+        let topCategory = '', maxCat = 0;
+        for (const [cat, count] of Object.entries(catCounts)) { if (count > maxCat) { topCategory = cat; maxCat = count; } }
+        const recap: MonthlyRecap = { monthKey: prevKey, storiesRead, xpEarned, activeDays, topCategory, categoriesExplored: Object.keys(catCounts).length, missionsCompleted, quizzesCompleted, levelReached: getLevelForXP(totalXP).level, seen: false };
+        set({ monthlyRecaps: { ...monthlyRecaps, [prevKey]: recap } });
+        return recap;
+      },
+
+      getUnseenMonthlyRecap: () => {
+        const { monthlyRecaps } = get();
+        for (const key of Object.keys(monthlyRecaps).sort().reverse()) {
+          if (!monthlyRecaps[key].seen) return monthlyRecaps[key];
+        }
+        return null;
+      },
+
+      markMonthlyRecapSeen: (monthKey: string) => {
+        const { monthlyRecaps } = get();
+        if (monthlyRecaps[monthKey]) set({ monthlyRecaps: { ...monthlyRecaps, [monthKey]: { ...monthlyRecaps[monthKey], seen: true } } });
+      },
+
       generateWeeklyRecap: () => {
         const { calendarLog, weeklyRecaps, totalXP } = get();
         const lastWeek = new Date(); lastWeek.setDate(lastWeek.getDate() - 7);
@@ -511,7 +718,7 @@ restoreStreak: () => set((state) => ({
           const raw = await AsyncStorage.getItem(`gamification-storage-${userId}`);
           if (raw) {
             const parsed = JSON.parse(raw); const s = parsed?.state ?? parsed;
-            set({ currentStreak: s.currentStreak ?? 0, longestStreak: s.longestStreak ?? 0, lastActiveDate: s.lastActiveDate ?? null, readEventsToday: s.readEventsToday ?? [], readDate: s.readDate ?? null, totalEventsRead: s.totalEventsRead ?? 0, totalXP: s.totalXP ?? 0, todayXP: s.todayXP ?? 0, xpDate: s.xpDate ?? null, unlockedAchievements: s.unlockedAchievements ?? [], achievementDates: s.achievementDates ?? {}, newAchievements: s.newAchievements ?? [], categoriesRead: new Set(s.categoriesRead ?? []), categoryCount: s.categoryCount ?? {}, dailyGoalsCompleted: s.dailyGoalsCompleted ?? 0, dailyGoalDates: s.dailyGoalDates ?? [], weeklyRecaps: s.weeklyRecaps ?? {}, currentWeekKey: s.currentWeekKey ?? null, calendarLog: s.calendarLog ?? {}, _userId: userId });
+            set({ currentStreak: s.currentStreak ?? 0, longestStreak: s.longestStreak ?? 0, lastActiveDate: s.lastActiveDate ?? null, readEventsToday: s.readEventsToday ?? [], readDate: s.readDate ?? null, totalEventsRead: s.totalEventsRead ?? 0, totalXP: s.totalXP ?? 0, todayXP: s.todayXP ?? 0, xpDate: s.xpDate ?? null, monthlyXP: s.monthlyXP ?? 0, monthlyXPResetDate: s.monthlyXPResetDate ?? null, unlockedAchievements: s.unlockedAchievements ?? [], achievementDates: s.achievementDates ?? {}, newAchievements: s.newAchievements ?? [], categoriesRead: new Set(s.categoriesRead ?? []), categoryCount: s.categoryCount ?? {}, dailyGoalsCompleted: s.dailyGoalsCompleted ?? 0, dailyGoalDates: s.dailyGoalDates ?? [], quizzesToday: s.quizzesToday ?? 0, quizDate: s.quizDate ?? null, missionStoriesDone: s.missionStoriesDone ?? false, missionQuizzesDone: s.missionQuizzesDone ?? false, missionsDate: s.missionsDate ?? null, missionStreakCount: s.missionStreakCount ?? 0, missionStreakLastDate: s.missionStreakLastDate ?? null, explorerBonusDates: s.explorerBonusDates ?? [], streakShieldUsedWeek: s.streakShieldUsedWeek ?? null, monthlyRecaps: s.monthlyRecaps ?? {}, weeklyRecaps: s.weeklyRecaps ?? {}, currentWeekKey: s.currentWeekKey ?? null, calendarLog: s.calendarLog ?? {}, _userId: userId });
           } else { set({ ...initialState, _userId: userId }); }
         } catch { set({ ...initialState, _userId: userId }); }
         await _saveCurrentState(userId);
@@ -530,9 +737,16 @@ restoreStreak: () => set((state) => ({
         currentStreak: state.currentStreak, longestStreak: state.longestStreak, lastActiveDate: state.lastActiveDate,
         readEventsToday: state.readEventsToday, readDate: state.readDate, totalEventsRead: state.totalEventsRead,
         totalXP: state.totalXP, todayXP: state.todayXP, xpDate: state.xpDate,
+        monthlyXP: state.monthlyXP, monthlyXPResetDate: state.monthlyXPResetDate,
         unlockedAchievements: state.unlockedAchievements, achievementDates: state.achievementDates, newAchievements: state.newAchievements,
         categoriesRead: Array.from(_ensureSet(state.categoriesRead)), categoryCount: state.categoryCount,
         dailyGoalsCompleted: state.dailyGoalsCompleted, dailyGoalDates: state.dailyGoalDates,
+        quizzesToday: state.quizzesToday, quizDate: state.quizDate,
+        missionStoriesDone: state.missionStoriesDone, missionQuizzesDone: state.missionQuizzesDone, missionsDate: state.missionsDate,
+        missionStreakCount: state.missionStreakCount, missionStreakLastDate: state.missionStreakLastDate,
+        explorerBonusDates: state.explorerBonusDates,
+        streakShieldUsedWeek: state.streakShieldUsedWeek,
+        monthlyRecaps: state.monthlyRecaps,
         weeklyRecaps: state.weeklyRecaps, currentWeekKey: state.currentWeekKey,
         calendarLog: state.calendarLog, _userId: state._userId,
       }),
@@ -558,12 +772,18 @@ async function _saveCurrentState(userId: string) {
         currentStreak: state.currentStreak, longestStreak: state.longestStreak, lastActiveDate: state.lastActiveDate,
         readEventsToday: state.readEventsToday, readDate: state.readDate, totalEventsRead: state.totalEventsRead,
         totalXP: state.totalXP, todayXP: state.todayXP, xpDate: state.xpDate,
+        monthlyXP: state.monthlyXP, monthlyXPResetDate: state.monthlyXPResetDate,
         unlockedAchievements: state.unlockedAchievements, achievementDates: state.achievementDates, newAchievements: state.newAchievements,
         categoriesRead: Array.from(_ensureSet(state.categoriesRead)), categoryCount: state.categoryCount,
         dailyGoalsCompleted: state.dailyGoalsCompleted, dailyGoalDates: state.dailyGoalDates,
+        quizzesToday: state.quizzesToday, quizDate: state.quizDate,
+        missionStoriesDone: state.missionStoriesDone, missionQuizzesDone: state.missionQuizzesDone, missionsDate: state.missionsDate,
+        missionStreakCount: state.missionStreakCount, missionStreakLastDate: state.missionStreakLastDate,
+        explorerBonusDates: state.explorerBonusDates, streakShieldUsedWeek: state.streakShieldUsedWeek,
+        monthlyRecaps: state.monthlyRecaps,
         weeklyRecaps: state.weeklyRecaps, currentWeekKey: state.currentWeekKey,
         calendarLog: state.calendarLog, _userId: userId,
-      }, version: 2,
+      }, version: 3,
     }));
   } catch (e) { console.warn('[Gamification] Failed to save state:', e); }
 }

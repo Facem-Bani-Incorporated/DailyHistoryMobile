@@ -25,9 +25,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { pushToServer } from '../hooks/useGamificationSync';
+import { haptic } from '../utils/haptics';
 import {
   fetchLeaderboard,
   LeaderboardEntry,
+  LeaderboardPeriod,
   LeaderboardType,
 } from '../services/leaderboardService';
 
@@ -80,6 +82,8 @@ const L: Record<string, Record<string, string>> = {
     champion: 'CHAMPION', elite: 'ELITE', gold: 'GOLD', silver: 'SILVER',
     bronze: 'BRONZE', rising: 'RISING', explorer: 'EXPLORER',
     noRank: 'Not ranked yet', climbHint: 'Read more to climb the ranks',
+    allTime: 'All Time', thisMonth: 'This Month',
+    monthlyXP: 'Monthly XP', monthlyNote: 'Resets on the 1st of each month',
   },
   ro: {
     subtitle: 'Clasament Global', loading: 'Se încarcă...',
@@ -89,6 +93,8 @@ const L: Record<string, Record<string, string>> = {
     champion: 'CAMPION', elite: 'ELITĂ', gold: 'AUR', silver: 'ARGINT',
     bronze: 'BRONZ', rising: 'ÎN ASCENSIUNE', explorer: 'EXPLORATOR',
     noRank: 'Încă neclasat', climbHint: 'Citește mai mult ca să urci în clasament',
+    allTime: 'Tot Timpul', thisMonth: 'Luna Aceasta',
+    monthlyXP: 'XP Lunar', monthlyNote: 'Se resetează pe 1 ale lunii',
   },
   fr: {
     subtitle: 'Classement Mondial', loading: 'Chargement...',
@@ -98,6 +104,8 @@ const L: Record<string, Record<string, string>> = {
     champion: 'CHAMPION', elite: 'ÉLITE', gold: 'OR', silver: 'ARGENT',
     bronze: 'BRONZE', rising: 'MONTANT', explorer: 'EXPLORATEUR',
     noRank: 'Pas encore classé', climbHint: 'Lisez plus pour grimper',
+    allTime: 'Tous Temps', thisMonth: 'Ce Mois',
+    monthlyXP: 'XP Mensuel', monthlyNote: 'Se réinitialise le 1er du mois',
   },
   de: {
     subtitle: 'Globale Rangliste', loading: 'Wird geladen...',
@@ -107,6 +115,8 @@ const L: Record<string, Record<string, string>> = {
     champion: 'CHAMPION', elite: 'ELITE', gold: 'GOLD', silver: 'SILBER',
     bronze: 'BRONZE', rising: 'AUFSTEIGEND', explorer: 'ENTDECKER',
     noRank: 'Noch nicht platziert', climbHint: 'Lies mehr um aufzusteigen',
+    allTime: 'Gesamt', thisMonth: 'Diesen Monat',
+    monthlyXP: 'Monatliche XP', monthlyNote: 'Wird am 1. des Monats zurückgesetzt',
   },
   es: {
     subtitle: 'Ranking Mundial', loading: 'Cargando...',
@@ -116,9 +126,50 @@ const L: Record<string, Record<string, string>> = {
     champion: 'CAMPEÓN', elite: 'ÉLITE', gold: 'ORO', silver: 'PLATA',
     bronze: 'BRONCE', rising: 'EN ASCENSO', explorer: 'EXPLORADOR',
     noRank: 'Sin clasificar', climbHint: 'Lee más para subir en el ranking',
+    allTime: 'Todo el Tiempo', thisMonth: 'Este Mes',
+    monthlyXP: 'XP Mensual', monthlyNote: 'Se reinicia el día 1 de cada mes',
   },
 };
 const tx = (lang: string, k: string) => (L[lang] ?? L.en)[k] ?? L.en[k] ?? k;
+
+// ── Period toggle: All Time | This Month ──
+const PeriodToggle = ({ period, onSelect, language, isDark, theme }: {
+  period: LeaderboardPeriod; onSelect: (p: LeaderboardPeriod) => void;
+  language: string; isDark: boolean; theme: any;
+}) => {
+  const GOLD = '#FFB300';
+  const PURPLE = '#818CF8';
+  const options: { key: LeaderboardPeriod; label: string; color: string }[] = [
+    { key: 'alltime', label: tx(language, 'allTime'), color: GOLD },
+    { key: 'monthly', label: tx(language, 'thisMonth'), color: PURPLE },
+  ];
+  return (
+    <View style={pt.row}>
+      {options.map(opt => {
+        const active = period === opt.key;
+        return (
+          <TouchableOpacity key={opt.key} onPress={() => { haptic('medium'); onSelect(opt.key); }} activeOpacity={0.75} style={{ flex: 1 }}>
+            <View style={[pt.pill, {
+              backgroundColor: active ? opt.color : (isDark ? '#151117' : '#FFFFFF'),
+              borderColor: active ? opt.color : (isDark ? '#252030' : '#E7ECF3'),
+              shadowColor: active ? opt.color : 'transparent',
+            }]}>
+              <Text style={[pt.label, { color: active ? '#FFF' : theme.subtext }]}>{opt.label}</Text>
+            </View>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+};
+const pt = StyleSheet.create({
+  row: { flexDirection: 'row', gap: 10, marginBottom: 12 },
+  pill: {
+    alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: 14, borderWidth: 1,
+    shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 3,
+  },
+  label: { fontSize: 13, fontWeight: '800', letterSpacing: 0.3 },
+});
 
 // ══════════════════════════════════════════════════════════════════════════════
 // USER HERO CARD — Big "YOU" card showing rank + tier + progress to next
@@ -334,7 +385,7 @@ const TabsRow = ({ active, onSelect, t, theme, isDark }: {
         const isActive = active === type;
         const meta = TAB_META[type];
         return (
-          <TouchableOpacity key={type} onPress={() => onSelect(type)} activeOpacity={0.75} style={ts.tabWrap}>
+          <TouchableOpacity key={type} onPress={() => { haptic('light'); onSelect(type); }} activeOpacity={0.75} style={ts.tabWrap}>
             <View style={[ts.tab, {
               backgroundColor: isActive ? meta.color : (isDark ? '#151117' : '#FFFFFF'),
               borderColor: isActive ? meta.color : (isDark ? '#252030' : '#E7ECF3'),
@@ -644,22 +695,29 @@ export default function LeaderboardModal({
   const insets = useSafeAreaInsets();
 
   const [activeTab, setActiveTab] = useState<LeaderboardType>('xp');
+  const [period, setPeriod] = useState<LeaderboardPeriod>('alltime');
   const [data, setData] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Monthly period only supports XP ranking; reset tab when switching
+  const handlePeriodChange = useCallback((p: LeaderboardPeriod) => {
+    setPeriod(p);
+    if (p === 'monthly') setActiveTab('xp');
+  }, []);
+
   const tabMeta = TAB_META[activeTab];
-  const tabColor = tabMeta.color;
+  const tabColor = period === 'monthly' ? '#818CF8' : tabMeta.color;
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
       await pushToServer();
-      const results = await fetchLeaderboard(activeTab);
+      const results = await fetchLeaderboard(activeTab, period);
       setData(results);
     } finally {
       setLoading(false);
     }
-  }, [activeTab]);
+  }, [activeTab, period]);
 
   useEffect(() => {
     if (visible) loadData();
@@ -688,7 +746,7 @@ export default function LeaderboardModal({
 
         {/* Header */}
         <View style={lbs.hdr}>
-          <TouchableOpacity onPress={onClose} style={[lbs.iconBtn, {
+          <TouchableOpacity onPress={() => { haptic('light'); onClose(); }} style={[lbs.iconBtn, {
             backgroundColor: isDark ? '#181220' : '#FFFFFF',
             borderColor: isDark ? '#2A2332' : '#EFE9E0',
           }]} activeOpacity={0.75}>
@@ -704,7 +762,7 @@ export default function LeaderboardModal({
             </Text>
           </View>
 
-          <TouchableOpacity onPress={loadData} style={[lbs.iconBtn, {
+          <TouchableOpacity onPress={() => { haptic('medium'); loadData(); }} style={[lbs.iconBtn, {
             backgroundColor: isDark ? '#181220' : '#FFFFFF',
             borderColor: isDark ? '#2A2332' : '#EFE9E0',
           }]} activeOpacity={0.75}>
@@ -726,11 +784,25 @@ export default function LeaderboardModal({
             theme={theme} t={t}
           />
 
-          {/* TABS */}
-          <TabsRow
-            active={activeTab} onSelect={setActiveTab}
-            t={t} theme={theme} isDark={isDark}
-          />
+          {/* PERIOD TOGGLE */}
+          <PeriodToggle period={period} onSelect={handlePeriodChange} language={language} isDark={isDark} theme={theme} />
+
+          {/* Monthly note */}
+          {period === 'monthly' && (
+            <View style={{ marginBottom: 12, alignItems: 'center' }}>
+              <Text style={{ color: theme.subtext, fontSize: 11, fontWeight: '600', opacity: 0.55 }}>
+                {tx(language, 'monthlyNote')}
+              </Text>
+            </View>
+          )}
+
+          {/* TABS — only for All Time */}
+          {period === 'alltime' && (
+            <TabsRow
+              active={activeTab} onSelect={setActiveTab}
+              t={t} theme={theme} isDark={isDark}
+            />
+          )}
 
           {/* Content */}
           {loading ? (

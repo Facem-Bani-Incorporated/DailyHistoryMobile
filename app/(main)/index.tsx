@@ -25,6 +25,7 @@ import Svg, { Circle } from 'react-native-svg';
 import api from '../../api';
 import AchievementsModal from '../../components/AchievementsModal';
 import AchievementToast from '../../components/AchievementToast';
+import XPFloatToast from '../../components/XPFloatToast';
 import AdCard from '../../components/AdCard';
 import CalendarModal from '../../components/CalendarModal';
 import CelestialDay from '../../components/CelestialDay';
@@ -40,8 +41,8 @@ import StreakIcon from '../../components/StreakIcon';
 import type { Tab } from '../../components/TabBar';
 import TabBar, { TABBAR_PILL_HEIGHT } from '../../components/TabBar';
 import TimelineScreen from '../../components/TimelineScreen';
-import WeeklyRecapModal from '../../components/WeeklyRecapModal';
-import { AD_UNIT_IDS } from '../../config/ads';
+import MonthlyRecapModal from '../../components/MonthlyRecapModal';
+import { AD_UNIT_IDS, ADS_CONFIG } from '../../config/ads';
 import { ENDPOINTS } from '../../config/api';
 import { AllEventsProvider } from '../../context/AllEventsContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -63,8 +64,7 @@ const CACHE_TTL = 30 * 60 * 1000;
 const MAX_FWD = 2;
 const PAST_DAYS = 200;
 const TODAY_INDEX = PAST_DAYS;
-const AD_FREQUENCY = 3;
-const STORY_AD_FREQUENCY = 3;
+const AD_FREQUENCY = ADS_CONFIG.AD_CARD_DAY_FREQUENCY; // 7 days between AdCard slots
 
 // Show banner only on these tabs
 const SHOW_BANNER_TABS: Tab[] = ['today', 'discover', 'timeline', 'saved'];
@@ -679,17 +679,17 @@ const _pfb = StyleSheet.create({
 export default function HomeScreen() {
   const { theme, isDark, isPremium } = useTheme();
   const { t, language } = useLanguage();
-  const { isPro, presentPaywall, presentPaywallIfNeeded } = useRevenueCat();
+  const { isPro, presentPaywall } = useRevenueCat();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
   const userSaved = useUserSavedEvents();
   const recordVisit = useGamificationStore(s => s.recordDailyVisit);
-  const genRecap = useGamificationStore(s => s.generateWeeklyRecap);
-  const getRecap = useGamificationStore(s => s.getUnseenRecap);
+  const genMonthlyRecap = useGamificationStore(s => s.generateMonthlyRecap);
+  const getUnseenMonthlyRecap = useGamificationStore(s => s.getUnseenMonthlyRecap);
   const newAch = useGamificationStore(s => s.newAchievements);
   const totalEventsRead = useGamificationStore(s => s.totalEventsRead);
 
-  const { maybeShowInterstitial } = useInterstitialAd();
+  const { showInterstitial } = useInterstitialAd();
   const { showForUnlock, isUnlockReady } = useRewardedUnlock();
 
   const [tomorrowMainUnlocked, setTomorrowMainUnlocked] = useState(false);
@@ -733,6 +733,8 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('today');
   const user = useAuthStore(s => s.user);
+  const isTestAccount = (user as any)?.email === 'stefanrazvan.dogaru@gmail.com';
+  const gamificationSet = useGamificationStore.setState;
   const [seenSaved, setSeenSaved] = useState(userSaved.length);
   useEffect(() => { setSeenSaved(userSaved.length); }, [user?.id]);
   const unseenSaved = tab === 'saved' ? 0 : Math.max(0, userSaved.length - seenSaved);
@@ -745,16 +747,8 @@ export default function HomeScreen() {
     if (pendingEvent) { setNotifEvent(pendingEvent); clearPendingEvent(); }
   }, [pendingEvent]);
 
-  // Ad trigger: every 3 stories read (skip for pro)
-  const prevEventsRead = useRef(totalEventsRead);
-  useEffect(() => {
-    if (!isPro && totalEventsRead > prevEventsRead.current) {
-      if (totalEventsRead % STORY_AD_FREQUENCY === 0) {
-        maybeShowInterstitial(totalEventsRead);
-      }
-    }
-    prevEventsRead.current = totalEventsRead;
-  }, [totalEventsRead, isPro]);
+  // Interstitials fire at natural moments (quiz done, map exit), not on story count.
+  // showInterstitial() is passed down to screens that own those moments.
 
   // ── Data loading ──
   const mem = useRef<Record<string, PD>>({});
@@ -809,8 +803,8 @@ export default function HomeScreen() {
 
   useEffect(() => {
     recordVisit();
-    try { genRecap(); } catch { }
-    setTimeout(() => { if (getRecap()) setRecapVis(true); }, 2000);
+    try { genMonthlyRecap(); } catch { }
+    setTimeout(() => { if (getUnseenMonthlyRecap()) setRecapVis(true); }, 2000);
     Promise.all([fetchOne(0), fetchOne(-1), fetchOne(1), fetchOne(2)]).then(async () => {
       setLoading(false);
       setTick(t => t + 1);
@@ -1029,15 +1023,10 @@ export default function HomeScreen() {
   const canFwd = off < MAX_FWD;
   const showChrome = tab === 'today' || tab === 'discover' || tab === 'search';
   const badgeCnt = newAch.length;
-  const PRO_ONLY_TABS: Tab[] = ['timeline', 'saved'];
   const switchTab = useCallback(async (t: Tab) => {
-    if (PRO_ONLY_TABS.includes(t) && !isPro) {
-      await presentPaywallIfNeeded();
-      return;
-    }
     setTab(t);
     if (t === 'saved') setSeenSaved(userSaved.length);
-  }, [userSaved.length, isPro, presentPaywallIfNeeded]);
+  }, [userSaved.length]);
   const swipeOn = tab === 'today' || tab === 'discover';
   const isNextDayLocked = canFwd && !isPro && (
     (off === 0 && (
@@ -1057,6 +1046,7 @@ export default function HomeScreen() {
       <View style={ms.root}>
         <StatusBar style={isDark ? 'light' : 'dark'} />
         <AchievementToast />
+        <XPFloatToast />
 
         {/* ═════════════════ CHROME (header) ═════════════════ */}
         {showChrome && (
@@ -1110,6 +1100,31 @@ export default function HomeScreen() {
 
               {/* Right — utilities */}
               <View style={[ms.headerRight, { gap: screenWidth < 375 ? 2 : screenWidth < 414 ? 4 : 6 }]}>
+                {isTestAccount && (
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      // Reset daily missions + trigger monthly recap for testing
+                      const today = new Date().toISOString().split('T')[0];
+                      const prevMonth = (() => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; })();
+                      gamificationSet(s => ({
+                        missionsDate: null,
+                        missionStoriesDone: false,
+                        missionQuizzesDone: false,
+                        quizzesToday: 0,
+                        quizDate: null,
+                        monthlyRecaps: { ...s.monthlyRecaps, [prevMonth]: undefined as any },
+                      }));
+                      setTimeout(() => {
+                        try { genMonthlyRecap(); } catch {}
+                        setTimeout(() => { if (getUnseenMonthlyRecap()) setRecapVis(true); }, 300);
+                      }, 100);
+                    }}
+                    style={[ms.iconBtn, { backgroundColor: '#FF375F20', borderWidth: 1, borderColor: '#FF375F50' }]}
+                  >
+                    <Text style={{ fontSize: 10, fontWeight: '900', color: '#FF375F' }}>DEV</Text>
+                  </TouchableOpacity>
+                )}
                 {!isPro && <ProStarButton gold={goldColor} onPress={() => presentPaywall()} />}
 
                 <TouchableOpacity onPress={() => { haptic('light'); setAchVis(true); }}
@@ -1181,9 +1196,9 @@ export default function HomeScreen() {
         {/* ═════════════════ CONTENT ═════════════════ */}
         <View style={{ flex: 1 }}>
           {tab === 'saved' ? <SavedScreen />
-            : tab === 'map' ? <MapScreen />
+            : tab === 'map' ? <MapScreen onInterstitial={!isPro ? showInterstitial : undefined} />
             : tab === 'search' ? <SearchScreen allEvents={allEvents} />
-            : tab === 'timeline' ? <TimelineScreen allEvents={allEvents} />
+            : tab === 'timeline' ? <TimelineScreen allEvents={allEvents} onInterstitial={!isPro ? showInterstitial : undefined} />
             : loading ? (
               <View style={ms.loadW}>
                 <View style={[ms.loadP, { borderColor: goldColor + '25' }]}>
@@ -1235,7 +1250,7 @@ export default function HomeScreen() {
 
         <AchievementsModal visible={achVis} onClose={() => setAchVis(false)} />
         <LeaderboardModal visible={leadVis} onClose={() => setLeadVis(false)} />
-        <WeeklyRecapModal visible={recapVis} onClose={() => setRecapVis(false)} />
+        <MonthlyRecapModal visible={recapVis} onClose={() => setRecapVis(false)} />
         <CalendarModal
           visible={calVis}
           onClose={() => setCalVis(false)}

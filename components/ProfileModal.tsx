@@ -23,6 +23,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { buildAvatarUrl, getStoreUrl, WEBSITE_URL } from '../config/urls';
+import { haptic } from '../utils/haptics';
 import { Language, useLanguage } from '../context/LanguageContext';
 import { GameIcon } from '../utils/GameIcon';
 import { useRevenueCat } from '../context/RevenueCatContext';
@@ -114,7 +115,7 @@ const SettingRow = ({ icon, iconColor, iconBg, title, subtitle, theme, onPress, 
       {right !== undefined ? right : <Ionicons name="chevron-forward" size={14} color={theme.border} />}
     </View>
   );
-  return onPress ? <TouchableOpacity activeOpacity={0.6} onPress={onPress}>{inner}</TouchableOpacity> : inner;
+  return onPress ? <TouchableOpacity activeOpacity={0.6} onPress={() => { haptic('light'); onPress(); }}>{inner}</TouchableOpacity> : inner;
 };
 const _sr = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 13, gap: 13 },
@@ -218,15 +219,18 @@ export default function ProfileModal({ visible, onClose }: Props) {
   const [restoreLoading, setRestoreLoading] = useState(false);
 
   const handleUnlockPro = async () => {
+    haptic('medium');
     await presentPaywall();
   };
 
   const handleManagePro = async () => {
+    haptic('light');
     await presentCustomerCenter();
   };
 
   const handleRestore = async () => {
     if (restoreLoading) return;
+    haptic('medium');
     setRestoreLoading(true);
     try { await restorePurchases(); } finally { setRestoreLoading(false); }
   };
@@ -274,6 +278,7 @@ export default function ProfileModal({ visible, onClose }: Props) {
   };
 
   const handleLogout = async () => {
+    haptic('heavy');
     try { if (isGoogleUser) await GoogleSignin.signOut(); } catch {} finally {
       onClose(); logout(); router.replace('/(auth)/welcome');
     }
@@ -304,7 +309,7 @@ export default function ProfileModal({ visible, onClose }: Props) {
           )}
 
           <View style={s.header}>
-            <TouchableOpacity onPress={onClose} style={s.closeBtn} hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}>
+            <TouchableOpacity onPress={() => { haptic('light'); onClose(); }} style={s.closeBtn} hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}>
               <Ionicons name="chevron-down" size={22} color={theme.text} />
             </TouchableOpacity>
             <Text style={[s.headerTitle, { color: theme.text }]}>{t('profile_title')}</Text>
@@ -400,13 +405,13 @@ export default function ProfileModal({ visible, onClose }: Props) {
               {/* ══ PREFERENCES ══ */}
               <SectionTitle label={t('preferences')} theme={theme} />
               <View style={[s.card, { backgroundColor: isPremium ? '#0F0D14' : theme.card, borderColor: isPremium ? '#2A2230' : theme.border }]}>
-                <SettingRow icon="globe-outline" iconColor="#5856D6" iconBg={'#5856D610'} title={t('language')} subtitle={currentLang.native} theme={theme} onPress={() => setLangExpanded(v => !v)} right={<Ionicons name={langExpanded ? 'chevron-up' : 'chevron-down'} size={15} color={theme.subtext} />} />
+                <SettingRow icon="globe-outline" iconColor="#5856D6" iconBg={'#5856D610'} title={t('language')} subtitle={currentLang.native} theme={theme} onPress={() => { haptic('selection'); setLangExpanded(v => !v); }} right={<Ionicons name={langExpanded ? 'chevron-up' : 'chevron-down'} size={15} color={theme.subtext} />} />
                 {langExpanded && (
                   <View style={s.langList}>
                     {LANGUAGES.map(lang => {
                       const active = language === lang.code;
                       return (
-                        <TouchableOpacity key={lang.code} onPress={() => { setLanguage(lang.code); setLangExpanded(false); }} activeOpacity={0.6}
+                        <TouchableOpacity key={lang.code} onPress={() => { haptic('medium'); setLanguage(lang.code); setLangExpanded(false); }} activeOpacity={0.6}
                           style={[s.langItem, { backgroundColor: active ? `${gold}12` : 'transparent', borderColor: active ? `${gold}35` : theme.border }]}>
                           <View style={[s.langFlagBadge, { borderColor: active ? `${gold}60` : theme.border }]}>
                             <Text style={[s.langFlag, { color: active ? gold : theme.subtext }]}>{lang.flag}</Text>
@@ -490,7 +495,7 @@ export default function ProfileModal({ visible, onClose }: Props) {
                   {THEME_OPTIONS.filter(o => !o.premium).map(opt => {
                     const active = mode === opt.value;
                     return (
-                      <TouchableOpacity key={opt.value} onPress={() => setMode(opt.value)} activeOpacity={0.6}
+                      <TouchableOpacity key={opt.value} onPress={() => { haptic('selection'); setMode(opt.value); }} activeOpacity={0.6}
                         style={[s.themeBtn, { backgroundColor: active ? `${gold}10` : 'transparent', borderColor: active ? `${gold}40` : theme.border }]}>
                         <View style={[s.themeCircle, { backgroundColor: active ? gold : isDark ? '#1C1A16' : '#F0ECE4' }]}>
                           <Ionicons name={opt.icon} size={17} color={active ? '#000' : theme.subtext} />
@@ -505,6 +510,7 @@ export default function ProfileModal({ visible, onClose }: Props) {
                     isDark={isDark}
                     theme={theme}
                     onPress={async () => {
+                      haptic('medium');
                       if (!isPro) { await presentPaywall(); return; }
                       setMode('premium');
                     }}

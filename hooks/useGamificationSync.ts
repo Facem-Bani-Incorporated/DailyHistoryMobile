@@ -60,6 +60,18 @@ export function buildSyncPayload(): GamificationSyncDTO {
     calendarLog: s.calendarLog ?? {},
     photoUrl,
     savedEventsData: perUserEvents,
+    // new fields
+    quizzesToday: s.quizzesToday ?? 0,
+    quizDate: s.quizDate ?? null,
+    missionStoriesDone: s.missionStoriesDone ?? false,
+    missionQuizzesDone: s.missionQuizzesDone ?? false,
+    missionsDate: s.missionsDate ?? null,
+    missionStreakCount: s.missionStreakCount ?? 0,
+    missionStreakLastDate: s.missionStreakLastDate ?? null,
+    explorerBonusDates: s.explorerBonusDates ?? [],
+    streakShieldUsedWeek: s.streakShieldUsedWeek ?? null,
+    monthlyRecaps: s.monthlyRecaps ?? {},
+    monthlyXPResetDate: s.monthlyXPResetDate ?? null,
   };
 
   return {
@@ -71,6 +83,7 @@ export function buildSyncPayload(): GamificationSyncDTO {
     lastActiveDate: s.lastActiveDate ?? null,
     gamificationData: JSON.stringify(blob),
     savedEvents: savedEventIds,
+    monthlyXP: s.monthlyXP ?? 0,
   };
 }
 
@@ -96,6 +109,8 @@ function hydrateFromServer(dto: GamificationSyncDTO, userId: string) {
       totalEventsRead: dto.totalEventsRead ?? 0,
       dailyGoalsCompleted: dto.dailyGoalsCompleted ?? 0,
       lastActiveDate: dto.lastActiveDate ?? null,
+      monthlyXP: dto.monthlyXP ?? 0,
+      monthlyXPResetDate: blob.monthlyXPResetDate ?? null,
       readEventsToday: blob.readEventsToday ?? [],
       readDate: blob.readDate ?? null,
       todayXP: blob.todayXP ?? 0,
@@ -106,6 +121,16 @@ function hydrateFromServer(dto: GamificationSyncDTO, userId: string) {
       categoriesRead: new Set(blob.categoriesRead ?? []),
       categoryCount: blob.categoryCount ?? {},
       dailyGoalDates: blob.dailyGoalDates ?? [],
+      quizzesToday: blob.quizzesToday ?? 0,
+      quizDate: blob.quizDate ?? null,
+      missionStoriesDone: blob.missionStoriesDone ?? false,
+      missionQuizzesDone: blob.missionQuizzesDone ?? false,
+      missionsDate: blob.missionsDate ?? null,
+      missionStreakCount: blob.missionStreakCount ?? 0,
+      missionStreakLastDate: blob.missionStreakLastDate ?? null,
+      explorerBonusDates: blob.explorerBonusDates ?? [],
+      streakShieldUsedWeek: blob.streakShieldUsedWeek ?? null,
+      monthlyRecaps: blob.monthlyRecaps ?? {},
       weeklyRecaps: blob.weeklyRecaps ?? {},
       currentWeekKey: blob.currentWeekKey ?? null,
       calendarLog: blob.calendarLog ?? {},

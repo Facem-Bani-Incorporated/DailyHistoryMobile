@@ -1,143 +1,120 @@
 // components/QuizSection.tsx
+import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import {
-  Check,
-  CheckCircle2,
-  ChevronDown,
-  Sparkles,
-  Trophy,
-  X as XIcon,
-  Zap,
-} from 'lucide-react-native';
+import { Check, ChevronDown, Sparkles, Trophy, X as XIcon } from 'lucide-react-native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
   Easing,
-  LayoutAnimation,
   LayoutChangeEvent,
   Platform,
+  Pressable,
   StyleSheet,
   Text,
-  TouchableOpacity,
-  UIManager,
   View,
 } from 'react-native';
+import { useTheme } from '../context/ThemeContext';
 import { useQuiz } from '../hooks/useQuiz';
 import { useGamificationStore } from '../store/useGamificationStore';
 
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
-
-const SANS = Platform.OS === 'ios' ? 'System' : 'sans-serif';
 const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
 
-// XP awarded client-side: a perfect run is worth 500, otherwise 100.
-const XP_PERFECT = 500;
-const XP_PARTIAL = 100;
-
 const L: Record<string, Record<string, string>> = {
-  en: { cta: 'Test Your Knowledge', tap: 'Tap to begin', questions: 'questions', question: 'question', submit: 'Submit Answers', correct: 'correct', done: 'Quiz Completed', allRequired: 'Answer every question to continue', perfect: 'Flawless Victory', great: 'Well Played', review: 'Review', answered: 'answered', xp: 'XP' },
-  ro: { cta: 'Testează-ți Cunoștințele', tap: 'Apasă pentru a începe', questions: 'întrebări', question: 'întrebare', submit: 'Trimite Răspunsurile', correct: 'corecte', done: 'Quiz Finalizat', allRequired: 'Răspunde la toate întrebările pentru a continua', perfect: 'Victorie Perfectă', great: 'Bine Jucat', review: 'Recapitulare', answered: 'răspunse', xp: 'XP' },
-  fr: { cta: 'Testez vos Connaissances', tap: 'Touchez pour commencer', questions: 'questions', question: 'question', submit: 'Soumettre', correct: 'correctes', done: 'Quiz Terminé', allRequired: 'Répondez à toutes les questions pour continuer', perfect: 'Victoire Parfaite', great: 'Bien Joué', review: 'Révision', answered: 'répondues', xp: 'XP' },
-  de: { cta: 'Teste Dein Wissen', tap: 'Tippen zum Starten', questions: 'Fragen', question: 'Frage', submit: 'Antworten Senden', correct: 'richtig', done: 'Quiz Abgeschlossen', allRequired: 'Beantworte alle Fragen, um fortzufahren', perfect: 'Perfekter Sieg', great: 'Gut Gespielt', review: 'Überblick', answered: 'beantwortet', xp: 'XP' },
-  es: { cta: 'Pon a Prueba tu Conocimiento', tap: 'Toca para empezar', questions: 'preguntas', question: 'pregunta', submit: 'Enviar Respuestas', correct: 'correctas', done: 'Quiz Completado', allRequired: 'Responde todas las preguntas para continuar', perfect: 'Victoria Perfecta', great: 'Bien Jugado', review: 'Repaso', answered: 'respondidas', xp: 'XP' },
+  en: { kicker: 'Knowledge Check', cta: 'Test your knowledge', tap: 'Tap to begin', q: 'question', qs: 'questions', submit: 'Submit', done: 'Completed', answered: 'answered', correct: 'correct', perfect: 'Perfect', great: 'Nicely done', review: 'Your result', xp: 'XP', need: 'Answer all questions' },
+  ro: { kicker: 'Test de Cunoștințe', cta: 'Testează-ți cunoștințele', tap: 'Apasă pentru a începe', q: 'întrebare', qs: 'întrebări', submit: 'Trimite', done: 'Finalizat', answered: 'răspunse', correct: 'corecte', perfect: 'Perfect', great: 'Bravo', review: 'Rezultatul tău', xp: 'XP', need: 'Răspunde la toate' },
+  fr: { kicker: 'Quiz', cta: 'Testez vos connaissances', tap: 'Touchez pour commencer', q: 'question', qs: 'questions', submit: 'Valider', done: 'Terminé', answered: 'répondues', correct: 'correctes', perfect: 'Parfait', great: 'Bien joué', review: 'Votre résultat', xp: 'XP', need: 'Répondez à tout' },
+  de: { kicker: 'Wissens-Check', cta: 'Teste dein Wissen', tap: 'Zum Starten tippen', q: 'Frage', qs: 'Fragen', submit: 'Senden', done: 'Fertig', answered: 'beantwortet', correct: 'richtig', perfect: 'Perfekt', great: 'Gut gemacht', review: 'Dein Ergebnis', xp: 'XP', need: 'Alle beantworten' },
+  es: { kicker: 'Test', cta: 'Pon a prueba tu saber', tap: 'Toca para empezar', q: 'pregunta', qs: 'preguntas', submit: 'Enviar', done: 'Completado', answered: 'resp.', correct: 'correctas', perfect: 'Perfecto', great: 'Bien hecho', review: 'Tu resultado', xp: 'XP', need: 'Responde todo' },
 };
 
 interface Props {
   eventId: string | null;
   language?: string;
-  theme: any;
-  isDark: boolean;
+  theme?: any;
+  isDark?: boolean;
 }
 
-export function QuizSection({ eventId, language = 'en', theme, isDark }: Props) {
+export function QuizSection({ eventId, language = 'en' }: Props) {
+  const { theme, isDark } = useTheme();
   const { phase, quiz, answers, result, allAnswered, selectAnswer, submit } = useQuiz(eventId, language);
   const addQuizXP = useGamificationStore(s => s.addQuizXP);
+  const recordQuizDone = useGamificationStore(s => s.recordQuizDone);
   const lbl = L[language] ?? L.en;
+
+  const gold = theme.gold ?? '#D4A843';
+  const green = '#2ECC88';
+  const red = '#FF5C5C';
+
+  // Card colors — fully opaque, no blur
+  const cardBg = isDark ? '#1A1509' : '#FAF7EE';
+  const ink = isDark ? '#F0E6CC' : '#1C1506';
+  const sub = isDark ? 'rgba(240,230,204,0.5)' : 'rgba(28,21,6,0.45)';
+  const divider = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
+  const optBg = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.035)';
+  const optBorder = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
 
   const [expanded, setExpanded] = useState(false);
   const [contentH, setContentH] = useState(0);
-  const [displayXP, setDisplayXP] = useState(0);
+  const [shownXP, setShownXP] = useState(0);
 
   const expandAnim = useRef(new Animated.Value(0)).current;
-  const arrowAnim = useRef(new Animated.Value(0)).current;
-  const pulse = useRef(new Animated.Value(0)).current;
-  const xpAnim = useRef(new Animated.Value(0)).current;
-  const scoreScale = useRef(new Animated.Value(0.7)).current;
-  const awardedRef = useRef(false);
-
-  // ── Palette ──
-  const gold = theme.gold ?? '#D4A843';
-  const textMain = theme.text ?? (isDark ? '#F5F1E8' : '#1A1208');
-  const textSub = theme.subtext ?? (isDark ? 'rgba(245,241,232,0.5)' : 'rgba(26,18,8,0.45)');
-  const surf = isDark ? 'rgba(255,255,255,0.035)' : 'rgba(0,0,0,0.025)';
-  const surfRaised = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
-  const border = isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)';
-  const green = '#4ade80';
-  const red = '#f87171';
+  const arrow = useRef(new Animated.Value(0)).current;
+  const scorePop = useRef(new Animated.Value(0.7)).current;
+  const xpCount = useRef(new Animated.Value(0)).current;
+  const shimmer = useRef(new Animated.Value(0)).current;
+  const awarded = useRef(false);
 
   const isPerfect = !!result?.perfectScore;
-  const earnedXP = result ? (isPerfect ? XP_PERFECT : XP_PARTIAL) : 0;
+  const accent = phase === 'done' ? (isPerfect ? gold : green) : gold;
 
-  // ── Idle glow pulse on the trigger ──
-  useEffect(() => {
-    if (phase === 'ready' || phase === 'loading') {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulse, { toValue: 1, duration: 1800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-          Animated.timing(pulse, { toValue: 0, duration: 1800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        ]),
-      ).start();
-    }
-  }, [phase]);
-
-  // ── Animate the results reveal (score pop + XP count-up) ──
   useEffect(() => {
     if (phase === 'done' && result) {
-      scoreScale.setValue(0.7);
-      xpAnim.setValue(0);
-      Animated.spring(scoreScale, { toValue: 1, tension: 120, friction: 9, useNativeDriver: true }).start();
-      Animated.timing(xpAnim, { toValue: earnedXP, duration: 1100, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
-      const id = xpAnim.addListener(({ value }) => setDisplayXP(Math.round(value)));
-      if (expanded) LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      return () => xpAnim.removeListener(id);
+      scorePop.setValue(0.7);
+      xpCount.setValue(0);
+      Animated.spring(scorePop, { toValue: 1, tension: 160, friction: 8, useNativeDriver: true }).start();
+      Animated.timing(xpCount, { toValue: result.xpEarned, duration: 1100, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+      const id = xpCount.addListener(({ value }) => setShownXP(Math.round(value)));
+      if (isPerfect) {
+        Animated.loop(
+          Animated.timing(shimmer, { toValue: 1, duration: 2200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        ).start();
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      } else {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+      }
+      return () => xpCount.removeListener(id);
     }
   }, [phase]);
-
-  // ── Unavailable: render nothing in production; a hint in dev so we can see WHY ──
-  if (phase === 'unavailable') {
-    if (__DEV__) {
-      return (
-        <View style={[st.devNote, { borderColor: border }]}>
-          <Text style={[st.devNoteText, { color: textSub }]}>
-            [quiz] no quiz for event {String(eventId)} (404 / empty)
-          </Text>
-        </View>
-      );
-    }
-    return null;
-  }
 
   const onContentLayout = useCallback((e: LayoutChangeEvent) => {
     const h = e.nativeEvent.layout.height;
     if (h > 0 && h !== contentH) setContentH(h);
   }, [contentH]);
 
+  if (phase === 'unavailable') return null;
+
   const toggle = () => {
     if (phase === 'loading') return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     const next = !expanded;
     setExpanded(next);
-    Animated.spring(expandAnim, { toValue: next ? 1 : 0, tension: 60, friction: 12, useNativeDriver: false }).start();
-    Animated.spring(arrowAnim, { toValue: next ? 1 : 0, tension: 80, friction: 12, useNativeDriver: true }).start();
+    Animated.spring(expandAnim, { toValue: next ? 1 : 0, tension: 55, friction: 12, useNativeDriver: false }).start();
+    Animated.spring(arrow, { toValue: next ? 1 : 0, tension: 70, friction: 12, useNativeDriver: true }).start();
   };
 
-  const handleSubmit = async () => {
+  const pick = (qk: string, oid: string) => {
+    Haptics.selectionAsync().catch(() => {});
+    selectAnswer(qk, oid);
+  };
+
+  const onSubmit = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     const res = await submit();
-    if (res && !awardedRef.current) {
-      awardedRef.current = true;
-      addQuizXP(res.perfectScore ? XP_PERFECT : XP_PARTIAL);
+    if (res && !awarded.current) {
+      awarded.current = true;
+      addQuizXP(res.xpEarned);
+      recordQuizDone();
     }
   };
 
@@ -147,313 +124,300 @@ export function QuizSection({ eventId, language = 'en', theme, isDark }: Props) 
   const answeredCount = quiz ? quiz.questions.filter(q => answers[q.questionKey]).length : 0;
   const progress = qCount > 0 ? answeredCount / qCount : 0;
 
-  const arrowRot = arrowAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '180deg'] });
-  const animH = contentH > 0
-    ? expandAnim.interpolate({ inputRange: [0, 1], outputRange: [0, contentH] })
-    : 0;
-  const glowOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.18, 0.5] });
-
-  const accent = isDone ? (isPerfect ? gold : green) : gold;
+  const rot = arrow.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '180deg'] });
+  const animH = contentH > 0 ? expandAnim.interpolate({ inputRange: [0, 1], outputRange: [0, contentH] }) : 0;
+  const shimmerX = shimmer.interpolate({ inputRange: [0, 1], outputRange: [-240, 240] });
 
   return (
-    <View style={[st.wrap, { borderColor: isDone ? accent + '50' : border, backgroundColor: isDark ? '#0E0C09' : '#FFFDF8' }]}>
-      {/* Animated accent glow on the edge */}
-      {(phase === 'ready' || isLoading) && (
-        <Animated.View
-          pointerEvents="none"
-          style={[StyleSheet.absoluteFill, { borderRadius: 20, borderWidth: 1, borderColor: gold, opacity: glowOpacity }]}
-        />
-      )}
+    <View style={s.outer}>
+      <View style={[
+        s.card,
+        { backgroundColor: cardBg, shadowColor: accent },
+        isDone && { borderColor: accent + '55' },
+        !isDone && { borderColor: divider },
+      ]}>
+        {/* Left accent bar */}
+        <View style={[s.accentBar, { backgroundColor: accent }]} />
 
-      {/* ═══ TRIGGER ═══ */}
-      <TouchableOpacity onPress={toggle} activeOpacity={0.85} style={st.trigger}>
-        <LinearGradient
-          colors={isDone
-            ? [accent + '22', accent + '08', 'transparent']
-            : [gold + '1C', gold + '06', 'transparent']}
-          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFill}
-        />
+        {/* ═══ TRIGGER ═══ */}
+        <Pressable onPress={toggle} style={({ pressed }) => [s.trigger, pressed && { opacity: 0.85 }]}>
+          <View style={[s.iconBox, { backgroundColor: accent + '1A', borderColor: accent + '44' }]}>
+            {isLoading
+              ? <ActivityIndicator size="small" color={accent} />
+              : isDone
+                ? (isPerfect
+                  ? <Trophy size={19} color={accent} strokeWidth={2} />
+                  : <Check size={19} color={accent} strokeWidth={2.8} />)
+                : <Sparkles size={19} color={accent} strokeWidth={2} />}
+          </View>
 
-        <View style={[st.iconOrb, { backgroundColor: accent + '1A', borderColor: accent + '38' }]}>
-          {isLoading
-            ? <ActivityIndicator size="small" color={gold} />
-            : isDone
-              ? (isPerfect
-                  ? <Trophy size={19} color={accent} strokeWidth={2} fill={accent + '40'} />
-                  : <CheckCircle2 size={19} color={accent} strokeWidth={2.2} />)
-              : <Zap size={19} color={gold} strokeWidth={2} fill={gold + '35'} />}
-        </View>
-
-        <View style={{ flex: 1 }}>
-          <Text style={[st.triggerKicker, { color: accent }]}>
-            {isDone ? lbl.review.toUpperCase() : 'QUIZ'}
-          </Text>
-          <Text style={[st.triggerTitle, { color: textMain }]} numberOfLines={1}>
-            {isDone ? lbl.done : lbl.cta}
-          </Text>
-          {isDone && result ? (
-            <Text style={[st.triggerSub, { color: textSub }]}>
-              {result.correctAnswers}/{result.totalQuestions} {lbl.correct}  ·  +{earnedXP} {lbl.xp}
+          <View style={{ flex: 1 }}>
+            <Text style={[s.kicker, { color: accent }]}>
+              {(isDone ? lbl.review : lbl.kicker).toUpperCase()}
             </Text>
-          ) : (
-            <Text style={[st.triggerSub, { color: textSub }]}>
-              {isLoading ? lbl.tap : `${qCount} ${qCount === 1 ? lbl.question : lbl.questions}  ·  ${lbl.tap}`}
+            <Text style={[s.title, { color: ink }]} numberOfLines={1}>
+              {isDone ? lbl.done : lbl.cta}
             </Text>
-          )}
-        </View>
+            <Text style={[s.subText, { color: sub }]} numberOfLines={1}>
+              {isDone && result
+                ? `${result.correctAnswers}/${result.totalQuestions} ${lbl.correct}  ·  +${result.xpEarned} ${lbl.xp}`
+                : isLoading
+                  ? lbl.tap
+                  : `${qCount} ${qCount === 1 ? lbl.q : lbl.qs}  ·  ${lbl.tap}`}
+            </Text>
+          </View>
 
-        <Animated.View style={{ transform: [{ rotate: arrowRot }] }}>
-          <ChevronDown size={20} color={accent} strokeWidth={2.4} />
-        </Animated.View>
-      </TouchableOpacity>
-
-      {/* ═══ EXPANDING BODY ═══ */}
-      <Animated.View style={{ height: animH, overflow: 'hidden' }}>
-        <View onLayout={onContentLayout} style={st.inner}>
-          <View style={[st.divider, { backgroundColor: border }]} />
-
-          {/* ─── QUESTIONS ─── */}
-          {(phase === 'ready' || phase === 'submitting') && quiz && (
-            <View style={{ gap: 22 }}>
-              {/* Progress header */}
-              <View style={st.progressRow}>
-                <Text style={[st.progressLabel, { color: textSub }]}>
-                  {answeredCount}/{qCount} {lbl.answered}
-                </Text>
-                <View style={[st.progressTrack, { backgroundColor: surfRaised }]}>
-                  <View style={[st.progressFill, { width: `${progress * 100}%`, backgroundColor: gold }]} />
-                </View>
-              </View>
-
-              {quiz.questions.map((q, qi) => (
-                <View key={q.questionKey} style={st.qBlock}>
-                  <View style={st.qHeader}>
-                    <View style={[st.qNumBadge, { backgroundColor: gold + '18', borderColor: gold + '38' }]}>
-                      <Text style={[st.qNum, { color: gold }]}>{qi + 1}</Text>
-                    </View>
-                    <Text style={[st.qText, { color: textMain }]}>{q.question}</Text>
-                  </View>
-
-                  <View style={{ gap: 8 }}>
-                    {q.options.map((opt, oi) => {
-                      const sel = answers[q.questionKey] === opt.optionId;
-                      return (
-                        <TouchableOpacity
-                          key={opt.optionId}
-                          onPress={() => selectAnswer(q.questionKey, opt.optionId)}
-                          activeOpacity={0.7}
-                          style={[st.opt, {
-                            backgroundColor: sel ? gold + '18' : surf,
-                            borderColor: sel ? gold : border,
-                          }]}
-                        >
-                          <View style={[st.optLetter, {
-                            backgroundColor: sel ? gold : 'transparent',
-                            borderColor: sel ? gold : (isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.18)'),
-                          }]}>
-                            <Text style={[st.optLetterText, { color: sel ? '#1A1208' : textSub }]}>
-                              {String.fromCharCode(65 + oi)}
-                            </Text>
-                          </View>
-                          <Text style={[st.optText, { color: sel ? textMain : textMain, fontWeight: sel ? '700' : '500' }]}>
-                            {opt.text}
-                          </Text>
-                          {sel && <Check size={15} color={gold} strokeWidth={3} />}
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                </View>
-              ))}
-
-              {/* Submit */}
-              <TouchableOpacity
-                onPress={handleSubmit}
-                disabled={!allAnswered || phase === 'submitting'}
-                activeOpacity={0.85}
-                style={st.submitWrap}
-              >
-                <LinearGradient
-                  colors={allAnswered ? [gold, '#C8923A'] : [surfRaised, surfRaised]}
-                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                  style={st.submitBtn}
-                >
-                  {phase === 'submitting'
-                    ? <ActivityIndicator size="small" color="#1A1208" />
-                    : (
-                      <>
-                        <Text style={[st.submitText, { color: allAnswered ? '#1A1208' : textSub }]}>
-                          {lbl.submit}
-                        </Text>
-                        {allAnswered && <Sparkles size={16} color="#1A1208" strokeWidth={2.4} />}
-                      </>
-                    )}
-                </LinearGradient>
-              </TouchableOpacity>
-
-              {!allAnswered && (
-                <Text style={[st.hint, { color: textSub }]}>{lbl.allRequired}</Text>
-              )}
+          <Animated.View style={{ transform: [{ rotate: rot }] }}>
+            <View style={[s.chevBox, { borderColor: divider }]}>
+              <ChevronDown size={15} color={sub} strokeWidth={2.5} />
             </View>
-          )}
+          </Animated.View>
+        </Pressable>
 
-          {/* ─── RESULTS ─── */}
-          {phase === 'done' && result && quiz && (
-            <View style={{ gap: 14 }}>
-              {/* Hero score banner */}
-              <Animated.View style={{ transform: [{ scale: scoreScale }] }}>
-                <LinearGradient
-                  colors={isPerfect
-                    ? [gold + '26', gold + '0E', 'transparent']
-                    : [green + '1E', green + '08', 'transparent']}
-                  start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }}
-                  style={[st.scoreBanner, { borderColor: accent + '40' }]}
-                >
-                  <View style={[st.scoreBadge, { backgroundColor: accent + '18', borderColor: accent + '45' }]}>
-                    {isPerfect
-                      ? <Trophy size={26} color={accent} strokeWidth={1.8} fill={accent + '35'} />
-                      : <CheckCircle2 size={26} color={accent} strokeWidth={2} />}
+        {/* ═══ BODY ═══ */}
+        <Animated.View style={{ height: animH, overflow: 'hidden' }}>
+          <View onLayout={onContentLayout} style={s.body}>
+            <View style={[s.divider, { backgroundColor: divider }]} />
+
+            {/* QUESTIONS */}
+            {(phase === 'ready' || phase === 'submitting') && quiz && (
+              <View style={{ gap: 20 }}>
+                {/* progress bar */}
+                <View style={s.progressRow}>
+                  <View style={[s.progressTrack, { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)' }]}>
+                    <Animated.View style={[s.progressFill, { width: `${progress * 100}%`, backgroundColor: accent }]} />
                   </View>
+                  <Text style={[s.progressTxt, { color: accent }]}>{answeredCount}/{qCount}</Text>
+                </View>
 
-                  <Text style={[st.scoreTitle, { color: accent }]}>
-                    {isPerfect ? lbl.perfect : lbl.great}
-                  </Text>
-
-                  <View style={st.scoreNumRow}>
-                    <Text style={[st.scoreNum, { color: textMain }]}>{result.correctAnswers}</Text>
-                    <Text style={[st.scoreDenom, { color: textSub }]}>/ {result.totalQuestions}</Text>
-                  </View>
-                  <Text style={[st.scoreCorrect, { color: textSub }]}>{lbl.correct}</Text>
-
-                  {/* Animated XP pill */}
-                  <View style={[st.xpPill, { backgroundColor: accent, shadowColor: accent }]}>
-                    <Zap size={15} color="#1A1208" strokeWidth={2.5} fill="#1A1208" />
-                    <Text style={st.xpPillText}>+{displayXP} {lbl.xp}</Text>
-                  </View>
-                </LinearGradient>
-              </Animated.View>
-
-              {/* Per-question breakdown */}
-              {result.answerResults.length > 0 && quiz.questions.map((q, qi) => {
-                const info = result.answerResults.find(r => r.questionKey === q.questionKey);
-                const ok = info?.isCorrect ?? false;
-                const myOpt = answers[q.questionKey];
-                const rightOpt = info?.correctOptionId;
-                const c = ok ? green : red;
-                return (
-                  <View key={q.questionKey} style={[st.resCard, { backgroundColor: c + '0C', borderColor: c + '2E' }]}>
-                    <View style={st.resHead}>
-                      <View style={[st.resIcon, { backgroundColor: c + '20' }]}>
-                        {ok
-                          ? <Check size={13} color={c} strokeWidth={3} />
-                          : <XIcon size={13} color={c} strokeWidth={3} />}
+                {quiz.questions.map((q, qi) => (
+                  <View key={q.questionKey} style={{ gap: 10 }}>
+                    <View style={s.qHead}>
+                      <View style={[s.qNum, { backgroundColor: accent + '22', borderColor: accent + '44' }]}>
+                        <Text style={[s.qNumTxt, { color: accent }]}>{qi + 1}</Text>
                       </View>
-                      <Text style={[st.resQ, { color: textMain }]}>{qi + 1}. {q.question}</Text>
+                      <Text style={[s.qText, { color: ink }]}>{q.question}</Text>
                     </View>
-
-                    <View style={{ gap: 6, marginLeft: 34 }}>
-                      {q.options.map(opt => {
-                        const mine = opt.optionId === myOpt;
-                        const right = opt.optionId === rightOpt;
-                        if (!mine && !right) return null;
-                        const oc = right ? green : red;
+                    <View style={{ gap: 8, paddingLeft: 2 }}>
+                      {q.options.map((opt, oi) => {
+                        const sel = answers[q.questionKey] === opt.optionId;
                         return (
-                          <View key={opt.optionId} style={[st.resOpt, { backgroundColor: oc + '16', borderColor: oc + '40' }]}>
-                            {right
-                              ? <Check size={12} color={green} strokeWidth={3} />
-                              : <XIcon size={12} color={red} strokeWidth={3} />}
-                            <Text style={[st.resOptText, { color: oc }]}>{opt.text}</Text>
-                          </View>
+                          <Pressable
+                            key={opt.optionId}
+                            onPress={() => pick(q.questionKey, opt.optionId)}
+                            style={({ pressed }) => [
+                              s.opt,
+                              sel
+                                ? { backgroundColor: accent + '18', borderColor: accent + 'BB' }
+                                : { backgroundColor: optBg, borderColor: optBorder },
+                              pressed && { transform: [{ scale: 0.985 }] },
+                            ]}
+                          >
+                            <View style={[
+                              s.letter,
+                              sel
+                                ? { backgroundColor: accent, borderColor: accent }
+                                : { backgroundColor: 'transparent', borderColor: optBorder },
+                            ]}>
+                              {sel
+                                ? <Check size={12} color={isDark ? '#1A1208' : '#fff'} strokeWidth={3.5} />
+                                : <Text style={[s.letterTxt, { color: sub }]}>{String.fromCharCode(65 + oi)}</Text>}
+                            </View>
+                            <Text style={[
+                              s.optTxt,
+                              { color: sel ? ink : (isDark ? 'rgba(240,230,204,0.82)' : 'rgba(28,21,6,0.8)'), fontWeight: sel ? '700' : '500' },
+                            ]}>
+                              {opt.text}
+                            </Text>
+                          </Pressable>
                         );
                       })}
                     </View>
-
-                    {q.explanation ? (
-                      <Text style={[st.explanation, { color: textSub }]}>{q.explanation}</Text>
-                    ) : null}
                   </View>
-                );
-              })}
-            </View>
-          )}
+                ))}
 
-          {/* ─── Done, no detail (reloaded) ─── */}
-          {phase === 'done' && !result && (
-            <View style={st.doneEmpty}>
-              <CheckCircle2 size={26} color={green} strokeWidth={2} />
-              <Text style={[st.doneEmptyText, { color: textSub }]}>{lbl.done}</Text>
-            </View>
-          )}
-        </View>
-      </Animated.View>
+                {/* submit button */}
+                <Pressable
+                  onPress={onSubmit}
+                  disabled={!allAnswered || phase === 'submitting'}
+                  style={({ pressed }) => [s.submitWrap, pressed && { opacity: 0.88 }]}
+                >
+                  {allAnswered ? (
+                    <LinearGradient
+                      colors={[gold, isDark ? '#B07E1E' : '#9A6E18']}
+                      start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                      style={s.submitBtn}
+                    >
+                      {phase === 'submitting'
+                        ? <ActivityIndicator size="small" color={isDark ? '#1A1208' : '#fff'} />
+                        : <>
+                          <Text style={[s.submitTxt, { color: '#1A1208' }]}>{lbl.submit}</Text>
+                          <Sparkles size={14} color="#1A1208" strokeWidth={2.5} />
+                        </>}
+                    </LinearGradient>
+                  ) : (
+                    <View style={[s.submitBtn, { backgroundColor: optBg, borderWidth: 1, borderColor: optBorder }]}>
+                      <Text style={[s.submitTxt, { color: sub }]}>{lbl.need}</Text>
+                    </View>
+                  )}
+                </Pressable>
+              </View>
+            )}
+
+            {/* RESULTS */}
+            {phase === 'done' && result && quiz && (
+              <View style={{ gap: 10 }}>
+                {/* Score card */}
+                <Animated.View style={[s.scoreCard, { backgroundColor: accent + '12', borderColor: accent + '44' }, { transform: [{ scale: scorePop }] }]}>
+                  {isPerfect && (
+                    <Animated.View
+                      pointerEvents="none"
+                      style={[StyleSheet.absoluteFill, { transform: [{ translateX: shimmerX }, { rotate: '15deg' }], borderRadius: 16, overflow: 'hidden' }]}
+                    >
+                      <LinearGradient
+                        colors={['transparent', accent + '2A', 'transparent']}
+                        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                        style={{ flex: 1, width: 100 }}
+                      />
+                    </Animated.View>
+                  )}
+                  <View style={[s.scoreBadge, { backgroundColor: accent + '22', borderColor: accent + '55' }]}>
+                    {isPerfect
+                      ? <Trophy size={24} color={accent} strokeWidth={1.9} />
+                      : <Check size={24} color={accent} strokeWidth={2.6} />}
+                  </View>
+                  <Text style={[s.scoreLabel, { color: accent }]}>
+                    {isPerfect ? lbl.perfect : lbl.great}
+                  </Text>
+                  <View style={s.scoreRow}>
+                    <Text style={[s.scoreBig, { color: ink }]}>{result.correctAnswers}</Text>
+                    <Text style={[s.scoreSmall, { color: sub }]}>/ {result.totalQuestions}</Text>
+                  </View>
+                  <View style={[s.xpPill, { backgroundColor: accent }]}>
+                    <Sparkles size={12} color="#1A1208" strokeWidth={2.5} />
+                    <Text style={s.xpPillTxt}>+{shownXP} {lbl.xp}</Text>
+                  </View>
+                </Animated.View>
+
+                {/* Per-question review */}
+                {result.answerResults.length > 0 && quiz.questions.map((q, qi) => {
+                  const info = result.answerResults.find(r => r.questionKey === q.questionKey);
+                  const ok = info?.isCorrect ?? false;
+                  const myOpt = answers[q.questionKey];
+                  const rightOpt = info?.correctOptionId;
+                  const c = ok ? green : red;
+                  return (
+                    <View key={q.questionKey} style={[s.resCard, { backgroundColor: c + '0D', borderColor: c + '30' }]}>
+                      <View style={s.resHead}>
+                        <View style={[s.resDot, { backgroundColor: c + '22' }]}>
+                          {ok
+                            ? <Check size={12} color={c} strokeWidth={3.2} />
+                            : <XIcon size={12} color={c} strokeWidth={3.2} />}
+                        </View>
+                        <Text style={[s.resQ, { color: ink }]}>{qi + 1}. {q.question}</Text>
+                      </View>
+                      <View style={{ gap: 6, marginLeft: 32 }}>
+                        {q.options.map(opt => {
+                          const mine = opt.optionId === myOpt;
+                          const right = opt.optionId === rightOpt;
+                          if (!mine && !right) return null;
+                          const oc = right ? green : red;
+                          return (
+                            <View key={opt.optionId} style={[s.resOpt, { backgroundColor: oc + '12', borderColor: oc + '33' }]}>
+                              {right
+                                ? <Check size={11} color={green} strokeWidth={3.2} />
+                                : <XIcon size={11} color={red} strokeWidth={3.2} />}
+                              <Text style={[s.resOptTxt, { color: oc }]}>{opt.text}</Text>
+                            </View>
+                          );
+                        })}
+                      </View>
+                      {q.explanation ? (
+                        <Text style={[s.expl, { color: sub }]}>{q.explanation}</Text>
+                      ) : null}
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+
+            {phase === 'done' && !result && (
+              <View style={s.doneEmpty}>
+                <Check size={22} color={green} strokeWidth={2.4} />
+                <Text style={[s.doneEmptyTxt, { color: sub }]}>{lbl.done}</Text>
+              </View>
+            )}
+          </View>
+        </Animated.View>
+      </View>
     </View>
   );
 }
 
-/* ═══════════════════════════════════════════════════════════ */
-const st = StyleSheet.create({
-  wrap: { marginTop: 28, borderRadius: 20, borderWidth: 1, overflow: 'hidden' },
+const s = StyleSheet.create({
+  outer: { marginTop: 24 },
+
+  card: {
+    borderRadius: 20,
+    borderWidth: 1,
+    overflow: 'hidden',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    elevation: 8,
+  },
+
+  accentBar: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 3 },
 
   // Trigger
-  trigger: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, paddingVertical: 16 },
-  iconOrb: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
-  triggerKicker: { fontSize: 9, fontWeight: '900', letterSpacing: 2.4, marginBottom: 3 },
-  triggerTitle: { fontSize: 17, fontWeight: '800', letterSpacing: -0.4, fontFamily: SERIF },
-  triggerSub: { fontSize: 11.5, marginTop: 3, letterSpacing: 0.1, fontWeight: '500' },
+  trigger: { flexDirection: 'row', alignItems: 'center', gap: 13, paddingLeft: 18, paddingRight: 14, paddingVertical: 16 },
+  iconBox: { width: 42, height: 42, borderRadius: 13, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  kicker: { fontSize: 9, fontWeight: '800', letterSpacing: 2.5, marginBottom: 2 },
+  title: { fontSize: 16, fontWeight: '700', letterSpacing: -0.3, fontFamily: SERIF },
+  subText: { fontSize: 11.5, marginTop: 2, fontWeight: '500' },
+  chevBox: { width: 28, height: 28, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
 
   // Body
-  inner: { paddingHorizontal: 16, paddingBottom: 18 },
+  body: { paddingLeft: 18, paddingRight: 14, paddingBottom: 18 },
   divider: { height: StyleSheet.hairlineWidth, marginBottom: 18 },
 
-  // Progress
-  progressRow: { gap: 7 },
-  progressLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase' },
-  progressTrack: { height: 4, borderRadius: 2, overflow: 'hidden' },
+  progressRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  progressTrack: { flex: 1, height: 4, borderRadius: 2, overflow: 'hidden' },
   progressFill: { height: 4, borderRadius: 2 },
+  progressTxt: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5, minWidth: 28, textAlign: 'right' },
 
-  // Question
-  qBlock: { gap: 12 },
-  qHeader: { flexDirection: 'row', gap: 11, alignItems: 'flex-start' },
-  qNumBadge: { width: 26, height: 26, borderRadius: 9, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  qNum: { fontSize: 13, fontWeight: '900', fontFamily: SANS },
-  qText: { flex: 1, fontSize: 15, fontWeight: '700', lineHeight: 21, paddingTop: 2, fontFamily: SERIF },
+  qHead: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
+  qNum: { width: 24, height: 24, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+  qNumTxt: { fontSize: 11, fontWeight: '900' },
+  qText: { flex: 1, fontSize: 15, fontWeight: '600', lineHeight: 22, fontFamily: SERIF },
 
-  // Options
-  opt: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 13, paddingVertical: 13, borderRadius: 13, borderWidth: 1 },
-  optLetter: { width: 24, height: 24, borderRadius: 8, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  optLetterText: { fontSize: 11, fontWeight: '900' },
-  optText: { flex: 1, fontSize: 13.5, lineHeight: 18 },
+  opt: { flexDirection: 'row', alignItems: 'center', gap: 11, paddingHorizontal: 13, paddingVertical: 12, borderRadius: 13, borderWidth: 1 },
+  letter: { width: 24, height: 24, borderRadius: 7, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  letterTxt: { fontSize: 11, fontWeight: '900' },
+  optTxt: { flex: 1, fontSize: 14, lineHeight: 20 },
 
-  // Submit
-  submitWrap: { borderRadius: 15, overflow: 'hidden', marginTop: 2 },
-  submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, paddingVertical: 15 },
-  submitText: { fontSize: 13, fontWeight: '900', letterSpacing: 1.4, textTransform: 'uppercase' },
-  hint: { fontSize: 11, textAlign: 'center', letterSpacing: 0.2, marginTop: -8, fontStyle: 'italic' },
+  submitWrap: { borderRadius: 14, overflow: 'hidden', marginTop: 2 },
+  submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 15, borderRadius: 14 },
+  submitTxt: { fontSize: 12, fontWeight: '900', letterSpacing: 1.8, textTransform: 'uppercase' },
 
-  // Results
-  scoreBanner: { alignItems: 'center', paddingVertical: 24, paddingHorizontal: 20, borderRadius: 18, borderWidth: 1, gap: 5 },
-  scoreBadge: { width: 56, height: 56, borderRadius: 18, alignItems: 'center', justifyContent: 'center', borderWidth: 1, marginBottom: 6 },
-  scoreTitle: { fontSize: 16, fontWeight: '900', letterSpacing: 0.5, fontFamily: SERIF },
-  scoreNumRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4, marginTop: 6 },
-  scoreNum: { fontSize: 48, fontWeight: '900', letterSpacing: -2, fontFamily: SERIF, lineHeight: 52 },
-  scoreDenom: { fontSize: 20, fontWeight: '700' },
-  scoreCorrect: { fontSize: 10, fontWeight: '800', letterSpacing: 2, textTransform: 'uppercase' },
-  xpPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 22, marginTop: 14, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 5 },
-  xpPillText: { fontSize: 14, fontWeight: '900', color: '#1A1208', letterSpacing: 0.3 },
+  // Results — score card
+  scoreCard: { borderRadius: 16, borderWidth: 1, alignItems: 'center', paddingVertical: 24, paddingHorizontal: 18, gap: 4, overflow: 'hidden' },
+  scoreBadge: { width: 54, height: 54, borderRadius: 18, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  scoreLabel: { fontSize: 14, fontWeight: '800', letterSpacing: 0.4, fontFamily: SERIF },
+  scoreRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4, marginTop: 6 },
+  scoreBig: { fontSize: 52, fontWeight: '900', letterSpacing: -2, lineHeight: 56, fontFamily: SERIF },
+  scoreSmall: { fontSize: 20, fontWeight: '600' },
+  xpPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 22, marginTop: 14 },
+  xpPillTxt: { fontSize: 13, fontWeight: '900', color: '#1A1208', letterSpacing: 0.3 },
 
-  resCard: { borderRadius: 13, borderWidth: 1, padding: 12, gap: 8 },
-  resHead: { flexDirection: 'row', gap: 9, alignItems: 'flex-start' },
-  resIcon: { width: 25, height: 25, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  resQ: { flex: 1, fontSize: 13, fontWeight: '700', lineHeight: 18, paddingTop: 3 },
-  resOpt: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 11, paddingVertical: 8, borderRadius: 9, borderWidth: 1 },
-  resOptText: { flex: 1, fontSize: 12.5, fontWeight: '600' },
-  explanation: { fontSize: 11.5, lineHeight: 17, marginLeft: 34, marginTop: 2, fontStyle: 'italic', opacity: 0.8 },
+  resCard: { borderRadius: 14, borderWidth: 1, padding: 12, gap: 8 },
+  resHead: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
+  resDot: { width: 22, height: 22, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
+  resQ: { flex: 1, fontSize: 13, fontWeight: '600', lineHeight: 18, paddingTop: 2 },
+  resOpt: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, borderWidth: 1 },
+  resOptTxt: { flex: 1, fontSize: 12.5, fontWeight: '600' },
+  expl: { fontSize: 11.5, lineHeight: 17, marginLeft: 32, fontStyle: 'italic', opacity: 0.8 },
 
-  doneEmpty: { alignItems: 'center', gap: 10, paddingVertical: 18 },
-  doneEmptyText: { fontSize: 13, fontWeight: '600' },
-
-  // Dev diagnostic
-  devNote: { marginTop: 28, borderRadius: 12, borderWidth: 1, borderStyle: 'dashed', padding: 12 },
-  devNoteText: { fontSize: 11, fontFamily: SANS, textAlign: 'center' },
+  doneEmpty: { alignItems: 'center', gap: 10, paddingVertical: 16 },
+  doneEmptyTxt: { fontSize: 13, fontWeight: '600' },
 });

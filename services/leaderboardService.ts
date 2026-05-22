@@ -5,6 +5,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { getLevelForXP } from '../store/useGamificationStore';
 
 export type LeaderboardType = 'xp' | 'streak' | 'stories' | 'goals';
+export type LeaderboardPeriod = 'alltime' | 'monthly';
 
 export interface LeaderboardEntry {
   userId: string;
@@ -16,22 +17,19 @@ export interface LeaderboardEntry {
   photoUrl?: string;
 }
 
-export const fetchLeaderboard = async (type: LeaderboardType): Promise<LeaderboardEntry[]> => {
+export const fetchLeaderboard = async (type: LeaderboardType, period: LeaderboardPeriod = 'alltime'): Promise<LeaderboardEntry[]> => {
   try {
     const user = useAuthStore.getState().user;
-    // Luăm ID-ul tău pentru a te marca în listă cu "Tu" / Highlighting
     const myId = user?.id || (user as any)?._id || (user as any)?.userId;
 
-    // Apelează ruta nouă din Spring Boot care returnează List<LeaderboardEntryDTO>
-    const response = await api.get(ENDPOINTS.GAMIFICATION_ALL);
-    
+    const response = await api.get(ENDPOINTS.GAMIFICATION_ALL, { params: { period } });
+
     if (!response.data || !Array.isArray(response.data)) {
         return [];
     }
 
-    // Aceste chei trebuie să se potrivească EXACT cu variabilele din LeaderboardEntryDTO (Java)
     const fieldMap: Record<LeaderboardType, string> = {
-      xp: 'totalXP',
+      xp: period === 'monthly' ? 'monthlyXP' : 'totalXP',
       streak: 'currentStreak',
       stories: 'totalEventsRead',
       goals: 'dailyGoalsCompleted'

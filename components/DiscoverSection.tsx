@@ -18,6 +18,7 @@ import {
 import { useLanguage } from '../context/LanguageContext';
 import { useGamificationStore } from '../store/useGamificationStore';
 import { getEventId } from '../store/useSavedStore';
+import { haptic } from '../utils/haptics';
 import { StoryModal } from './StoryModal';
 
 const GAP = 8;
@@ -602,9 +603,11 @@ export const DiscoverSection = ({ events, theme, t, isPro = true, onPaywall }: D
 
   const handleSelect = (event: any) => {
     if (isProEvent(event) && !isPro) {
+      haptic('medium');
       onPaywall?.();
       return;
     }
+    haptic('light');
     setSelected(event);
   };
 

@@ -12,7 +12,7 @@ try {
 type HapticStyle = 'light' | 'medium' | 'heavy' | 'success' | 'warning' | 'error' | 'selection';
 
 export function haptic(style: HapticStyle = 'light') {
-  if (!Haptics || Platform.OS === 'android') return;
+  if (!Haptics) return;
 
   try {
     switch (style) {
@@ -35,7 +35,12 @@ export function haptic(style: HapticStyle = 'light') {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         break;
       case 'selection':
-        Haptics.selectionAsync();
+        // selectionAsync not reliable on Android — use Light impact instead
+        if (Platform.OS === 'android') {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        } else {
+          Haptics.selectionAsync();
+        }
         break;
     }
   } catch {

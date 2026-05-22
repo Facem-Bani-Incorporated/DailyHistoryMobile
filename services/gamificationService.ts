@@ -11,6 +11,7 @@ export interface GamificationSyncDTO {
   lastActiveDate: string | null;
   gamificationData: string | null; // JSON blob — opaque for backend
   savedEvents?: number[];
+  monthlyXP?: number;
 }
 
 /**

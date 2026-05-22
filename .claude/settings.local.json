@@ -75,7 +75,30 @@
       "Bash(node -e \"const pkg = require\\('./node_modules/@hugeicons/react-native/dist/cjs/index.js'\\); console.log\\(Object.keys\\(pkg\\).slice\\(0,5\\)\\);\")",
       "Bash(grep -rn \"[\\\\x{1F300}-\\\\x{1F9FF}]\" --include=\"*.tsx\" --include=\"*.ts\" -l)",
       "Bash(grep -rn \"🏆\\\\|🔥\\\\|💎\\\\|⭐\\\\|🥇\\\\|🥈\\\\|🥉\\\\|👑\\\\|📊\\\\|🌱\\\\|✨\\\\|📅\\\\|⚡\\\\|🎬\\\\|🎯\\\\|📖\\\\|🛡\\\\|🗓\\\\|🏅\\\\|🎖\\\\|🌟\\\\|🌍\\\\|🏰\\\\|🎓\\\\|🔬\\\\|⚔\\\\|🧲\\\\|🧭\\\\|🎭\\\\|🎬\\\\|🏀\\\\|💫\\\\|🌠\\\\|✦\\\\|★\" --include=\"*.tsx\" --include=\"*.ts\" -l)",
-      "Bash(python3 -c ' *)"
+      "Bash(python3 -c ' *)",
+      "Bash(cd \"c:\\\\Users\\\\stefan-razvan.dogaru\" && ls -d */ 2>/dev/null | head -50; echo \"---\"; find . -maxdepth 2 -iname \"*.java\" 2>/dev/null | grep -i quiz | head; echo \"---search done---\")",
+      "Read(//c/Users/stefan-razvan.dogaru/**)",
+      "Bash(./mvnw -q -o compile)",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\('expo-updates:', \\(p.dependencies&&p.dependencies['expo-updates']\\)||'NOT INSTALLED'\\)\")",
+      "Bash(xargs -I{} echo {})",
+      "Bash(find . -path ./target -prune -o -iname \"V*quiz*.sql\" -print -o -iname \"V3*.sql\" -print)",
+      "Bash(ls src/main/resources/db/migration)",
+      "Bash(node -e \"const p=require\\('./package.json'\\); const d=p.dependencies||{}; ['expo-blur','expo-linear-gradient','expo-haptics','react-native-reanimated'].forEach\\(k=>console.log\\(k+':', d[k]||'NOT INSTALLED'\\)\\)\")",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\stefan-razvan.dogaru\\\\DailyHistoryMobile\" -Recurse -Include \"*.tsx\", \"*.ts\")",
+      "Bash(Select-Object FullName)",
+      "Bash(Head -20)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\stefan-razvan.dogaru\\\\daily-history-server\" -Recurse -Directory)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(set NODE_TLS_REJECT_UNAUTHORIZED=0)",
+      "PowerShell(cd \"c:\\\\Users\\\\stefan-razvan.dogaru\\\\DailyHistoryMobile\"; $env:NODE_TLS_REJECT_UNAUTHORIZED = \"0\"; npx eas update --branch production --platform android --message \"haptics everywhere + monthly XP leaderboard fix\" --non-interactive 2>&1)",
+      "Bash(node -e \"const p = require\\('./node_modules/lucide-react-native/dist/lucide-react-native.js'\\); console.log\\(!!p.BrainCircuit, !!p.Castle, !!p.FolderOpen, !!p.ArrowLeft, !!p.Navigation, !!p.Thermometer\\)\")",
+      "Bash(node -e \"const p = require\\('lucide-react-native'\\); console.log\\(!!p.BrainCircuit, !!p.Castle, !!p.FolderOpen, !!p.ArrowLeft\\)\")",
+      "PowerShell(Get-ChildItem \"c:\\\\Users\\\\stefan-razvan.dogaru\\\\DailyHistoryMobile\\\\node_modules\\\\lucide-react-native\\\\dist\\\\cjs\\\\icons\" | Where-Object { $_.Name -match \"brain|castle|thermometer|navigation|folder-open|arrow-left\" } | Select-Object Name)",
+      "PowerShell(Get-ChildItem \"c:\\\\Users\\\\stefan-razvan.dogaru\\\\DailyHistoryMobile\\\\node_modules\\\\react-native-maps\\\\lib\\\\commonjs\" | Where-Object { $_.Name -match \"Circle|Polygon|Polyline\" } | Select-Object Name)",
+      "PowerShell(Get-ChildItem \"c:\\\\Users\\\\stefan-razvan.dogaru\\\\DailyHistoryMobile\\\\node_modules\\\\react-native-maps\" | Select-Object Name; Get-ChildItem \"c:\\\\Users\\\\stefan-razvan.dogaru\\\\DailyHistoryMobile\\\\node_modules\\\\react-native-maps\\\\lib\" -Recurse | Where-Object { $_.Name -match \"Circle|Polygon|Polyline\" } | Select-Object Name)",
+      "PowerShell(Get-ChildItem \"c:\\\\Users\\\\stefan-razvan.dogaru\\\\DailyHistoryMobile\\\\node_modules\\\\react-native-maps\\\\lib\" -Recurse | Where-Object { !$_.PSIsContainer } | Select-Object -First 20 | Select-Object Name)",
+      "Bash(node -e \"const l = require\\('lucide-react-native'\\); console.log\\('Swords:', !!l.Swords, 'CircleIcon:', !!l.Circle\\);\")"
     ]
   }
 }
