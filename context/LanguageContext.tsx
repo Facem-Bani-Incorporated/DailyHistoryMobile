@@ -59,7 +59,31 @@ const translations: Record<Language, Record<string, string>> = {
     legend_minor: "minor",
     // LEADERBOARD
     leaderboard: "Leaderboard", your_rank: "YOUR RANK",
-    no_users_found: "No users found.", level: "Level"
+    no_users_found: "No users found.", level: "Level",
+    // SUBSCRIPTION
+    subscription: "Subscription",
+    subscription_active: "Your subscription is active",
+    subscription_desc: "Curated PRO events, ad-free, and more",
+    unlock_pro: "Unlock Daily History Pro",
+    manage_subscription: "Manage subscription",
+    unlock_pro_btn: "Unlock Pro",
+    restore_purchases: "Restore purchases",
+    active_badge: "ACTIVE",
+    // STORY MODAL
+    save_to_library: "Save to library",
+    saved_to_library: "Saved to library",
+    saved_badge: "SAVED",
+    min_read: "min read",
+    want_to_read_more: "WANT TO READ MORE?",
+    continue_wikipedia: "Continue on Wikipedia",
+    no_story_available: "No story available.",
+    // HOME SCREEN
+    search_placeholder: "Search events, years, places...",
+    no_results: "No events found",
+    exclusive_story: "EXCLUSIVE STORY",
+    story_locked: "This story is locked. Upgrade to PRO to read the full account.",
+    unlock_pro_cta: "Unlock PRO",
+    pro_early_access: "PRO EARLY ACCESS",
   },
 
   ro: {
@@ -99,7 +123,31 @@ const translations: Record<Language, Record<string, string>> = {
     legend_minor: "minor",
     // LEADERBOARD
     leaderboard: "Clasament", your_rank: "LOCUL TĂU",
-    no_users_found: "Nu există utilizatori momentan.", level: "Nivel"
+    no_users_found: "Nu există utilizatori momentan.", level: "Nivel",
+    // SUBSCRIPTION
+    subscription: "Abonament",
+    subscription_active: "Abonamentul tău este activ",
+    subscription_desc: "Evenimente PRO curate, fără reclame și mai mult",
+    unlock_pro: "Deblochează Daily History Pro",
+    manage_subscription: "Gestionează abonamentul",
+    unlock_pro_btn: "Deblochează Pro",
+    restore_purchases: "Restaurează achizițiile",
+    active_badge: "ACTIV",
+    // STORY MODAL
+    save_to_library: "Salvează în bibliotecă",
+    saved_to_library: "Salvat în bibliotecă",
+    saved_badge: "SALVAT",
+    min_read: "min citire",
+    want_to_read_more: "VREI SĂ CITEȘTI MAI MULT?",
+    continue_wikipedia: "Continuă pe Wikipedia",
+    no_story_available: "Nicio poveste disponibilă.",
+    // HOME SCREEN
+    search_placeholder: "Caută evenimente, ani, locuri...",
+    no_results: "Niciun eveniment găsit",
+    exclusive_story: "POVESTE EXCLUSIVĂ",
+    story_locked: "Această poveste este blocată. Fă upgrade la PRO pentru a citi.",
+    unlock_pro_cta: "Deblochează PRO",
+    pro_early_access: "ACCES TIMPURIU PRO",
   },
 
   fr: {
@@ -139,7 +187,31 @@ const translations: Record<Language, Record<string, string>> = {
     legend_minor: "mineur",
     // LEADERBOARD
     leaderboard: "Classement", your_rank: "VOTRE RANG",
-    no_users_found: "Aucun utilisateur trouvé.", level: "Niveau"
+    no_users_found: "Aucun utilisateur trouvé.", level: "Niveau",
+    // SUBSCRIPTION
+    subscription: "Abonnement",
+    subscription_active: "Votre abonnement est actif",
+    subscription_desc: "Événements PRO triés, sans pub et plus encore",
+    unlock_pro: "Débloquer Daily History Pro",
+    manage_subscription: "Gérer l'abonnement",
+    unlock_pro_btn: "Débloquer Pro",
+    restore_purchases: "Restaurer les achats",
+    active_badge: "ACTIF",
+    // STORY MODAL
+    save_to_library: "Enregistrer",
+    saved_to_library: "Enregistré",
+    saved_badge: "SAUVÉ",
+    min_read: "min de lecture",
+    want_to_read_more: "ENVIE D'EN SAVOIR PLUS ?",
+    continue_wikipedia: "Continuer sur Wikipedia",
+    no_story_available: "Aucune histoire disponible.",
+    // HOME SCREEN
+    search_placeholder: "Rechercher des événements, années, lieux...",
+    no_results: "Aucun événement trouvé",
+    exclusive_story: "HISTOIRE EXCLUSIVE",
+    story_locked: "Cette histoire est verrouillée. Passez à PRO pour tout lire.",
+    unlock_pro_cta: "Débloquer PRO",
+    pro_early_access: "ACCÈS ANTICIPÉ PRO",
   },
 
   de: {
@@ -179,7 +251,31 @@ const translations: Record<Language, Record<string, string>> = {
     legend_minor: "klein",
     // LEADERBOARD
     leaderboard: "Bestenliste", your_rank: "DEIN RANG",
-    no_users_found: "Keine Benutzer gefunden.", level: "Level"
+    no_users_found: "Keine Benutzer gefunden.", level: "Level",
+    // SUBSCRIPTION
+    subscription: "Abonnement",
+    subscription_active: "Dein Abonnement ist aktiv",
+    subscription_desc: "Kuratierte PRO-Ereignisse, werbefrei und mehr",
+    unlock_pro: "Daily History Pro freischalten",
+    manage_subscription: "Abonnement verwalten",
+    unlock_pro_btn: "Pro freischalten",
+    restore_purchases: "Käufe wiederherstellen",
+    active_badge: "AKTIV",
+    // STORY MODAL
+    save_to_library: "Speichern",
+    saved_to_library: "Gespeichert",
+    saved_badge: "GESPEICHERT",
+    min_read: "Min Lesen",
+    want_to_read_more: "MEHR LESEN?",
+    continue_wikipedia: "Auf Wikipedia weiterlesen",
+    no_story_available: "Keine Geschichte verfügbar.",
+    // HOME SCREEN
+    search_placeholder: "Ereignisse, Jahre, Orte suchen...",
+    no_results: "Keine Ereignisse gefunden",
+    exclusive_story: "EXKLUSIVE GESCHICHTE",
+    story_locked: "Diese Geschichte ist gesperrt. Upgrade auf PRO zum Lesen.",
+    unlock_pro_cta: "PRO Freischalten",
+    pro_early_access: "PRO FRÜHZUGANG",
   },
 
   es: {
@@ -219,7 +315,31 @@ const translations: Record<Language, Record<string, string>> = {
     legend_minor: "menor",
     // LEADERBOARD
     leaderboard: "Clasificación", your_rank: "TU RANGO",
-    no_users_found: "No se encontraron usuarios.", level: "Nivel"
+    no_users_found: "No se encontraron usuarios.", level: "Nivel",
+    // SUBSCRIPTION
+    subscription: "Suscripción",
+    subscription_active: "Tu suscripción está activa",
+    subscription_desc: "Eventos PRO seleccionados, sin anuncios y más",
+    unlock_pro: "Desbloquear Daily History Pro",
+    manage_subscription: "Gestionar suscripción",
+    unlock_pro_btn: "Desbloquear Pro",
+    restore_purchases: "Restaurar compras",
+    active_badge: "ACTIVO",
+    // STORY MODAL
+    save_to_library: "Guardar",
+    saved_to_library: "Guardado",
+    saved_badge: "GUARDADO",
+    min_read: "min de lectura",
+    want_to_read_more: "¿QUIERES LEER MÁS?",
+    continue_wikipedia: "Continuar en Wikipedia",
+    no_story_available: "Historia no disponible.",
+    // HOME SCREEN
+    search_placeholder: "Buscar eventos, años, lugares...",
+    no_results: "No se encontraron eventos",
+    exclusive_story: "HISTORIA EXCLUSIVA",
+    story_locked: "Esta historia está bloqueada. Mejora a PRO para leerla.",
+    unlock_pro_cta: "Desbloquear PRO",
+    pro_early_access: "ACCESO ANTICIPADO PRO",
   },
 };
 

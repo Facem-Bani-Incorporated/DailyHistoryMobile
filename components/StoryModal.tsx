@@ -172,9 +172,9 @@ function splitIntoParagraphs(text: string): string[] {
   return chunks.length > 0 ? chunks : [text];
 }
 
-function estimateReadTime(text: string): string {
+function estimateReadTime(text: string, minReadLabel: string): string {
   const words = text.trim().split(/\s+/).length;
-  return `${Math.max(1, Math.round(words / 200))} min read`;
+  return `${Math.max(1, Math.round(words / 200))} ${minReadLabel}`;
 }
 
 // ─── Paragraphs ───────────────────────────────────────────────────────────────
@@ -277,7 +277,7 @@ const sy = StyleSheet.create({
 // STORY MODAL
 // ═════════════════════════════════════════════════════════════════════════════
 export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEventsProp }: StoryModalProps) => {
-  const { language } = useLanguage();
+  const { language, t } = useLanguage();
   const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const contextEvents = useAllEvents();
@@ -339,7 +339,7 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
   const narrative = currentEvent.narrativeTranslations?.[language] ?? currentEvent.narrativeTranslations?.en ?? '';
   const category = (currentEvent.category ?? 'HISTORY').replace(/_/g, ' ').toUpperCase();
   const sourceUrl = currentEvent.source_url ?? currentEvent.sourceUrl ?? null;
-  const readTime = estimateReadTime(narrative || '');
+  const readTime = estimateReadTime(narrative || '', t('min_read'));
   const ttsLabel = TTS_LABELS[language] ?? TTS_LABELS.en;
 
   const headerBg = scrollY.interpolate({ inputRange: [HERO_H - 80, HERO_H], outputRange: ['rgba(0,0,0,0)', theme.background], extrapolate: 'clamp' });
@@ -427,7 +427,7 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
                   {saved && (
                     <View style={st.savedBadge}>
                       <Bookmark size={9} color="#ffd700" fill="#ffd700" />
-                      <Text style={st.savedText}>SAVED</Text>
+                      <Text style={st.savedText}>{t('saved_badge')}</Text>
                     </View>
                   )}
                 </View>
@@ -472,7 +472,7 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
               <View style={[st.accentLine, { backgroundColor: theme.gold + '35' }]} />
 
               {/* Narrative text */}
-              <Paragraphs text={narrative || 'No story available.'} theme={theme} isDark={isDark} />
+              <Paragraphs text={narrative || t('no_story_available')} theme={theme} isDark={isDark} />
 
               {/* Quiz */}
               <QuizSection eventId={eventId} language={language} theme={theme} isDark={isDark} />
@@ -497,8 +497,8 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
                     <BookOpen size={17} color={theme.gold} strokeWidth={2} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={[st.wikiLabel, { color: theme.subtext }]}>WANT TO READ MORE?</Text>
-                    <Text style={[st.wikiTitle, { color: theme.text }]}>Continue on Wikipedia</Text>
+                    <Text style={[st.wikiLabel, { color: theme.subtext }]}>{t('want_to_read_more')}</Text>
+                    <Text style={[st.wikiTitle, { color: theme.text }]}>{t('continue_wikipedia')}</Text>
                   </View>
                   <Text style={{ color: theme.gold, fontSize: 18, fontWeight: '300' }}>→</Text>
                 </TouchableOpacity>
@@ -525,7 +525,7 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
                   strokeWidth={2}
                 />
                 <Text style={[st.saveBtnText, { color: saved ? '#ffd700' : theme.subtext }]}>
-                  {saved ? 'Saved to library' : 'Save to library'}
+                  {saved ? t('saved_to_library') : t('save_to_library')}
                 </Text>
               </TouchableOpacity>
 

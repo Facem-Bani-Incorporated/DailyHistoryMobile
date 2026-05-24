@@ -16,6 +16,12 @@ export interface ExplorerRoute {
   shortDesc: string;
   coordinates: { latitude: number; longitude: number }[];
   keyStops: RouteWaypoint[];
+  translations?: {
+    ro?: { name: string; shortDesc: string };
+    fr?: { name: string; shortDesc: string };
+    de?: { name: string; shortDesc: string };
+    es?: { name: string; shortDesc: string };
+  };
 }
 
 export const EXPLORER_ROUTES: ExplorerRoute[] = [
@@ -27,6 +33,12 @@ export const EXPLORER_ROUTES: ExplorerRoute[] = [
     color: '#E84545',
     emoji: '⚓',
     shortDesc: 'Discovery of the Americas',
+    translations: {
+      ro: { name: 'Columbus — Prima Călătorie', shortDesc: 'Descoperirea Americilor' },
+      fr: { name: 'Colomb — Premier Voyage', shortDesc: 'Découverte des Amériques' },
+      de: { name: 'Kolumbus — Erste Reise', shortDesc: 'Entdeckung Amerikas' },
+      es: { name: 'Colón — Primer Viaje', shortDesc: 'Descubrimiento de las Américas' },
+    },
     coordinates: [
       { latitude: 37.23,  longitude: -6.89  }, // Palos de la Frontera, Spain
       { latitude: 28.09,  longitude: -17.10 }, // La Gomera, Canary Islands (last European stop)
@@ -52,6 +64,12 @@ export const EXPLORER_ROUTES: ExplorerRoute[] = [
     color: '#0891B2',
     emoji: '🧭',
     shortDesc: 'First direct sea route from Europe to India',
+    translations: {
+      ro: { name: 'Vasco da Gama — Ruta Maritimă spre India', shortDesc: 'Prima rută maritimă directă din Europa spre India' },
+      fr: { name: 'Vasco de Gama — Route Maritime vers l\'Inde', shortDesc: 'Première route maritime directe d\'Europe vers l\'Inde' },
+      de: { name: 'Vasco da Gama — Seeweg nach Indien', shortDesc: 'Erste direkte Seeroute von Europa nach Indien' },
+      es: { name: 'Vasco da Gama — Ruta Marítima a India', shortDesc: 'Primera ruta marítima directa de Europa a India' },
+    },
     coordinates: [
       { latitude: 38.72,  longitude: -9.14  }, // Lisbon
       { latitude: 28.07,  longitude: -15.43 }, // Canary Islands
@@ -80,6 +98,12 @@ export const EXPLORER_ROUTES: ExplorerRoute[] = [
     color: '#7C3AED',
     emoji: '🌍',
     shortDesc: 'First voyage to circumnavigate the globe',
+    translations: {
+      ro: { name: 'Magellan–Elcano — Prima Circumnavigare', shortDesc: 'Prima călătorie în jurul lumii' },
+      fr: { name: 'Magellan–Elcano — Première Circumnavigation', shortDesc: 'Premier voyage autour du globe' },
+      de: { name: 'Magellan–Elcano — Erste Weltumsegelung', shortDesc: 'Erste Reise um die Erde' },
+      es: { name: 'Magallanes–Elcano — Primera Circunnavegación', shortDesc: 'Primer viaje alrededor del globo' },
+    },
     coordinates: [
       { latitude: 36.78,   longitude: -6.35  }, // Sanlúcar de Barrameda, Spain
       { latitude: 28.47,   longitude: -16.25 }, // Tenerife, Canary Islands
@@ -113,6 +137,12 @@ export const EXPLORER_ROUTES: ExplorerRoute[] = [
     color: '#D97706',
     emoji: '🐪',
     shortDesc: 'The Silk Road to the court of Kublai Khan',
+    translations: {
+      ro: { name: 'Marco Polo — Călătoria în China', shortDesc: 'Drumul Mătăsii spre curtea lui Kublai Khan' },
+      fr: { name: 'Marco Polo — Voyage en Chine', shortDesc: 'La Route de la Soie vers la cour de Kubilaï Khan' },
+      de: { name: 'Marco Polo — Reise nach China', shortDesc: 'Die Seidenstraße zum Hof von Kublai Khan' },
+      es: { name: 'Marco Polo — Viaje a China', shortDesc: 'La Ruta de la Seda a la corte de Kublai Kan' },
+    },
     coordinates: [
       // ── Outward journey (overland) ──
       { latitude: 45.44, longitude: 12.34  }, // Venice
@@ -155,6 +185,12 @@ export const EXPLORER_ROUTES: ExplorerRoute[] = [
     color: '#059669',
     emoji: '⚔️',
     shortDesc: 'Privateer, pirate, circumnavigator — knighted by Queen Elizabeth',
+    translations: {
+      ro: { name: 'Francis Drake — Prima Circumnavigare Engleză', shortDesc: 'Privateer, pirat, circumnavigator — înnobilat de Regina Elisabeta' },
+      fr: { name: 'Francis Drake — Première Circumnavigation Anglaise', shortDesc: 'Corsaire, pirate, circumnavigateur — anobli par la reine Élisabeth' },
+      de: { name: 'Francis Drake — Erste Englische Weltumsegelung', shortDesc: 'Freibeuter, Pirat, Weltumsegler — von Königin Elisabeth geadelt' },
+      es: { name: 'Francis Drake — Primera Circunnavegación Inglesa', shortDesc: 'Corsario, pirata, circunnavegador — nombrado caballero por la reina Isabel' },
+    },
     coordinates: [
       { latitude: 50.37,  longitude: -4.14  }, // Plymouth, England
       { latitude: 31.51,  longitude: -9.77  }, // Moroccan coast (Mogador)
@@ -188,6 +224,12 @@ export const EXPLORER_ROUTES: ExplorerRoute[] = [
     color: '#C026D3',
     emoji: '⛵',
     shortDesc: 'Seven voyages from China to East Africa — largest fleet the world had ever seen',
+    translations: {
+      ro: { name: 'Zheng He — Flota Comorilor', shortDesc: 'Șapte călătorii din China în Africa de Est — cea mai mare flotă din istorie' },
+      fr: { name: 'Zheng He — Flotte au Trésor', shortDesc: 'Sept voyages de Chine jusqu\'en Afrique de l\'Est — la plus grande flotte de l\'histoire' },
+      de: { name: 'Zheng He — Schatzflotte', shortDesc: 'Sieben Reisen von China nach Ostafrika — die größte Flotte der Geschichte' },
+      es: { name: 'Zheng He — Flota del Tesoro', shortDesc: 'Siete viajes de China a África Oriental — la mayor flota que el mundo había visto' },
+    },
     coordinates: [
       { latitude: 31.22, longitude: 121.47 }, // Nanjing / Shanghai (departure port)
       { latitude: 22.33, longitude: 114.17 }, // Hong Kong / Guangzhou area
@@ -216,6 +258,12 @@ export const EXPLORER_ROUTES: ExplorerRoute[] = [
     color: '#6366F1',
     emoji: '🗺️',
     shortDesc: 'Charted New Zealand and Australia\'s east coast — first scientific circumnavigation',
+    translations: {
+      ro: { name: 'Cook — HMS Endeavour', shortDesc: 'A cartografiat Noua Zeelandă și coasta de est a Australiei — prima circumnavigare științifică' },
+      fr: { name: 'Cook — HMS Endeavour', shortDesc: 'Cartographia la Nouvelle-Zélande et la côte est de l\'Australie — première circumnavigation scientifique' },
+      de: { name: 'Cook — HMS Endeavour', shortDesc: 'Kartografierte Neuseeland und Australiens Ostküste — erste wissenschaftliche Weltumsegelung' },
+      es: { name: 'Cook — HMS Endeavour', shortDesc: 'Cartografió Nueva Zelanda y la costa este de Australia — primera circunnavegación científica' },
+    },
     coordinates: [
       { latitude: 51.48,  longitude: -0.09  }, // London / Plymouth, England
       { latitude: 28.47,  longitude: -16.25 }, // Tenerife, Canaries
@@ -248,6 +296,12 @@ export const EXPLORER_ROUTES: ExplorerRoute[] = [
     color: '#65A30D',
     emoji: '🌲',
     shortDesc: 'First US overland expedition to the Pacific — 8,000 miles through the American West',
+    translations: {
+      ro: { name: 'Lewis & Clark — Corpul Descoperirii', shortDesc: 'Prima expediție SUA spre Pacific — 13.000 km prin Vestul American' },
+      fr: { name: 'Lewis & Clark — Corps de Découverte', shortDesc: 'Première expédition américaine vers le Pacifique — 13 000 km à travers l\'Ouest américain' },
+      de: { name: 'Lewis & Clark — Korps der Entdeckung', shortDesc: 'Erste amerikanische Überlandexpedition zum Pazifik — 13.000 km durch den Amerikanischen Westen' },
+      es: { name: 'Lewis & Clark — Cuerpo de Descubrimiento', shortDesc: 'Primera expedición terrestre de EE.UU. al Pacífico — 13.000 km por el oeste americano' },
+    },
     coordinates: [
       { latitude: 38.63, longitude: -90.20  }, // St. Louis, Missouri (departure)
       { latitude: 41.26, longitude: -95.87  }, // Omaha, Nebraska
@@ -276,6 +330,12 @@ export const EXPLORER_ROUTES: ExplorerRoute[] = [
     color: '#EA580C',
     emoji: '🐫',
     shortDesc: '75,000 miles across 40 countries — greatest traveler of the medieval world',
+    translations: {
+      ro: { name: 'Ibn Battuta — Marea Călătorie', shortDesc: '120.000 km prin 40 de țări — cel mai mare călător al lumii medievale' },
+      fr: { name: 'Ibn Battuta — Le Grand Voyage', shortDesc: '120 000 km à travers 40 pays — plus grand voyageur du monde médiéval' },
+      de: { name: 'Ibn Battuta — Die Große Reise', shortDesc: '120.000 km durch 40 Länder — größter Reisender der mittelalterlichen Welt' },
+      es: { name: 'Ibn Battuta — El Gran Viaje', shortDesc: '120.000 km por 40 países — el mayor viajero del mundo medieval' },
+    },
     coordinates: [
       { latitude: 34.02, longitude: -5.00  }, // Tangier, Morocco (hometown, departure 1325)
       { latitude: 36.73, longitude: 3.09   }, // Algiers

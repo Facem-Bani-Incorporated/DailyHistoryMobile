@@ -6,6 +6,12 @@ export interface EmpireBorder {
   color: string;
   description: string;
   coordinates: { latitude: number; longitude: number }[];
+  translations?: {
+    ro?: { name: string; description: string };
+    fr?: { name: string; description: string };
+    de?: { name: string; description: string };
+    es?: { name: string; description: string };
+  };
 }
 
 export const EMPIRE_BORDERS: EmpireBorder[] = [
@@ -15,6 +21,12 @@ export const EMPIRE_BORDERS: EmpireBorder[] = [
     period: '117 AD — Trajan\'s peak',
     color: '#DC2626',
     description: '~5 million km², ~70 million people. "All roads lead to Rome."',
+    translations: {
+      ro: { name: 'Imperiul Roman', description: '~5 milioane km², ~70 milioane de locuitori. "Toate drumurile duc la Roma."' },
+      fr: { name: 'Empire Romain', description: '~5 millions km², ~70 millions de personnes. "Tous les chemins mènent à Rome."' },
+      de: { name: 'Römisches Reich', description: '~5 Millionen km², ~70 Millionen Menschen. „Alle Wege führen nach Rom."' },
+      es: { name: 'Imperio Romano', description: '~5 millones km², ~70 millones de personas. "Todos los caminos llevan a Roma."' },
+    },
     coordinates: [
       // Britain (Hadrian's Wall marks northern limit)
       { latitude: 55.5,  longitude: -3.0  },
@@ -64,6 +76,12 @@ export const EMPIRE_BORDERS: EmpireBorder[] = [
     period: '1279 AD — Kublai Khan\'s peak',
     color: '#D97706',
     description: 'Largest contiguous land empire in history — ~24 million km².',
+    translations: {
+      ro: { name: 'Imperiul Mongol', description: 'Cel mai mare imperiu terestru contigu din istorie — ~24 milioane km².' },
+      fr: { name: 'Empire Mongol', description: 'Le plus grand empire terrestre contigu de l\'histoire — ~24 millions km².' },
+      de: { name: 'Mongolisches Reich', description: 'Größtes zusammenhängendes Landreich der Geschichte — ~24 Millionen km².' },
+      es: { name: 'Imperio Mongol', description: 'El mayor imperio terrestre contiguo de la historia — ~24 millones km².' },
+    },
     coordinates: [
       // Westernmost extent: Poland, Ukraine
       { latitude: 52.0,  longitude: 23.0  },
@@ -101,6 +119,12 @@ export const EMPIRE_BORDERS: EmpireBorder[] = [
     period: '1683 AD — Siege of Vienna (peak)',
     color: '#059669',
     description: '600 years on 3 continents. "The Sublime Porte" ruled from Morocco to Iraq.',
+    translations: {
+      ro: { name: 'Imperiul Otoman', description: '600 de ani pe 3 continente. "Sublima Poartă" a stăpânit de la Maroc până în Irak.' },
+      fr: { name: 'Empire Ottoman', description: '600 ans sur 3 continents. "La Sublime Porte" régnait du Maroc à l\'Irak.' },
+      de: { name: 'Osmanisches Reich', description: '600 Jahre auf 3 Kontinenten. Die "Hohe Pforte" herrschte von Marokko bis in den Irak.' },
+      es: { name: 'Imperio Otomano', description: '600 años en 3 continentes. La "Sublime Puerta" gobernó desde Marruecos hasta Irak.' },
+    },
     coordinates: [
       // Vienna — high watermark 1683
       { latitude: 48.2,  longitude: 16.5  },
@@ -141,6 +165,12 @@ export const EMPIRE_BORDERS: EmpireBorder[] = [
     period: '323 BC — After 13 years of conquest',
     color: '#7C3AED',
     description: 'Built in just 13 years. From Greece to the edge of the known world — never defeated in battle.',
+    translations: {
+      ro: { name: 'Imperiul lui Alexandru', description: 'Construit în doar 13 ani. De la Grecia până la marginea lumii cunoscute — niciodată înfrânt în luptă.' },
+      fr: { name: 'Empire d\'Alexandre', description: 'Construit en seulement 13 ans. De la Grèce au bout du monde connu — jamais vaincu au combat.' },
+      de: { name: 'Reich Alexanders', description: 'In nur 13 Jahren erbaut. Von Griechenland bis ans Ende der bekannten Welt — in keiner Schlacht besiegt.' },
+      es: { name: 'Imperio de Alejandro', description: 'Construido en solo 13 años. De Grecia al límite del mundo conocido — nunca derrotado en batalla.' },
+    },
     coordinates: [
       // Macedonia / Greece
       { latitude: 41.5,  longitude: 22.0  },
@@ -177,6 +207,12 @@ export const EMPIRE_BORDERS: EmpireBorder[] = [
     period: '500 BC — Darius I\'s peak',
     color: '#B45309',
     description: '~8 million km², ~44% of world population. First true world empire — from Thrace to the Indus.',
+    translations: {
+      ro: { name: 'Imperiul Persan Ahemenid', description: '~8 milioane km², ~44% din populația lumii. Primul adevărat imperiu mondial — de la Tracia până la Indus.' },
+      fr: { name: 'Empire Perse Achéménide', description: '~8 millions km², ~44% de la population mondiale. Premier véritable empire mondial — de la Thrace à l\'Indus.' },
+      de: { name: 'Achämenidisches Perserreich', description: '~8 Millionen km², ~44% der Weltbevölkerung. Erstes echtes Weltreich — von Thrakien bis zum Indus.' },
+      es: { name: 'Imperio Persa Aqueménida', description: '~8 millones km², ~44% de la población mundial. Primer verdadero imperio mundial — de Tracia al Indo.' },
+    },
     coordinates: [
       { latitude: 41.5, longitude: 26.0  }, // Thrace (European territory)
       { latitude: 38.5, longitude: 26.5  }, // Ionian coast of Anatolia
@@ -204,6 +240,12 @@ export const EMPIRE_BORDERS: EmpireBorder[] = [
     period: '565 AD — Justinian I\'s reconquests',
     color: '#9D174D',
     description: 'Eastern Rome survived another 1,000 years — reconquered Italy, North Africa & coastal Spain.',
+    translations: {
+      ro: { name: 'Imperiul Bizantin', description: 'Roma de Est a supraviețuit încă 1.000 de ani — a reconquerit Italia, Africa de Nord și coasta Spaniei.' },
+      fr: { name: 'Empire Byzantin', description: 'Rome orientale survécut 1 000 ans de plus — reconquête de l\'Italie, l\'Afrique du Nord et l\'Espagne côtière.' },
+      de: { name: 'Byzantinisches Reich', description: 'Oströmisches Reich überlebte weitere 1.000 Jahre — Rückeroberung von Italien, Nordafrika und Küstenspanien.' },
+      es: { name: 'Imperio Bizantino', description: 'Roma oriental sobrevivió 1.000 años más — reconquistó Italia, Norte de África y la costa española.' },
+    },
     coordinates: [
       { latitude: 46.5, longitude: 26.0  }, // Danube frontier (Romania)
       { latitude: 44.0, longitude: 20.5  }, // Belgrade area (Pannonia)
@@ -236,6 +278,12 @@ export const EMPIRE_BORDERS: EmpireBorder[] = [
     period: '750 AD — Greatest extent before Abbasid revolution',
     color: '#0D9488',
     description: 'From Spain to the Indus in 100 years — fastest imperial expansion in history.',
+    translations: {
+      ro: { name: 'Califatul Omeiad', description: 'De la Spania până la Indus în 100 de ani — cea mai rapidă expansiune imperială din istorie.' },
+      fr: { name: 'Califat Omeyyade', description: 'De l\'Espagne à l\'Indus en 100 ans — expansion impériale la plus rapide de l\'histoire.' },
+      de: { name: 'Umayyadisches Kalifat', description: 'Von Spanien bis zum Indus in 100 Jahren — schnellste imperiale Expansion der Geschichte.' },
+      es: { name: 'Califato Omeya', description: 'De España al Indo en 100 años — la expansión imperial más rápida de la historia.' },
+    },
     coordinates: [
       { latitude: 43.5, longitude: -4.0  }, // Asturias border (unconquered north Spain)
       { latitude: 43.5, longitude: 3.5   }, // Narbonne / Septimania (southern France, brief)
@@ -267,6 +315,12 @@ export const EMPIRE_BORDERS: EmpireBorder[] = [
     period: '1812 AD — Before the Russian campaign',
     color: '#2563EB',
     description: 'Direct control + satellite states covering 70 million Europeans under one man.',
+    translations: {
+      ro: { name: 'Imperiul Napoleonian', description: 'Control direct + state satelit cuprinzând 70 de milioane de europeni sub un singur om.' },
+      fr: { name: 'Empire Napoléonien', description: 'Contrôle direct + États satellites couvrant 70 millions d\'Européens sous un seul homme.' },
+      de: { name: 'Napoleonisches Reich', description: 'Direkte Kontrolle + Satellitenstaaten mit 70 Millionen Europäern unter einem Mann.' },
+      es: { name: 'Imperio Napoleónico', description: 'Control directo + estados satélite con 70 millones de europeos bajo un solo hombre.' },
+    },
     coordinates: [
       { latitude: 53.6, longitude: 9.9   }, // Hamburg (annexed 1810)
       { latitude: 52.0, longitude: 21.0  }, // Warsaw (Grand Duchy)
@@ -295,6 +349,12 @@ export const EMPIRE_BORDERS: EmpireBorder[] = [
     period: '100 AD — Emperor Wu\'s expansion',
     color: '#E11D48',
     description: 'Han China rivalled Rome in power and population — defined Chinese civilization for 2,000 years.',
+    translations: {
+      ro: { name: 'China Dinastiei Han', description: 'China Han rivaliza cu Roma în putere și populație — a definit civilizația chineză timp de 2.000 de ani.' },
+      fr: { name: 'Chine de la Dynastie Han', description: 'La Chine Han rivalisait avec Rome en puissance et population — a défini la civilisation chinoise pour 2 000 ans.' },
+      de: { name: 'China der Han-Dynastie', description: 'Das Han-China rivalisierte mit Rom an Macht und Bevölkerung — prägte die chinesische Zivilisation für 2.000 Jahre.' },
+      es: { name: 'China de la Dinastía Han', description: 'La China Han rivalizaba con Roma en poder y población — definió la civilización china durante 2.000 años.' },
+    },
     coordinates: [
       { latitude: 40.0, longitude: 116.0 }, // Beijing / Yan commandery
       { latitude: 43.0, longitude: 128.0 }, // Liaodong / Manchuria

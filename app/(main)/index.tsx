@@ -276,8 +276,9 @@ const _peek = StyleSheet.create({
 const PRO_CARD_H = Math.max(280, H * 0.5);
 const SERIF_FONT = Platform.OS === 'ios' ? 'Georgia' : 'serif';
 
-const ProCardSection = ({ event, allEvents, gold, isPro, onPaywall }: {
+const ProCardSection = ({ event, allEvents, gold, isPro, onPaywall, t, language }: {
   event: any; allEvents: any[]; gold: string; isPro: boolean; onPaywall: () => void;
+  t: (k: string) => string; language: string;
 }) => {
   const pulse = useRef(new Animated.Value(0)).current;
   const ctaScale = useRef(new Animated.Value(1)).current;
@@ -302,8 +303,8 @@ const ProCardSection = ({ event, allEvents, gold, isPro, onPaywall }: {
   const ruleOp = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.9] });
 
   const title =
+    event?.titleTranslations?.[language] ??
     event?.titleTranslations?.en ??
-    event?.titleTranslations?.ro ??
     'Historical Event';
   const category = (event?.category ?? 'HISTORY').replace(/_/g, ' ');
   const rawDate = event?.eventDate ?? event?.event_date ?? '';
@@ -348,7 +349,7 @@ const ProCardSection = ({ event, allEvents, gold, isPro, onPaywall }: {
             {/* Shimmer rule */}
             <View style={_proSec.ruleRow}>
               <Animated.View style={[_proSec.rule, { backgroundColor: gold, opacity: ruleOp }]} />
-              <Text style={[_proSec.kicker, { color: gold }]}>✦  EXCLUSIVE STORY</Text>
+              <Text style={[_proSec.kicker, { color: gold }]}>✦  {t('exclusive_story')}</Text>
               <Animated.View style={[_proSec.rule, { backgroundColor: gold, opacity: ruleOp }]} />
             </View>
 
@@ -358,14 +359,14 @@ const ProCardSection = ({ event, allEvents, gold, isPro, onPaywall }: {
 
             {/* Lock hint */}
             <Text style={_proSec.lockHint}>
-              This story is locked. Upgrade to PRO to read the full account.
+              {t('story_locked')}
             </Text>
 
             {/* CTA button */}
             <Animated.View style={{ transform: [{ scale: ctaScale }] }}>
               <View style={[_proSec.ctaBtn, { backgroundColor: gold }]}>
                 <Ionicons name="lock-open-outline" size={15} color="#0A0815" />
-                <Text style={_proSec.ctaBtnText}>Unlock PRO</Text>
+                <Text style={_proSec.ctaBtnText}>{t('unlock_pro_cta')}</Text>
                 <Ionicons name="arrow-forward" size={15} color="#0A0815" />
               </View>
             </Animated.View>
@@ -646,11 +647,11 @@ const _lo = StyleSheet.create({
 // ═════════════════════════════════════════════════════════════════════════════
 // PRO FUTURE ACCESS BANNER — shown at top of day+1 / day+2 content for PRO users
 // ═════════════════════════════════════════════════════════════════════════════
-const ProFutureBanner = ({ gold, dayOff }: { gold: string; dayOff: number }) => (
+const ProFutureBanner = ({ gold, dayOff, t }: { gold: string; dayOff: number; t: (k: string) => string }) => (
   <View style={[_pfb.wrap, { backgroundColor: gold + '12', borderColor: gold + '30' }]}>
     <Ionicons name="star" size={10} color={gold} />
     <Text style={[_pfb.text, { color: gold }]}>
-      {dayOff === 1 ? 'TOMORROW' : `+${dayOff} DAYS`}{' · PRO EARLY ACCESS'}
+      {dayOff === 1 ? t('tomorrow').toUpperCase() : `+${dayOff} DAYS`}{' · '}{t('pro_early_access')}
     </Text>
   </View>
 );
@@ -967,6 +968,8 @@ export default function HomeScreen() {
                 gold={goldColor}
                 isPro={isPro}
                 onPaywall={() => presentPaywall()}
+                t={t}
+                language={language}
               />
               <View style={{ height: floatingBarPad + 12 }} />
             </ScrollView>
@@ -998,7 +1001,7 @@ export default function HomeScreen() {
       <AnimatedPage dayOff={dayOff} scrollX={scrollX}>
         {dayOff > 0 && isPro ? (
           <View style={{ flex: 1 }}>
-            <ProFutureBanner gold={goldColor} dayOff={dayOff} />
+            <ProFutureBanner gold={goldColor} dayOff={dayOff} t={t} />
             <View style={{ flex: 1 }}>{content}</View>
           </View>
         ) : content}

@@ -48,6 +48,10 @@ import { RELIGIONS, Religion } from '../data/religionSpread';
 import { WW1_EVENTS, WW1_YEAR_MIN, WW1_YEAR_MAX } from '../data/ww1Events';
 import { WW2_EVENTS, WW2_YEAR_MIN, WW2_YEAR_MAX } from '../data/ww2Events';
 import { WAR_TERRITORIES } from '../data/warTerritories';
+import { PANDEMICS, PLAGUE_YEAR_MIN, PLAGUE_YEAR_MAX } from '../data/plagues';
+import { PIRATE_ROUTES } from '../data/pirateRoutes';
+import { NUCLEAR_SITES, NUCLEAR_EVENTS } from '../data/nuclearTests';
+import { DINOSAUR_SITES } from '../data/dinosaurFossils';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -100,6 +104,98 @@ const ERA_PRESETS = [
   { label: 'Modern', year: 2024 },
 ];
 
+// ─── War phase narratives (per year, all 5 languages) ─────────────────────────
+type PhaseEntry = { name: string; description: string; stat: string };
+const WW1_PHASES: Record<number, Record<string, PhaseEntry>> = {
+  1914: {
+    en: { name: 'Opening Moves', description: "Europe's alliance system triggers a chain reaction. Germany's Schlieffen Plan collapses at the Marne. The war meant to end by Christmas will last four years.", stat: '~2 million casualties in 5 months' },
+    ro: { name: 'Primele Mișcări', description: "Sistemul de alianțe al Europei declanșează o reacție în lanț. Planul Schlieffen al Germaniei eșuează la Marna. Războiul care trebuia să se termine de Crăciun va dura patru ani.", stat: '~2 milioane de victime în 5 luni' },
+    fr: { name: 'Les Premiers Coups', description: "Le système d'alliances européen déclenche une réaction en chaîne. Le Plan Schlieffen allemand s'effondre sur la Marne. La guerre censée se terminer à Noël durera quatre ans.", stat: '~2 millions de victimes en 5 mois' },
+    de: { name: 'Die Eröffnungszüge', description: "Europas Bündnissystem löst eine Kettenreaktion aus. Deutschlands Schlieffen-Plan scheitert an der Marne. Der Krieg, der zu Weihnachten enden sollte, dauert vier Jahre.", stat: '~2 Millionen Opfer in 5 Monaten' },
+    es: { name: 'Los Primeros Movimientos', description: "El sistema de alianzas europeo desencadena una reacción en cadena. El Plan Schlieffen alemán colapsa en el Marne. La guerra que debía terminar en Navidad durará cuatro años.", stat: '~2 millones de bajas en 5 meses' },
+  },
+  1915: {
+    en: { name: 'Deadlock', description: "Trenches stretch 700 km from Belgium to Switzerland. The Gallipoli campaign ends in disaster. Poison gas is used for the first time in history.", stat: 'Trench line: 700 km across Europe' },
+    ro: { name: 'Blocaj', description: "Tranșeele se întind pe 700 km de la Belgia până în Elveția. Campania de la Gallipoli se încheie în dezastru. Gazul otrăvitor este folosit pentru prima dată în istorie.", stat: 'Linia tranșeelor: 700 km prin Europa' },
+    fr: { name: 'L\'Enlisement', description: "Les tranchées s'étendent sur 700 km de la Belgique à la Suisse. La campagne des Dardanelles se termine en catastrophe. Le gaz toxique est utilisé pour la première fois dans l'histoire.", stat: 'Front de tranchées : 700 km' },
+    de: { name: 'Stellungskrieg', description: "Schützengräben erstrecken sich über 700 km von Belgien bis zur Schweiz. Die Gallipoli-Kampagne endet in einer Katastrophe. Giftgas wird zum ersten Mal in der Geschichte eingesetzt.", stat: 'Schützengrabenfront: 700 km' },
+    es: { name: 'Punto Muerto', description: "Las trincheras se extienden 700 km desde Bélgica hasta Suiza. La campaña de Gallipoli termina en desastre. El gas venenoso se usa por primera vez en la historia.", stat: 'Línea de trincheras: 700 km' },
+  },
+  1916: {
+    en: { name: 'War of Attrition', description: "The bloodiest year of the war. Verdun and the Somme become symbols of industrial slaughter. The naval Battle of Jutland settles North Sea dominance.", stat: 'Verdun + Somme: 2 million+ casualties' },
+    ro: { name: 'Război de Uzură', description: "Cel mai sângeros an al războiului. Verdun și Somme devin simboluri ale măcelului industrial. Bătălia navală de la Jutlanda stabilește dominanța asupra Mării Nordului.", stat: 'Verdun + Somme: peste 2 milioane de victime' },
+    fr: { name: 'Guerre d\'Usure', description: "L'année la plus sanglante de la guerre. Verdun et la Somme deviennent des symboles du massacre industriel. La bataille navale du Jutland établit la domination en mer du Nord.", stat: 'Verdun + Somme : 2 millions+ de victimes' },
+    de: { name: 'Abnutzungskrieg', description: "Das blutigste Jahr des Krieges. Verdun und die Somme werden zu Symbolen des industriellen Gemetzels. Die Seeschlacht vor dem Skagerrak klärt die Vorherrschaft in der Nordsee.", stat: 'Verdun + Somme: 2 Millionen+ Opfer' },
+    es: { name: 'Guerra de Desgaste', description: "El año más sangriento de la guerra. Verdún y el Somme se convierten en símbolos de la matanza industrial. La batalla naval de Jutlandia establece el dominio del Mar del Norte.", stat: 'Verdún + Somme: 2 millones+ de bajas' },
+  },
+  1917: {
+    en: { name: 'Turning Point', description: "The USA enters the war. Russia collapses into revolution and exits. Widespread mutinies shake the French army. The tide begins to turn.", stat: 'USA deploys 2 million troops' },
+    ro: { name: 'Punct de Cotitură', description: "SUA intră în război. Rusia se prăbușește în revoluție și iese. Revoltele generalizate zguduie armata franceză. Valul începe să se întoarcă.", stat: 'SUA desfășoară 2 milioane de trupe' },
+    fr: { name: 'Le Tournant', description: "Les États-Unis entrent en guerre. La Russie s'effondre dans la révolution et se retire. De nombreuses mutineries secouent l'armée française. Le vent commence à tourner.", stat: 'Les USA déploient 2 millions de soldats' },
+    de: { name: 'Die Wende', description: "Die USA treten in den Krieg ein. Russland bricht in der Revolution zusammen und scheidet aus. Weitverbreitete Meutereien erschüttern die französische Armee. Das Blatt beginnt sich zu wenden.", stat: 'USA stellen 2 Millionen Soldaten bereit' },
+    es: { name: 'Punto de Inflexión', description: "EE.UU. entra en la guerra. Rusia colapsa en revolución y se retira. Los amotinamientos generalizados sacuden al ejército francés. La marea comienza a cambiar.", stat: 'EE.UU. despliega 2 millones de soldados' },
+  },
+  1918: {
+    en: { name: 'The Final Year', description: "Germany's Spring Offensive gains ground then fails. The Allied 100 Days Offensive shatters German lines. At 11 AM on November 11, the guns fall silent.", stat: 'Armistice: November 11 — 11:11 AM' },
+    ro: { name: 'Ultimul An', description: "Ofensiva de Primăvară a Germaniei câștigă teren, apoi eșuează. Ofensiva celor 100 de Zile a Aliaților sfărâmă liniile germane. La ora 11 pe 11 noiembrie, armele amuțesc.", stat: 'Armistițiu: 11 noiembrie — 11:11' },
+    fr: { name: 'L\'Année Finale', description: "L'offensive de printemps allemande gagne du terrain puis échoue. L'offensive des Cent Jours des Alliés brise les lignes allemandes. À 11h le 11 novembre, les canons se taisent.", stat: 'Armistice : 11 novembre — 11h11' },
+    de: { name: 'Das Letzte Jahr', description: "Deutschlands Frühjahrsoffensive gewinnt zunächst Boden, scheitert dann. Die Hundert-Tage-Offensive der Alliierten zerschlägt die deutschen Linien. Um 11 Uhr am 11. November verstummen die Waffen.", stat: 'Waffenstillstand: 11. November — 11:11 Uhr' },
+    es: { name: 'El Año Final', description: "La Ofensiva de Primavera alemana gana terreno pero fracasa. La Ofensiva de los Cien Días de los Aliados destruye las líneas alemanas. A las 11 AM del 11 de noviembre, los cañones callan.", stat: 'Armisticio: 11 de noviembre — 11:11 AM' },
+  },
+};
+
+const WW2_PHASES: Record<number, Record<string, PhaseEntry>> = {
+  1939: {
+    en: { name: 'Blitzkrieg', description: "Germany's lightning war doctrine reshapes warfare. Poland falls in five weeks. Britain and France declare war. The Soviet Union invades Finland.", stat: 'Poland conquered in 5 weeks' },
+    ro: { name: 'Blitzkrieg', description: "Doctrina războiului fulger a Germaniei redefinește războiul modern. Polonia cade în cinci săptămâni. Marea Britanie și Franța declară război. Uniunea Sovietică invadează Finlanda.", stat: 'Polonia cucerită în 5 săptămâni' },
+    fr: { name: 'Blitzkrieg', description: "La doctrine de la guerre éclair allemande révolutionne la guerre. La Pologne tombe en cinq semaines. La Grande-Bretagne et la France déclarent la guerre. L'URSS envahit la Finlande.", stat: 'Pologne conquise en 5 semaines' },
+    de: { name: 'Blitzkrieg', description: "Deutschlands Blitzkrieg-Doktrin revolutioniert die Kriegsführung. Polen fällt in fünf Wochen. Großbritannien und Frankreich erklären den Krieg. Die Sowjetunion überfällt Finnland.", stat: 'Polen in 5 Wochen besiegt' },
+    es: { name: 'Blitzkrieg', description: "La doctrina de guerra relámpago alemana remodela la guerra moderna. Polonia cae en cinco semanas. Gran Bretaña y Francia declaran la guerra. La Unión Soviética invade Finlandia.", stat: 'Polonia conquistada en 5 semanas' },
+  },
+  1940: {
+    en: { name: 'Axis Dominance', description: "France falls in six weeks — faster than anyone predicted. Dunkirk saves 338,000 troops. The Battle of Britain is the first major air campaign in history.", stat: '2,900 aircraft clash over Britain' },
+    ro: { name: 'Dominația Axei', description: "Franța cade în șase săptămâni — mai rapid decât oricine prevăzuse. Dunkerque salvează 338.000 de soldați. Bătălia Angliei este prima mare campanie aeriană din istorie.", stat: '2.900 de avioane se înfruntă deasupra Marii Britanii' },
+    fr: { name: 'Domination de l\'Axe', description: "La France tombe en six semaines — plus vite que prévu. Dunkerque sauve 338 000 soldats. La Bataille d'Angleterre est la première grande campagne aérienne de l'histoire.", stat: '2 900 avions s\'affrontent au-dessus de la Grande-Bretagne' },
+    de: { name: 'Achsenherrschaft', description: "Frankreich fällt in sechs Wochen — schneller als jeder erwartet hatte. Dünkirchen rettet 338.000 Soldaten. Die Luftschlacht um England ist die erste große Luftkampagne der Geschichte.", stat: '2.900 Flugzeuge kämpfen über Großbritannien' },
+    es: { name: 'Dominio del Eje', description: "Francia cae en seis semanas — más rápido de lo que nadie predijo. Dunkerque salva a 338.000 soldados. La Batalla de Gran Bretaña es la primera gran campaña aérea de la historia.", stat: '2.900 aviones chocan sobre Gran Bretaña' },
+  },
+  1941: {
+    en: { name: 'Global War', description: "Operation Barbarossa opens the largest front in history: 3,000 km. Japan attacks Pearl Harbor, bringing the USA into a truly global conflict.", stat: '3 million German troops cross into USSR' },
+    ro: { name: 'Război Global', description: "Operațiunea Barbarossa deschide cel mai lung front din istorie: 3.000 km. Japonia atacă Pearl Harbor, atrăgând SUA într-un conflict cu adevărat global.", stat: '3 milioane de trupe germane invadează URSS' },
+    fr: { name: 'Guerre Mondiale', description: "L'opération Barbarossa ouvre le plus grand front de l'histoire : 3 000 km. Le Japon attaque Pearl Harbor, entraînant les États-Unis dans un conflit véritablement mondial.", stat: '3 millions de soldats allemands entrent en URSS' },
+    de: { name: 'Weltkrieg', description: "Operation Barbarossa eröffnet die größte Front der Geschichte: 3.000 km. Japan greift Pearl Harbor an und zieht die USA in einen wahrhaft globalen Konflikt.", stat: '3 Millionen deutsche Soldaten marschieren in die UdSSR ein' },
+    es: { name: 'Guerra Global', description: "La Operación Barbarroja abre el frente más largo de la historia: 3.000 km. Japón ataca Pearl Harbor, arrastrando a EE.UU. a un conflicto verdaderamente global.", stat: '3 millones de tropas alemanas cruzan hacia la URSS' },
+  },
+  1942: {
+    en: { name: 'The Turning Points', description: "Three battles shift momentum forever: Stalingrad, El Alamein, and Midway. The Axis has reached its maximum territorial extent — and begins to recede.", stat: '800,000 Axis troops lost at Stalingrad' },
+    ro: { name: 'Punctele de Cotitură', description: "Trei bătălii schimbă definitiv cursul războiului: Stalingrad, El Alamein și Midway. Axa a atins extinderea teritorială maximă — și începe să se retragă.", stat: '800.000 de trupe ale Axei pierdute la Stalingrad' },
+    fr: { name: 'Les Tournants', description: "Trois batailles changent le cours de la guerre : Stalingrad, El-Alamein et Midway. L'Axe a atteint son extension territoriale maximale — et commence à reculer.", stat: '800 000 soldats de l\'Axe perdus à Stalingrad' },
+    de: { name: 'Die Wendepunkte', description: "Drei Schlachten verändern den Kriegsverlauf dauerhaft: Stalingrad, El Alamein und Midway. Die Achse hat ihre maximale territoriale Ausdehnung erreicht — und beginnt zurückzuweichen.", stat: '800.000 Achsensoldaten in Stalingrad verloren' },
+    es: { name: 'Los Puntos de Inflexión', description: "Tres batallas cambian el impulso para siempre: Stalingrado, El Alamein y Midway. El Eje ha alcanzado su máxima extensión territorial — y comienza a retroceder.", stat: '800.000 tropas del Eje perdidas en Stalingrado' },
+  },
+  1943: {
+    en: { name: 'Allied Advance', description: "Sicily falls, Italy switches sides. The Battle of Kursk — the largest tank battle in history — permanently breaks German offensive power in the East.", stat: '6,000 tanks clash at Kursk' },
+    ro: { name: 'Avansul Aliaților', description: "Sicilia cade, Italia schimbă tabăra. Bătălia de la Kursk — cea mai mare bătălie de tancuri din istorie — distruge definitiv puterea ofensivă germană la Est.", stat: '6.000 de tancuri se înfruntă la Kursk' },
+    fr: { name: 'L\'Avancée Alliée', description: "La Sicile tombe, l'Italie change de camp. La Bataille de Koursk — la plus grande bataille de chars de l'histoire — brise définitivement la puissance offensive allemande à l'Est.", stat: '6 000 chars s\'affrontent à Koursk' },
+    de: { name: 'Alliierter Vormarsch', description: "Sizilien fällt, Italien wechselt die Seiten. Die Panzerschlacht von Kursk — die größte Panzerschlacht der Geschichte — bricht die deutsche Angriffskraft im Osten dauerhaft.", stat: '6.000 Panzer kämpfen bei Kursk' },
+    es: { name: 'Avance Aliado', description: "Sicilia cae, Italia cambia de bando. La Batalla de Kursk — la mayor batalla de tanques de la historia — rompe permanentemente el poder ofensivo alemán en el Este.", stat: '6.000 tanques chocan en Kursk' },
+  },
+  1944: {
+    en: { name: 'Liberation', description: "D-Day opens the Western Front. Paris is liberated. The Red Army surges westward. Germany fights a desperate two-front war it cannot win.", stat: '156,000 troops land on D-Day' },
+    ro: { name: 'Eliberarea', description: "Ziua Z deschide Frontul de Vest. Parisul este eliberat. Armata Roșie înaintează spre vest. Germania luptă un război disperat pe două fronturi pe care nu îl poate câștiga.", stat: '156.000 de soldați debarcă în Ziua Z' },
+    fr: { name: 'La Libération', description: "Le Débarquement ouvre le front occidental. Paris est libéré. L'Armée rouge avance vers l'ouest. L'Allemagne mène une guerre désespérée sur deux fronts qu'elle ne peut pas gagner.", stat: '156 000 soldats débarquent le Jour J' },
+    de: { name: 'Befreiung', description: "D-Day eröffnet die Westfront. Paris wird befreit. Die Rote Armee drängt westwärts. Deutschland kämpft einen verzweifelten Zweifrontenkrieg, den es nicht gewinnen kann.", stat: '156.000 Soldaten landen am D-Day' },
+    es: { name: 'La Liberación', description: "El Día D abre el Frente Occidental. París es liberado. El Ejército Rojo avanza hacia el oeste. Alemania lucha una desesperada guerra en dos frentes que no puede ganar.", stat: '156.000 soldados desembarcan en el Día D' },
+  },
+  1945: {
+    en: { name: 'Victory', description: "Berlin falls on May 2nd. VE Day ends the war in Europe. Atomic bombs force Japan's surrender. The deadliest conflict in human history is over.", stat: 'Total dead: estimated 70–85 million' },
+    ro: { name: 'Victoria', description: "Berlinul cade pe 2 mai. Ziua Victoriei în Europa pune capăt războiului pe continent. Bombele atomice forțează capitularea Japoniei. Cel mai mortal conflict din istoria omenirii s-a încheiat.", stat: 'Total morți: estimat 70–85 milioane' },
+    fr: { name: 'La Victoire', description: "Berlin tombe le 2 mai. Le Jour de la Victoire met fin à la guerre en Europe. Les bombes atomiques forcent la capitulation du Japon. Le conflit le plus meurtrier de l'histoire humaine est terminé.", stat: 'Total des morts : 70–85 millions estimés' },
+    de: { name: 'Sieg', description: "Berlin fällt am 2. Mai. Der VE Day beendet den Krieg in Europa. Atombomben erzwingen Japans Kapitulation. Der tödlichste Konflikt der Menschheitsgeschichte ist vorbei.", stat: 'Gesamtverluste: geschätzt 70–85 Millionen' },
+    es: { name: 'Victoria', description: "Berlín cae el 2 de mayo. El Día de la Victoria en Europa termina la guerra en Europa. Las bombas atómicas fuerzan la rendición de Japón. El conflicto más mortífero de la historia humana termina.", stat: 'Total de muertos: estimados 70–85 millones' },
+  },
+};
+
 // ─── i18n ──────────────────────────────────────────────────────────────────────
 const T: Record<string, Record<string, string>> = {
   en: {
@@ -140,6 +236,46 @@ const T: Record<string, Record<string, string>> = {
     outcome: 'Outcome',
     significance: 'Significance',
     casualties: 'Casualties',
+    // Layer descriptions
+    layer_time_desc: 'Explore events through time',
+    layer_heatmap_desc: 'Density of historical events',
+    layer_empires_desc: 'great empires at peak',
+    layer_routes_desc: 'legendary voyages',
+    layer_battles_desc: 'famous battles with phases',
+    layer_cities_desc: 'great ancient cities',
+    layer_trade_desc: 'historical trade routes',
+    layer_religion_desc: '4 world religions spreading through time',
+    layer_ww_battles: 'battles & key events',
+    layer_plagues: '🦠 Plagues',
+    layer_plagues_desc: 'pandemics spreading through history',
+    layer_pirates: '🏴‍☠️ Pirates',
+    layer_pirates_desc: 'legendary pirate routes',
+    layer_nuclear: '☢️ Nuclear / Cold War',
+    layer_nuclear_desc_sites: 'test sites',
+    layer_nuclear_desc_events: 'events',
+    layer_dinosaurs: '🦕 Dinosaur Fossils',
+    layer_dinosaurs_desc: 'sites across 3 eras',
+    clear_layer: 'Clear layer',
+    // Plague UI
+    plague_move_slider: 'Move slider to see spread',
+    plague_select_hint: 'Select a pandemic above, then use the slider to watch it spread',
+    // Nuclear UI
+    nuclear_tests: 'tests',
+    nuclear_max: 'Max',
+    // Dinosaur UI
+    era_triassic: 'Triassic',
+    era_jurassic: 'Jurassic',
+    era_cretaceous: 'Cretaceous',
+    origin: 'Origin',
+    // WW alliances
+    central_powers: 'Central Powers',
+    axis_powers: 'Axis Powers',
+    allied: 'Allied',
+    // City status
+    city_active: '🏙 Active',
+    city_ruins: '🏚 Ruins',
+    city_lost: '❓ Lost',
+    city_submerged: '🌊 Submerged',
   },
   ro: {
     loading: 'Se încarcă...',
@@ -179,6 +315,283 @@ const T: Record<string, Record<string, string>> = {
     outcome: 'Rezultat',
     significance: 'Semnificație',
     casualties: 'Pierderi',
+    // Layer descriptions
+    layer_time_desc: 'Explorează evenimentele în timp',
+    layer_heatmap_desc: 'Densitatea evenimentelor istorice',
+    layer_empires_desc: 'mari imperii la apogeu',
+    layer_routes_desc: 'călătorii legendare',
+    layer_battles_desc: 'bătălii celebre cu faze',
+    layer_cities_desc: 'mari orașe antice',
+    layer_trade_desc: 'rute comerciale istorice',
+    layer_religion_desc: '4 religii mondiale răspândindu-se în timp',
+    layer_ww_battles: 'bătălii și evenimente cheie',
+    layer_plagues: '🦠 Epidemii',
+    layer_plagues_desc: 'pandemii răspândindu-se de-a lungul istoriei',
+    layer_pirates: '🏴‍☠️ Pirați',
+    layer_pirates_desc: 'rute legendare ale piraților',
+    layer_nuclear: '☢️ Nuclear / Război Rece',
+    layer_nuclear_desc_sites: 'situri de testare',
+    layer_nuclear_desc_events: 'evenimente',
+    layer_dinosaurs: '🦕 Fosile Dinosauri',
+    layer_dinosaurs_desc: 'situri din 3 ere',
+    clear_layer: 'Șterge stratul',
+    // Plague UI
+    plague_move_slider: 'Mișcă cursorul pentru a vedea răspândirea',
+    plague_select_hint: 'Alege o pandemie de mai sus, apoi folosește cursorul pentru a urmări răspândirea',
+    // Nuclear UI
+    nuclear_tests: 'teste',
+    nuclear_max: 'Max',
+    // Dinosaur UI
+    era_triassic: 'Triasic',
+    era_jurassic: 'Jurasic',
+    era_cretaceous: 'Cretacic',
+    origin: 'Origine',
+    // WW alliances
+    central_powers: 'Puterile Centrale',
+    axis_powers: 'Puterile Axei',
+    allied: 'Aliați',
+    // City status
+    city_active: '🏙 Activ',
+    city_ruins: '🏚 Ruine',
+    city_lost: '❓ Pierdut',
+    city_submerged: '🌊 Scufundat',
+  },
+  fr: {
+    loading: 'Chargement...',
+    events_across: 'événements dans',
+    countries: 'pays',
+    no_events: 'Aucun événement',
+    events: 'événements',
+    categories: 'catégories',
+    back_to_world: 'Vue mondiale',
+    war_conflict: 'Guerres & Conflits',
+    tech_innovation: 'Technologie',
+    science_discovery: 'Science',
+    politics_state: 'Politique',
+    culture_arts: 'Culture & Arts',
+    natural_disaster: 'Catastrophes naturelles',
+    exploration: 'Exploration',
+    religion_phil: 'Religion',
+    personalities: 'Personnalités',
+    media: 'Médias',
+    sport: 'Sport',
+    tap_to_explore: 'Appuyez sur un marqueur',
+    read_more: 'Lire l\'article complet',
+    close: 'Fermer',
+    zoom_hint: 'Zoomez pour voir les villes',
+    time_filter: 'Filtre temporel',
+    heat_map: 'Carte de chaleur',
+    empires: 'Empires',
+    routes: 'Routes',
+    battles: 'Batailles célèbres',
+    cities: 'Villes antiques',
+    trade: 'Routes commerciales',
+    religion: 'Propagation religieuse',
+    all_time: 'Toute époque',
+    phase: 'Phase',
+    attacker: 'Attaquant',
+    defender: 'Défenseur',
+    outcome: 'Résultat',
+    significance: 'Importance',
+    casualties: 'Pertes',
+    // Layer descriptions
+    layer_time_desc: 'Explorer les événements dans le temps',
+    layer_heatmap_desc: 'Densité des événements historiques',
+    layer_empires_desc: 'grands empires à leur apogée',
+    layer_routes_desc: 'voyages légendaires',
+    layer_battles_desc: 'batailles célèbres avec phases',
+    layer_cities_desc: 'grandes villes antiques',
+    layer_trade_desc: 'routes commerciales historiques',
+    layer_religion_desc: '4 religions mondiales se propageant dans le temps',
+    layer_ww_battles: 'batailles & événements clés',
+    layer_plagues: '🦠 Épidémies',
+    layer_plagues_desc: 'pandémies à travers l\'histoire',
+    layer_pirates: '🏴‍☠️ Pirates',
+    layer_pirates_desc: 'routes de pirates légendaires',
+    layer_nuclear: '☢️ Nucléaire / Guerre froide',
+    layer_nuclear_desc_sites: 'sites de test',
+    layer_nuclear_desc_events: 'événements',
+    layer_dinosaurs: '🦕 Fossiles de dinosaures',
+    layer_dinosaurs_desc: 'sites à travers 3 ères',
+    clear_layer: 'Effacer le calque',
+    // Plague UI
+    plague_move_slider: 'Bougez le curseur pour voir la propagation',
+    plague_select_hint: 'Sélectionnez une pandémie ci-dessus, puis utilisez le curseur pour suivre sa propagation',
+    // Nuclear UI
+    nuclear_tests: 'tests',
+    nuclear_max: 'Max',
+    // Dinosaur UI
+    era_triassic: 'Trias',
+    era_jurassic: 'Jurassique',
+    era_cretaceous: 'Crétacé',
+    origin: 'Origine',
+    // WW alliances
+    central_powers: 'Puissances centrales',
+    axis_powers: "Puissances de l'Axe",
+    allied: 'Alliés',
+    // City status
+    city_active: '🏙 Actif',
+    city_ruins: '🏚 Ruines',
+    city_lost: '❓ Perdu',
+    city_submerged: '🌊 Submergé',
+  },
+  de: {
+    loading: 'Lädt...',
+    events_across: 'Ereignisse in',
+    countries: 'Ländern',
+    no_events: 'Keine Ereignisse',
+    events: 'Ereignisse',
+    categories: 'Kategorien',
+    back_to_world: 'Weltansicht',
+    war_conflict: 'Kriege & Konflikte',
+    tech_innovation: 'Technologie',
+    science_discovery: 'Wissenschaft',
+    politics_state: 'Politik',
+    culture_arts: 'Kultur & Kunst',
+    natural_disaster: 'Naturkatastrophen',
+    exploration: 'Entdeckung',
+    religion_phil: 'Religion',
+    personalities: 'Persönlichkeiten',
+    media: 'Medien',
+    sport: 'Sport',
+    tap_to_explore: 'Marker antippen',
+    read_more: 'Artikel lesen',
+    close: 'Schließen',
+    zoom_hint: 'Hereinzoomen für Städte',
+    time_filter: 'Zeitfilter',
+    heat_map: 'Wärmekarte',
+    empires: 'Reiche',
+    routes: 'Routen',
+    battles: 'Berühmte Schlachten',
+    cities: 'Antike Städte',
+    trade: 'Handelsrouten',
+    religion: 'Religionsverbreitung',
+    all_time: 'Alle Zeiten',
+    phase: 'Phase',
+    attacker: 'Angreifer',
+    defender: 'Verteidiger',
+    outcome: 'Ergebnis',
+    significance: 'Bedeutung',
+    casualties: 'Verluste',
+    // Layer descriptions
+    layer_time_desc: 'Ereignisse durch die Zeit erkunden',
+    layer_heatmap_desc: 'Dichte historischer Ereignisse',
+    layer_empires_desc: 'große Reiche auf dem Höhepunkt',
+    layer_routes_desc: 'legendäre Reisen',
+    layer_battles_desc: 'berühmte Schlachten mit Phasen',
+    layer_cities_desc: 'große antike Städte',
+    layer_trade_desc: 'historische Handelsrouten',
+    layer_religion_desc: '4 Weltreligionen breiten sich durch die Zeit aus',
+    layer_ww_battles: 'Schlachten & Schlüsselereignisse',
+    layer_plagues: '🦠 Seuchen',
+    layer_plagues_desc: 'Pandemien durch die Geschichte',
+    layer_pirates: '🏴‍☠️ Piraten',
+    layer_pirates_desc: 'legendäre Piratenrouten',
+    layer_nuclear: '☢️ Nuklear / Kalter Krieg',
+    layer_nuclear_desc_sites: 'Testgelände',
+    layer_nuclear_desc_events: 'Ereignisse',
+    layer_dinosaurs: '🦕 Dinosaurierfossilien',
+    layer_dinosaurs_desc: 'Fundstätten aus 3 Epochen',
+    clear_layer: 'Ebene löschen',
+    // Plague UI
+    plague_move_slider: 'Schieberegler bewegen für Ausbreitung',
+    plague_select_hint: 'Pandemie oben auswählen, dann Schieberegler nutzen',
+    // Nuclear UI
+    nuclear_tests: 'Tests',
+    nuclear_max: 'Max',
+    // Dinosaur UI
+    era_triassic: 'Trias',
+    era_jurassic: 'Jura',
+    era_cretaceous: 'Kreide',
+    origin: 'Ursprung',
+    // WW alliances
+    central_powers: 'Mittelmächte',
+    axis_powers: 'Achsenmächte',
+    allied: 'Alliierte',
+    // City status
+    city_active: '🏙 Aktiv',
+    city_ruins: '🏚 Ruinen',
+    city_lost: '❓ Verloren',
+    city_submerged: '🌊 Versunken',
+  },
+  es: {
+    loading: 'Cargando...',
+    events_across: 'eventos en',
+    countries: 'países',
+    no_events: 'Sin eventos',
+    events: 'eventos',
+    categories: 'categorías',
+    back_to_world: 'Vista mundial',
+    war_conflict: 'Guerras & Conflictos',
+    tech_innovation: 'Tecnología',
+    science_discovery: 'Ciencia',
+    politics_state: 'Política',
+    culture_arts: 'Cultura & Arte',
+    natural_disaster: 'Desastres naturales',
+    exploration: 'Exploración',
+    religion_phil: 'Religión',
+    personalities: 'Personalidades',
+    media: 'Medios',
+    sport: 'Deporte',
+    tap_to_explore: 'Toca un marcador',
+    read_more: 'Leer artículo completo',
+    close: 'Cerrar',
+    zoom_hint: 'Acerca para ver ciudades',
+    time_filter: 'Filtro de tiempo',
+    heat_map: 'Mapa de calor',
+    empires: 'Imperios',
+    routes: 'Rutas',
+    battles: 'Batallas famosas',
+    cities: 'Ciudades antiguas',
+    trade: 'Rutas comerciales',
+    religion: 'Difusión religiosa',
+    all_time: 'Toda la historia',
+    phase: 'Fase',
+    attacker: 'Atacante',
+    defender: 'Defensor',
+    outcome: 'Resultado',
+    significance: 'Importancia',
+    casualties: 'Bajas',
+    // Layer descriptions
+    layer_time_desc: 'Explorar eventos a través del tiempo',
+    layer_heatmap_desc: 'Densidad de eventos históricos',
+    layer_empires_desc: 'grandes imperios en su apogeo',
+    layer_routes_desc: 'viajes legendarios',
+    layer_battles_desc: 'batallas famosas con fases',
+    layer_cities_desc: 'grandes ciudades antiguas',
+    layer_trade_desc: 'rutas comerciales históricas',
+    layer_religion_desc: '4 religiones mundiales extendiéndose en el tiempo',
+    layer_ww_battles: 'batallas y eventos clave',
+    layer_plagues: '🦠 Plagas',
+    layer_plagues_desc: 'pandemias a lo largo de la historia',
+    layer_pirates: '🏴‍☠️ Piratas',
+    layer_pirates_desc: 'rutas de piratas legendarias',
+    layer_nuclear: '☢️ Nuclear / Guerra Fría',
+    layer_nuclear_desc_sites: 'sitios de prueba',
+    layer_nuclear_desc_events: 'eventos',
+    layer_dinosaurs: '🦕 Fósiles de Dinosaurios',
+    layer_dinosaurs_desc: 'sitios a través de 3 eras',
+    clear_layer: 'Limpiar capa',
+    // Plague UI
+    plague_move_slider: 'Mueve el control para ver la propagación',
+    plague_select_hint: 'Selecciona una pandemia arriba, luego usa el control para ver su propagación',
+    // Nuclear UI
+    nuclear_tests: 'pruebas',
+    nuclear_max: 'Máx',
+    // Dinosaur UI
+    era_triassic: 'Triásico',
+    era_jurassic: 'Jurásico',
+    era_cretaceous: 'Cretácico',
+    origin: 'Origen',
+    // WW alliances
+    central_powers: 'Potencias Centrales',
+    axis_powers: 'Potencias del Eje',
+    allied: 'Aliados',
+    // City status
+    city_active: '🏙 Activo',
+    city_ruins: '🏚 Ruinas',
+    city_lost: '❓ Perdida',
+    city_submerged: '🌊 Sumergida',
   },
 };
 
@@ -210,6 +623,16 @@ const WAR_TYPE_ICON: Record<string, string> = {
   treaty: 'scroll',
   offensive: 'target',
 };
+
+const NUCLEAR_EVENT_EMOJI: Record<string, string> = {
+  first_test: '☢️', combat: '💥', largest: '🔥', accident: '⚠️', crisis: '🚨', treaty: '📜', program: '🏭',
+};
+
+const DINO_ERA_CONFIG = [
+  { id: 'triassic',   label: 'Triassic',   color: '#7C3AED', emoji: '🦎' },
+  { id: 'jurassic',   label: 'Jurassic',   color: '#059669', emoji: '🌿' },
+  { id: 'cretaceous', label: 'Cretaceous', color: '#D97706', emoji: '🦕' },
+] as const;
 const sideColorOf = (side: string) =>
   side === 'axis' || side === 'central' ? '#DC2626' : side === 'allied' ? '#2563EB' : '#6B7280';
 
@@ -221,6 +644,33 @@ const WAR_COUNTRY_KEYWORD: Record<string, string> = {
 };
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
+
+// Returns the nearest point on a polyline to a given coordinate.
+// Projects onto every segment (not just vertices) for sub-segment precision.
+const snapToRoute = (
+  pt: { latitude: number; longitude: number },
+  coords: { latitude: number; longitude: number }[],
+): { latitude: number; longitude: number } => {
+  if (coords.length === 0) return pt;
+  if (coords.length === 1) return coords[0];
+  let best = coords[0];
+  let bestDist = Infinity;
+  for (let i = 0; i < coords.length - 1; i++) {
+    const a = coords[i];
+    const b = coords[i + 1];
+    const dx = b.longitude - a.longitude;
+    const dy = b.latitude  - a.latitude;
+    const lenSq = dx * dx + dy * dy;
+    const t = lenSq === 0 ? 0 : Math.max(0, Math.min(1,
+      ((pt.longitude - a.longitude) * dx + (pt.latitude - a.latitude) * dy) / lenSq,
+    ));
+    const proj = { latitude: a.latitude + t * dy, longitude: a.longitude + t * dx };
+    const d = (proj.latitude - pt.latitude) ** 2 + (proj.longitude - pt.longitude) ** 2;
+    if (d < bestDist) { bestDist = d; best = proj; }
+  }
+  return best;
+};
+
 const getCat = (e: any): string => (e.category ?? '').toString().toLowerCase();
 const getYear = (e: any): string => {
   const r = String(e.eventDate ?? e.event_date ?? e.year ?? '').trim();
@@ -586,42 +1036,46 @@ const SmartMarker = ({
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// PinHead — reusable teardrop marker graphic with a fixed size (no clipping),
-// an SVG GameIcon or single emoji glyph, an optional name label, and a tail.
+// PinHead — fixed-size teardrop marker. Explicit outer dimensions prevent the
+// Android bitmap-snapshot clipping bug. collapsable={false} stops the RN
+// layout optimizer from collapsing the view before the snapshot is taken.
+// Max head diameter is capped at MAX_PIN (32) so icons/numbers never truncate.
 // ═══════════════════════════════════════════════════════════════════════════════
+const MAX_PIN = 32;
 const PinHead = ({
-  color, size = 38, selected, iconKey, emoji, label, text,
+  color, size = 28, selected, iconKey, emoji, text,
 }: {
   color: string;
   size?: number;
   selected?: boolean;
   iconKey?: string;
   emoji?: string;
-  label?: string;
   text?: string;
-}) => (
-  <View style={mkr.wrap}>
-    {label ? (
-      <View style={[mkr.label, { borderColor: color }]}>
-        <Text style={[mkr.labelText, { color }]} numberOfLines={1}>{label}</Text>
+}) => {
+  const s = Math.min(size, MAX_PIN);
+  // tail: borderTopWidth=9 - marginTop=-2 overlap = 7px net
+  return (
+    <View
+      style={{ width: s + 10, height: s + 7, alignItems: 'center' }}
+      collapsable={false}
+    >
+      <View style={[mkr.head, {
+        width: s, height: s, borderRadius: s / 2,
+        backgroundColor: color, borderWidth: selected ? 3 : 2,
+      }]}>
+        {iconKey
+          ? <GameIcon iconKey={iconKey} size={Math.round(s * 0.5)} color="#FFFFFF" />
+          : text != null
+          ? <Text style={{
+              fontSize: Math.min(Math.round(s * 0.38), 12),
+              fontWeight: '900', color: '#FFFFFF', textAlign: 'center', includeFontPadding: false,
+            }}>{text}</Text>
+          : <Text style={{ fontSize: Math.min(Math.round(s * 0.5), 15), includeFontPadding: false }}>{emoji}</Text>}
       </View>
-    ) : null}
-    <View style={[mkr.head, {
-      width: size, height: size, borderRadius: size / 2,
-      backgroundColor: color, borderWidth: selected ? 4 : 2.5,
-    }]}>
-      {iconKey
-        ? <GameIcon iconKey={iconKey} size={Math.round(size * 0.52)} color="#FFFFFF" />
-        : text != null
-        ? <Text style={{
-            fontSize: Math.round(size * 0.4), lineHeight: Math.round(size * 0.52),
-            fontWeight: '900', color: '#FFFFFF', textAlign: 'center', includeFontPadding: false,
-          }}>{text}</Text>
-        : <Text style={{ fontSize: Math.round(size * 0.5), lineHeight: Math.round(size * 0.6) }}>{emoji}</Text>}
+      <View style={[mkr.tail, { borderTopColor: color }]} />
     </View>
-    <View style={[mkr.tail, { borderTopColor: color }]} />
-  </View>
-);
+  );
+};
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Main Component
@@ -629,6 +1083,7 @@ const PinHead = ({
 export default function MapScreen({ onInterstitial }: { onInterstitial?: () => void } = {}) {
   const { theme, isDark } = useTheme();
   const { language } = useLanguage();
+  const tLang = language !== 'en' ? (language as 'ro' | 'fr' | 'de' | 'es') : undefined;
   const insets = useSafeAreaInsets();
   const { isPro, presentPaywall } = useRevenueCat();
   const { showForUnlock } = useRewardedUnlock();
@@ -651,7 +1106,7 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
   const [isZoomedIn, setIsZoomedIn] = useState(false);
 
   // Layer state
-  type MapLayer = 'off' | 'time' | 'heatmap' | 'empires' | 'routes' | 'battles' | 'cities' | 'trade' | 'religion' | 'ww1' | 'ww2';
+  type MapLayer = 'off' | 'time' | 'heatmap' | 'empires' | 'routes' | 'battles' | 'cities' | 'trade' | 'religion' | 'ww1' | 'ww2' | 'plagues' | 'pirates' | 'nuclear' | 'dinosaurs';
   const [mapLayer, setMapLayer] = useState<MapLayer>('off');
   const [selectedEmpires, setSelectedEmpires] = useState<Set<string>>(new Set());
   const [selectedRoutes, setSelectedRoutes] = useState<Set<string>>(new Set());
@@ -680,15 +1135,31 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
 
   // WW1/WW2 layer state
   const [ww1Unlocked, setWw1Unlocked] = useState(false);
-  const [ww1Year, setWw1Year] = useState(WW1_YEAR_MAX);
-  const [ww2Year, setWw2Year] = useState(WW2_YEAR_MAX);
-  const [ww1Countries, setWw1Countries] = useState<Set<string>>(new Set());
-  const [ww2Countries, setWw2Countries] = useState<Set<string>>(new Set());
+  const [ww1Year, setWw1Year] = useState(WW1_YEAR_MIN);
+  const [ww2Year, setWw2Year] = useState(WW2_YEAR_MIN);
   const [selectedWarEvent, setSelectedWarEvent] = useState<any>(null);
-  const ww1SliderWidthRef = useRef(300);
-  const ww2SliderWidthRef = useRef(300);
-  const ww1SliderRatioAtGrant = useRef(1);
-  const ww2SliderRatioAtGrant = useRef(1);
+
+  // Plagues layer state
+  const [selectedPlagueId, setSelectedPlagueId] = useState<string | null>(null);
+  const [plagueYear, setPlagueYear] = useState(PLAGUE_YEAR_MIN);
+  const plagueSliderWidthRef = useRef(300);
+  const plagueSliderRatioAtGrant = useRef(0);
+
+  // Pirates layer state
+  const [selectedPirateRoutes, setSelectedPirateRoutes] = useState<Set<string>>(new Set());
+
+  // Nuclear layer state
+  const [selectedNuclearCountries, setSelectedNuclearCountries] = useState<Set<string>>(
+    new Set(['usa', 'ussr', 'uk', 'france', 'china', 'india', 'pakistan', 'north_korea']),
+  );
+  const [selectedNuclearEvent, setSelectedNuclearEvent] = useState<any>(null);
+  const [selectedNuclearSite, setSelectedNuclearSite] = useState<any>(null);
+
+  // Dinosaurs layer state
+  const [selectedDinoEras, setSelectedDinoEras] = useState<Set<string>>(
+    new Set(['triassic', 'jurassic', 'cretaceous']),
+  );
+  const [selectedDinoSite, setSelectedDinoSite] = useState<any>(null);
 
   // Keep latest selectedBattle accessible inside callbacks (phase navigation)
   const selectedBattleRef = useRef<FamousBattle | null>(null);
@@ -868,21 +1339,28 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
 
   const visibleWW1Events = useMemo(() => {
     if (mapLayer !== 'ww1') return [];
-    return WW1_EVENTS.filter(e => {
-      const yearOk = e.year <= ww1Year;
-      const countryOk = ww1Countries.size === 0 || e.countries.some((c: string) => ww1Countries.has(c));
-      return yearOk && countryOk;
-    });
-  }, [mapLayer, ww1Year, ww1Countries]);
+    return WW1_EVENTS.filter(e => e.year === ww1Year)
+      .sort((a, b) => b.significance - a.significance);
+  }, [mapLayer, ww1Year]);
 
   const visibleWW2Events = useMemo(() => {
     if (mapLayer !== 'ww2') return [];
-    return WW2_EVENTS.filter(e => {
-      const yearOk = e.year <= ww2Year;
-      const countryOk = ww2Countries.size === 0 || e.countries.some((c: string) => ww2Countries.has(c));
-      return yearOk && countryOk;
-    });
-  }, [mapLayer, ww2Year, ww2Countries]);
+    return WW2_EVENTS.filter(e => e.year === ww2Year)
+      .sort((a, b) => b.significance - a.significance);
+  }, [mapLayer, ww2Year]);
+
+  const visiblePlagueData = useMemo(() => {
+    if (mapLayer !== 'plagues' || !selectedPlagueId) return null;
+    const pandemic = PANDEMICS.find(p => p.id === selectedPlagueId);
+    if (!pandemic) return null;
+    const yearSpread = pandemic.spread.filter(s => s.year <= plagueYear);
+    return {
+      pandemic,
+      regions: yearSpread.flatMap(s => s.regions),
+      latestLabel: yearSpread.length > 0 ? yearSpread[yearSpread.length - 1].label : '',
+    };
+  }, [mapLayer, selectedPlagueId, plagueYear]);
+
 
   const warEventSideColor = useMemo(() => {
     if (!selectedWarEvent) return '#DC2626';
@@ -927,21 +1405,20 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
   const toggleLayer = useCallback((layer: MapLayer) => {
     haptic('medium');
 
-    if (!isPro && layer !== 'heatmap') {
-      const rewardedLayers: MapLayer[] = ['routes', 'trade', 'cities', 'ww1'];
+    const freeLayers: MapLayer[] = ['heatmap', 'battles', 'ww1', 'ww2', 'religion'];
+    if (!isPro && !freeLayers.includes(layer)) {
+      const rewardedLayers: MapLayer[] = ['routes', 'trade', 'cities'];
       if (rewardedLayers.includes(layer)) {
         const unlocked =
           layer === 'routes' ? routesUnlocked :
           layer === 'trade'  ? tradeUnlocked  :
-          layer === 'cities' ? citiesUnlocked :
-          ww1Unlocked;
+          citiesUnlocked;
         if (!unlocked) {
           setLayersOpen(false);
           showForUnlock(() => {
             if (layer === 'routes')      setRoutesUnlocked(true);
             else if (layer === 'trade')  setTradeUnlocked(true);
             else if (layer === 'cities') setCitiesUnlocked(true);
-            else if (layer === 'ww1')   setWw1Unlocked(true);
             setMapLayer(layer);
             setSelectedKeyStop(null);
             setSelectedWarEvent(null);
@@ -998,22 +1475,49 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
     });
   }, []);
 
-  const toggleWw1Country = useCallback((c: string) => {
+  const decrementWW1Year = useCallback(() => {
     haptic('selection');
-    setWw1Countries(prev => {
-      const next = new Set(prev);
-      if (next.has(c)) next.delete(c); else next.add(c);
-      return next;
-    });
+    setWw1Year(y => Math.max(WW1_YEAR_MIN, y - 1));
+    setSelectedWarEvent(null);
+  }, []);
+  const incrementWW1Year = useCallback(() => {
+    haptic('selection');
+    setWw1Year(y => Math.min(WW1_YEAR_MAX, y + 1));
+    setSelectedWarEvent(null);
+  }, []);
+  const decrementWW2Year = useCallback(() => {
+    haptic('selection');
+    setWw2Year(y => Math.max(WW2_YEAR_MIN, y - 1));
+    setSelectedWarEvent(null);
+  }, []);
+  const incrementWW2Year = useCallback(() => {
+    haptic('selection');
+    setWw2Year(y => Math.min(WW2_YEAR_MAX, y + 1));
+    setSelectedWarEvent(null);
   }, []);
 
-  const toggleWw2Country = useCallback((c: string) => {
+  const togglePirateRoute = useCallback((id: string) => {
     haptic('selection');
-    setWw2Countries(prev => {
-      const next = new Set(prev);
-      if (next.has(c)) next.delete(c); else next.add(c);
-      return next;
-    });
+    setSelectedPirateRoutes(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  }, []);
+
+  const toggleNuclearCountry = useCallback((country: string) => {
+    haptic('selection');
+    setSelectedNuclearCountries(prev => { const next = new Set(prev); if (next.has(country)) next.delete(country); else next.add(country); return next; });
+  }, []);
+
+  const toggleDinoEra = useCallback((era: string) => {
+    haptic('selection');
+    setSelectedDinoEras(prev => { const next = new Set(prev); if (next.has(era)) next.delete(era); else next.add(era); return next; });
+  }, []);
+
+  const selectPandemic = useCallback((id: string | null) => {
+    haptic('medium');
+    setSelectedPlagueId(id);
+    if (id) {
+      const p = PANDEMICS.find(x => x.id === id);
+      if (p) setPlagueYear(p.yearMin);
+    }
   }, []);
 
   // Religion slider pan
@@ -1034,31 +1538,19 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
     },
   })).current;
 
-  const ww1SliderPan = useRef(PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onMoveShouldSetPanResponder: () => true,
-    onPanResponderGrant: (e) => {
-      const ratio = Math.max(0, Math.min(1, e.nativeEvent.locationX / ww1SliderWidthRef.current));
-      ww1SliderRatioAtGrant.current = ratio;
-      setWw1Year(Math.round(WW1_YEAR_MIN + ratio * (WW1_YEAR_MAX - WW1_YEAR_MIN)));
-    },
-    onPanResponderMove: (_, g) => {
-      const ratio = Math.max(0, Math.min(1, ww1SliderRatioAtGrant.current + g.dx / ww1SliderWidthRef.current));
-      setWw1Year(Math.round(WW1_YEAR_MIN + ratio * (WW1_YEAR_MAX - WW1_YEAR_MIN)));
-    },
-  })).current;
 
-  const ww2SliderPan = useRef(PanResponder.create({
+  // Plague year slider pan
+  const plagueSliderPan = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: () => true,
     onPanResponderGrant: (e) => {
-      const ratio = Math.max(0, Math.min(1, e.nativeEvent.locationX / ww2SliderWidthRef.current));
-      ww2SliderRatioAtGrant.current = ratio;
-      setWw2Year(Math.round(WW2_YEAR_MIN + ratio * (WW2_YEAR_MAX - WW2_YEAR_MIN)));
+      const ratio = Math.max(0, Math.min(1, e.nativeEvent.locationX / plagueSliderWidthRef.current));
+      plagueSliderRatioAtGrant.current = ratio;
+      setPlagueYear(Math.round(PLAGUE_YEAR_MIN + ratio * (PLAGUE_YEAR_MAX - PLAGUE_YEAR_MIN)));
     },
     onPanResponderMove: (_, g) => {
-      const ratio = Math.max(0, Math.min(1, ww2SliderRatioAtGrant.current + g.dx / ww2SliderWidthRef.current));
-      setWw2Year(Math.round(WW2_YEAR_MIN + ratio * (WW2_YEAR_MAX - WW2_YEAR_MIN)));
+      const ratio = Math.max(0, Math.min(1, plagueSliderRatioAtGrant.current + g.dx / plagueSliderWidthRef.current));
+      setPlagueYear(Math.round(PLAGUE_YEAR_MIN + ratio * (PLAGUE_YEAR_MAX - PLAGUE_YEAR_MIN)));
     },
   })).current;
 
@@ -1158,6 +1650,49 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
       longitudeDelta: Math.max((maxLng - minLng) * pad, minDelta),
     }, duration);
   }, []);
+
+  // Auto-fit map to the current year's events whenever year/layer changes
+  useEffect(() => {
+    if (mapLayer !== 'ww1') return;
+    const events = WW1_EVENTS.filter(e => e.year === ww1Year);
+    if (events.length === 0) return;
+    fitToCoords(events.map(e => ({ latitude: e.latitude, longitude: e.longitude })), 1.6, 8, 700);
+  }, [ww1Year, mapLayer, fitToCoords]);
+
+  useEffect(() => {
+    if (mapLayer !== 'ww2') return;
+    const events = WW2_EVENTS.filter(e => e.year === ww2Year);
+    if (events.length === 0) return;
+    fitToCoords(events.map(e => ({ latitude: e.latitude, longitude: e.longitude })), 1.6, 10, 700);
+  }, [ww2Year, mapLayer, fitToCoords]);
+
+  useEffect(() => {
+    if (mapLayer !== 'plagues' || !selectedPlagueId) return;
+    const pandemic = PANDEMICS.find(p => p.id === selectedPlagueId);
+    if (!pandemic) return;
+    fitToCoords([pandemic.origin], 1.0, 40, 700);
+  }, [mapLayer, selectedPlagueId, fitToCoords]);
+
+  useEffect(() => {
+    if (mapLayer !== 'pirates' || selectedPirateRoutes.size === 0) return;
+    const coords = PIRATE_ROUTES.filter(r => selectedPirateRoutes.has(r.id)).flatMap(r => r.coordinates);
+    if (coords.length === 0) return;
+    fitToCoords(coords, 1.2, 15, 700);
+  }, [mapLayer, selectedPirateRoutes, fitToCoords]);
+
+  useEffect(() => {
+    if (mapLayer !== 'nuclear') return;
+    const sites = NUCLEAR_SITES.filter(s => selectedNuclearCountries.has(s.country));
+    if (sites.length === 0) return;
+    fitToCoords(sites.map(s => ({ latitude: s.latitude, longitude: s.longitude })), 1.1, 20, 700);
+  }, [mapLayer, fitToCoords]); // intentionally no selectedNuclearCountries dep — only fit on layer open
+
+  useEffect(() => {
+    if (mapLayer !== 'dinosaurs') return;
+    const sites = DINOSAUR_SITES.filter(s => selectedDinoEras.has(s.era));
+    if (sites.length === 0) return;
+    fitToCoords(sites.map(s => ({ latitude: s.latitude, longitude: s.longitude })), 1.1, 25, 700);
+  }, [mapLayer, fitToCoords]); // only fit on layer open
 
   // ── Select a battle: open it, reset to phase 1, zoom to its location ─────────
   const selectBattle = useCallback((battle: FamousBattle) => {
@@ -1334,7 +1869,7 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
             >
               {(() => {
                 const n = cluster.count;
-                const dia = n > 99 ? 50 : n > 9 ? 44 : 38;
+                const dia = n > 99 ? 32 : n > 9 ? 30 : 28;
                 return <PinHead color={cluster.mainColor} size={dia} text={n > 99 ? '99+' : String(n)} />;
               })()}
             </SmartMarker>
@@ -1356,7 +1891,7 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
                 onPress={() => openPreview(item)}
                 anchor={{ x: 0.5, y: 1 }}
               >
-                <PinHead color={c} size={34} iconKey={isPro ? 'crown' : (CAT[catKey]?.emoji ?? 'star')} />
+                <PinHead color={c} size={28} iconKey={isPro ? 'crown' : (CAT[catKey]?.emoji ?? 'star')} />
               </SmartMarker>
             );
           })}
@@ -1393,18 +1928,21 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
               lineDashPattern={[8, 4]}
               geodesic
             />
-            {route.keyStops.map((stop: any, idx: number) => (
-              <SmartMarker
-                key={`stop-${route.id}-${idx}`}
-                redraw={route.color}
-                coordinate={{ latitude: stop.latitude, longitude: stop.longitude }}
-                anchor={{ x: 0.5, y: 0.5 }}
-                title={stop.label}
-                onPress={() => { haptic('light'); setSelectedKeyStop({ route, stop }); }}
-              >
-                <View style={[mkr.dot, { backgroundColor: route.color }]} />
-              </SmartMarker>
-            ))}
+            {route.keyStops.map((stop: any, idx: number) => {
+              const snapped = snapToRoute(stop, route.coordinates);
+              return (
+                <SmartMarker
+                  key={`stop-${route.id}-${idx}`}
+                  redraw={route.color}
+                  coordinate={{ latitude: snapped.latitude, longitude: snapped.longitude }}
+                  anchor={{ x: 0.5, y: 0.5 }}
+                  title={stop.label}
+                  onPress={() => { haptic('light'); setSelectedKeyStop({ route, stop }); }}
+                >
+                  <View style={[mkr.dot, { backgroundColor: route.color }]} />
+                </SmartMarker>
+              );
+            })}
           </React.Fragment>
         ))}
 
@@ -1418,18 +1956,21 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
               lineDashPattern={[10, 6]}
               geodesic
             />
-            {route.keyStops.map((stop, idx) => (
-              <SmartMarker
-                key={`trade-stop-${route.id}-${idx}`}
-                redraw={route.color}
-                coordinate={{ latitude: stop.latitude, longitude: stop.longitude }}
-                anchor={{ x: 0.5, y: 0.5 }}
-                title={stop.label}
-                onPress={() => { haptic('light'); setSelectedKeyStop({ route, stop }); }}
-              >
-                <View style={[mkr.dot, { backgroundColor: route.color }]} />
-              </SmartMarker>
-            ))}
+            {route.keyStops.map((stop, idx) => {
+              const snapped = snapToRoute(stop, route.coordinates);
+              return (
+                <SmartMarker
+                  key={`trade-stop-${route.id}-${idx}`}
+                  redraw={route.color}
+                  coordinate={{ latitude: snapped.latitude, longitude: snapped.longitude }}
+                  anchor={{ x: 0.5, y: 0.5 }}
+                  title={stop.label}
+                  onPress={() => { haptic('light'); setSelectedKeyStop({ route, stop }); }}
+                >
+                  <View style={[mkr.dot, { backgroundColor: route.color }]} />
+                </SmartMarker>
+              );
+            })}
           </React.Fragment>
         ))}
 
@@ -1463,7 +2004,7 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
               anchor={{ x: 0.5, y: 1 }}
               zIndex={isFocused ? 999 : 1}
             >
-              <PinHead color={city.color} size={isFocused ? 42 : 36} emoji={city.emoji} selected={isFocused} />
+              <PinHead color={city.color} size={isFocused ? 32 : 28} emoji={city.emoji} selected={isFocused} />
             </SmartMarker>
           );
         })}
@@ -1494,7 +2035,7 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
               anchor={{ x: 0.5, y: 1 }}
               zIndex={isSel ? 999 : 1}
             >
-              <PinHead color={battle.color} size={isSel ? 46 : 38} emoji={battle.emoji} selected={isSel} />
+              <PinHead color={battle.color} size={isSel ? 32 : 28} emoji={battle.emoji} selected={isSel} />
             </SmartMarker>
           );
         })}
@@ -1511,7 +2052,7 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
               description={pos.troops ?? pos.note}
               anchor={{ x: 0.5, y: 1 }}
             >
-              <PinHead color={sideCol} size={30} iconKey={pos.side === 'attacker' ? 'sword' : 'shield'} label={pos.label.split(' ').slice(0, 3).join(' ')} />
+              <PinHead color={sideCol} size={26} iconKey={pos.side === 'attacker' ? 'sword' : 'shield'} />
             </SmartMarker>
           );
         })}
@@ -1539,24 +2080,152 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
             title={religion.name}
             anchor={{ x: 0.5, y: 1 }}
           >
-            <PinHead color={religion.color} size={36} emoji={religion.emoji} label={religion.name} />
+            <PinHead color={religion.color} size={28} emoji={religion.emoji} />
           </SmartMarker>
         ))}
 
-        {/* ── WW1/WW2 — alliance territory highlights ── */}
+        {/* ── Plagues — spread circles ── */}
+        {mapLayer === 'plagues' && visiblePlagueData && visiblePlagueData.regions.map((region, i) => (
+          <Circle
+            key={`plague-circle-${i}`}
+            center={{ latitude: region.latitude, longitude: region.longitude }}
+            radius={region.radius}
+            strokeColor={visiblePlagueData.pandemic.color + '40'}
+            fillColor={visiblePlagueData.pandemic.color + Math.round(region.intensity * 38).toString(16).padStart(2, '0')}
+            strokeWidth={1}
+          />
+        ))}
+        {/* Plague origin pin */}
+        {mapLayer === 'plagues' && selectedPlagueId && (() => {
+          const pandemic = PANDEMICS.find(p => p.id === selectedPlagueId);
+          if (!pandemic) return null;
+          return (
+            <SmartMarker
+              key={`plague-origin-${pandemic.id}`}
+              redraw={pandemic.color}
+              coordinate={pandemic.origin}
+              title={pandemic.name}
+              description={`${tm('origin')}: ${pandemic.origin.label}`}
+              anchor={{ x: 0.5, y: 1 }}
+            >
+              <PinHead color={pandemic.color} size={32} emoji={pandemic.emoji} selected />
+            </SmartMarker>
+          );
+        })()}
+
+        {/* ── Pirate Routes ── */}
+        {mapLayer === 'pirates' && PIRATE_ROUTES.filter(r => selectedPirateRoutes.has(r.id)).map(route => (
+          <React.Fragment key={`pirate-${route.id}`}>
+            <Polyline
+              coordinates={route.coordinates}
+              strokeColor={route.color}
+              strokeWidth={3}
+              lineDashPattern={[8, 6]}
+              geodesic
+            />
+            {route.keyStops.map((stop, idx) => {
+              const snapped = snapToRoute(stop, route.coordinates);
+              return (
+                <SmartMarker
+                  key={`pirate-stop-${route.id}-${idx}`}
+                  redraw={route.color}
+                  coordinate={{ latitude: snapped.latitude, longitude: snapped.longitude }}
+                  anchor={{ x: 0.5, y: 0.5 }}
+                  title={stop.label}
+                  onPress={() => { haptic('light'); setSelectedKeyStop({ route, stop }); }}
+                >
+                  <View style={[mkr.dot, { backgroundColor: route.color }]} />
+                </SmartMarker>
+              );
+            })}
+          </React.Fragment>
+        ))}
+
+        {/* ── Nuclear Test Sites — circles ── */}
+        {mapLayer === 'nuclear' && NUCLEAR_SITES.filter(s => selectedNuclearCountries.has(s.country)).map(site => (
+          <React.Fragment key={`nuclear-site-${site.id}`}>
+            <Circle
+              center={{ latitude: site.latitude, longitude: site.longitude }}
+              radius={site.radius}
+              strokeColor={site.color + '50'}
+              fillColor={site.color + '18'}
+              strokeWidth={1.5}
+            />
+            <SmartMarker
+              redraw={`${site.color}-${selectedNuclearSite?.id === site.id}`}
+              coordinate={{ latitude: site.latitude, longitude: site.longitude }}
+              title={site.name}
+              description={`${site.totalTests} tests · ${site.period}`}
+              anchor={{ x: 0.5, y: 1 }}
+              onPress={() => { haptic('medium'); setSelectedNuclearSite(site); setSelectedNuclearEvent(null); }}
+              zIndex={selectedNuclearSite?.id === site.id ? 999 : 1}
+            >
+              <PinHead color={site.color} size={selectedNuclearSite?.id === site.id ? 32 : 28}
+                text={site.flag} selected={selectedNuclearSite?.id === site.id} />
+            </SmartMarker>
+          </React.Fragment>
+        ))}
+        {/* Nuclear Events — event pins */}
+        {mapLayer === 'nuclear' && NUCLEAR_EVENTS.filter(e =>
+          e.country === 'multi' || selectedNuclearCountries.has(e.country as string)
+        ).map(event => {
+          const isSel = selectedNuclearEvent?.id === event.id;
+          return (
+            <SmartMarker
+              key={`nuclear-event-${event.id}`}
+              redraw={`${event.color}-${isSel}`}
+              coordinate={{ latitude: event.latitude, longitude: event.longitude }}
+              title={event.title}
+              description={`${event.year} · ${event.type.replace('_', ' ')}`}
+              anchor={{ x: 0.5, y: 1 }}
+              onPress={() => { haptic('medium'); setSelectedNuclearEvent(event); setSelectedNuclearSite(null); }}
+              zIndex={isSel ? 999 : event.significance}
+            >
+              <PinHead color={event.color} size={isSel ? 32 : event.significance === 3 ? 30 : 26}
+                emoji={NUCLEAR_EVENT_EMOJI[event.type] ?? '☢️'} selected={isSel} />
+            </SmartMarker>
+          );
+        })}
+
+        {/* ── Dinosaur Fossil Sites ── */}
+        {mapLayer === 'dinosaurs' && DINOSAUR_SITES.filter(s => selectedDinoEras.has(s.era)).map(site => {
+          const isSel = selectedDinoSite?.id === site.id;
+          const r = site.significance === 3 ? 220000 : site.significance === 2 ? 130000 : 75000;
+          return (
+            <React.Fragment key={`dino-${site.id}`}>
+              <Circle
+                center={{ latitude: site.latitude, longitude: site.longitude }}
+                radius={isSel ? r * 1.3 : r}
+                strokeColor={site.color + '60'}
+                fillColor={site.color + (isSel ? '28' : '14')}
+                strokeWidth={isSel ? 2 : 1}
+              />
+              <SmartMarker
+                redraw={`${site.color}-${isSel}`}
+                coordinate={{ latitude: site.latitude, longitude: site.longitude }}
+                title={site.name}
+                description={site.geologicalPeriod}
+                anchor={{ x: 0.5, y: 1 }}
+                onPress={() => { haptic('medium'); setSelectedDinoSite(site); }}
+                zIndex={isSel ? 999 : site.significance}
+              >
+                <PinHead color={site.color} size={isSel ? 32 : site.significance === 3 ? 30 : 26}
+                  emoji={site.emoji} selected={isSel} />
+              </SmartMarker>
+            </React.Fragment>
+          );
+        })}
+
+        {/* ── WW1/WW2 — alliance territory highlights (subtle background) ── */}
         {(mapLayer === 'ww1' || mapLayer === 'ww2') && WAR_TERRITORIES.filter(t => t.war === mapLayer).map(t => {
           const col = sideColorOf(t.side);
-          const selected = mapLayer === 'ww1' ? ww1Countries : ww2Countries;
-          const tName = t.country.toLowerCase();
-          const matches = selected.size === 0 ||
-            Array.from(selected).some(k => tName.includes(WAR_COUNTRY_KEYWORD[k] ?? k));
           return (
             <Polygon
               key={`terr-${t.id}`}
               coordinates={t.coordinates}
-              strokeColor={col + (matches ? 'FF' : '55')}
-              fillColor={col + (matches ? '4D' : '14')}
-              strokeWidth={matches ? 2.5 : 1}
+              strokeColor={col + '35'}
+              fillColor={col + '18'}
+              strokeWidth={0.8}
               tappable={false}
             />
           );
@@ -1566,7 +2235,7 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
         {(mapLayer === 'ww1' ? visibleWW1Events : mapLayer === 'ww2' ? visibleWW2Events : []).map(e => {
           const col = sideColorOf(e.side);
           const isSel = selectedWarEvent?.id === e.id;
-          const size = e.significance === 3 ? 40 : e.significance === 2 ? 34 : 28;
+          const size = e.significance === 3 ? 32 : e.significance === 2 ? 28 : 24;
           return (
             <SmartMarker
               key={`war-${e.id}`}
@@ -1578,7 +2247,7 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
               anchor={{ x: 0.5, y: 1 }}
               zIndex={isSel ? 999 : e.significance}
             >
-              <PinHead color={col} size={isSel ? size + 6 : size} selected={isSel} iconKey={WAR_TYPE_ICON[e.type] ?? 'sword'} />
+              <PinHead color={col} size={isSel ? Math.min(size + 4, 32) : size} selected={isSel} iconKey={WAR_TYPE_ICON[e.type] ?? 'sword'} />
             </SmartMarker>
           );
         })}
@@ -1658,24 +2327,27 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
         }]}>
           <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
             {([
-              { id: 'time'     as const, Icon: Clock,       label: tm('time_filter'), desc: 'Explore events through time',            badge: 'pro'   as const },
-              { id: 'heatmap'  as const, Icon: Thermometer, label: tm('heat_map'),    desc: 'Density of historical events',           badge: 'free'  as const },
-              { id: 'empires'  as const, Icon: Castle,      label: tm('empires'),     desc: `${EMPIRE_BORDERS.length} great empires at peak`,     badge: 'pro'   as const },
-              { id: 'routes'   as const, Icon: Navigation,  label: tm('routes'),      desc: `${EXPLORER_ROUTES.length} legendary voyages`,         badge: 'video' as const },
-              { id: 'battles'  as const, Icon: Swords,      label: tm('battles'),     desc: `${FAMOUS_BATTLES.length} famous battles with phases`, badge: 'pro'   as const },
-              { id: 'cities'   as const, Icon: CircleIcon,  label: tm('cities'),      desc: `${ANCIENT_CITIES.length} great ancient cities`,       badge: 'video' as const },
-              { id: 'trade'    as const, Icon: Navigation,  label: tm('trade'),       desc: `${TRADE_ROUTES.length} historical trade routes`,      badge: 'video' as const },
-              { id: 'religion' as const, Icon: Globe2,      label: tm('religion'),    desc: '4 world religions spreading through time', badge: 'pro'   as const },
-              { id: 'ww1'      as const, Icon: Swords,      label: 'WW1 1914–1918',   desc: `${WW1_EVENTS.length} battles & key events`,           badge: 'video' as const },
-              { id: 'ww2'      as const, Icon: Swords,      label: 'WW2 1939–1945',   desc: `${WW2_EVENTS.length} battles & key events`,           badge: 'pro'   as const },
+              { id: 'time'     as const, Icon: Clock,       label: tm('time_filter'), desc: tm('layer_time_desc'),                                                                         badge: 'pro'   as const },
+              { id: 'heatmap'  as const, Icon: Thermometer, label: tm('heat_map'),    desc: tm('layer_heatmap_desc'),                                                                     badge: 'free'  as const },
+              { id: 'empires'  as const, Icon: Castle,      label: tm('empires'),     desc: `${EMPIRE_BORDERS.length} ${tm('layer_empires_desc')}`,                                       badge: 'pro'   as const },
+              { id: 'routes'   as const, Icon: Navigation,  label: tm('routes'),      desc: `${EXPLORER_ROUTES.length} ${tm('layer_routes_desc')}`,                                       badge: 'video' as const },
+              { id: 'battles'  as const, Icon: Swords,      label: tm('battles'),     desc: `${FAMOUS_BATTLES.length} ${tm('layer_battles_desc')}`,                                       badge: 'free'  as const },
+              { id: 'cities'   as const, Icon: CircleIcon,  label: tm('cities'),      desc: `${ANCIENT_CITIES.length} ${tm('layer_cities_desc')}`,                                        badge: 'video' as const },
+              { id: 'trade'    as const, Icon: Navigation,  label: tm('trade'),       desc: `${TRADE_ROUTES.length} ${tm('layer_trade_desc')}`,                                           badge: 'video' as const },
+              { id: 'religion' as const, Icon: Globe2,      label: tm('religion'),    desc: tm('layer_religion_desc'),                                                                     badge: 'free'  as const },
+              { id: 'ww1'       as const, Icon: Swords,      label: 'WW1 1914–1918',  desc: `${WW1_EVENTS.length} ${tm('layer_ww_battles')}`,                                             badge: 'free'  as const },
+              { id: 'ww2'       as const, Icon: Swords,      label: 'WW2 1939–1945',  desc: `${WW2_EVENTS.length} ${tm('layer_ww_battles')}`,                                             badge: 'free'  as const },
+              { id: 'plagues'   as const, Icon: Thermometer, label: tm('layer_plagues'),   desc: `${PANDEMICS.length} ${tm('layer_plagues_desc')}`,                                       badge: 'pro'   as const },
+              { id: 'pirates'   as const, Icon: Navigation,  label: tm('layer_pirates'),   desc: `${PIRATE_ROUTES.length} ${tm('layer_pirates_desc')}`,                                   badge: 'pro'   as const },
+              { id: 'nuclear'   as const, Icon: CircleIcon,  label: tm('layer_nuclear'),   desc: `${NUCLEAR_SITES.length} ${tm('layer_nuclear_desc_sites')} · ${NUCLEAR_EVENTS.length} ${tm('layer_nuclear_desc_events')}`, badge: 'pro' as const },
+              { id: 'dinosaurs' as const, Icon: Globe2,      label: tm('layer_dinosaurs'), desc: `${DINOSAUR_SITES.length} ${tm('layer_dinosaurs_desc')}`,                                badge: 'pro'   as const },
             ]).map(({ id, Icon, label, desc, badge }) => {
               const active = mapLayer === id;
               const lockedPro = !isPro && badge === 'pro';
               const lockedVideo = !isPro && badge === 'video' && (
                 (id === 'routes'  && !routesUnlocked) ||
                 (id === 'trade'   && !tradeUnlocked)  ||
-                (id === 'cities'  && !citiesUnlocked)  ||
-                (id === 'ww1'     && !ww1Unlocked)
+                (id === 'cities'  && !citiesUnlocked)
               );
               return (
                 <TouchableOpacity key={id} onPress={() => toggleLayer(id)} activeOpacity={0.75}
@@ -1706,12 +2378,12 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
             {mapLayer !== 'off' && (
               <>
                 <View style={[styles.layersPanelSep, { backgroundColor: borderCol }]} />
-                <TouchableOpacity onPress={() => { haptic('light'); setMapLayer('off'); setLayersOpen(false); setSelectedKeyStop(null); setSelectedBattle(null); setSelectedCity(null); setSelectedWarEvent(null); }}
+                <TouchableOpacity onPress={() => { haptic('light'); setMapLayer('off'); setLayersOpen(false); setSelectedKeyStop(null); setSelectedBattle(null); setSelectedCity(null); setSelectedWarEvent(null); setSelectedPlagueId(null); setSelectedNuclearSite(null); setSelectedNuclearEvent(null); setSelectedDinoSite(null); }}
                   activeOpacity={0.75} style={styles.layersPanelRow}>
                   <View style={[styles.layersPanelIcon, { backgroundColor: isDark ? '#292524' : '#F5F5F5' }]}>
                     <X size={14} color={theme.subtext} strokeWidth={2} />
                   </View>
-                  <Text style={[styles.layersPanelLabel, { color: theme.subtext }]}>Clear layer</Text>
+                  <Text style={[styles.layersPanelLabel, { color: theme.subtext }]}>{tm('clear_layer')}</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -1725,7 +2397,7 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
       )}
 
       {/* ── Empire / Route / Trade / Religion / Battle / War / City chips ── */}
-      {(mapLayer === 'empires' || mapLayer === 'routes' || mapLayer === 'trade' || mapLayer === 'religion' || mapLayer === 'battles' || mapLayer === 'ww1' || mapLayer === 'ww2' || mapLayer === 'cities') && (
+      {(mapLayer === 'empires' || mapLayer === 'routes' || mapLayer === 'trade' || mapLayer === 'religion' || mapLayer === 'battles' || mapLayer === 'cities' || mapLayer === 'plagues' || mapLayer === 'pirates' || mapLayer === 'nuclear' || mapLayer === 'dinosaurs') && (
         <View style={[styles.chipsRow, { top: insets.top + (activeCountry || isZoomedIn ? 110 : 52) }]} pointerEvents="box-none">
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsContent}>
             {mapLayer === 'empires' ? EMPIRE_BORDERS.map(empire => {
@@ -1734,7 +2406,7 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
                 <TouchableOpacity key={empire.id} onPress={() => toggleEmpire(empire.id)}
                   style={[styles.chip, { backgroundColor: on ? empire.color + '22' : cardBg, borderColor: on ? empire.color : borderCol }]}>
                   <View style={[styles.chipDot, { backgroundColor: empire.color }]} />
-                  <Text style={[styles.chipLabel, { color: on ? empire.color : theme.subtext }]} numberOfLines={1}>{empire.name}</Text>
+                  <Text style={[styles.chipLabel, { color: on ? empire.color : theme.subtext }]} numberOfLines={1}>{(tLang && empire.translations?.[tLang]?.name) ?? empire.name}</Text>
                 </TouchableOpacity>
               );
             }) : mapLayer === 'cities' ? ANCIENT_CITIES.map(city => {
@@ -1763,7 +2435,7 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
                 <TouchableOpacity key={route.id} onPress={() => toggleTradeRoute(route.id)}
                   style={[styles.chip, { backgroundColor: on ? route.color + '22' : cardBg, borderColor: on ? route.color : borderCol }]}>
                   <Text style={styles.chipEmoji}>{route.emoji}</Text>
-                  <Text style={[styles.chipLabel, { color: on ? route.color : theme.subtext }]} numberOfLines={1}>{route.name.split(' ').slice(0, 2).join(' ')}</Text>
+                  <Text style={[styles.chipLabel, { color: on ? route.color : theme.subtext }]} numberOfLines={1}>{((tLang && route.translations?.[tLang]?.name) ?? route.name).split(' ').slice(0, 2).join(' ')}</Text>
                 </TouchableOpacity>
               );
             }) : mapLayer === 'religion' ? RELIGIONS.map(rel => {
@@ -1772,45 +2444,64 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
                 <TouchableOpacity key={rel.id} onPress={() => toggleReligion(rel.id)}
                   style={[styles.chip, { backgroundColor: on ? rel.color + '22' : cardBg, borderColor: on ? rel.color : borderCol }]}>
                   <Text style={styles.chipEmoji}>{rel.emoji}</Text>
-                  <Text style={[styles.chipLabel, { color: on ? rel.color : theme.subtext }]} numberOfLines={1}>{rel.name}</Text>
+                  <Text style={[styles.chipLabel, { color: on ? rel.color : theme.subtext }]} numberOfLines={1}>{(tLang && rel.translations?.[tLang]?.name) ?? rel.name}</Text>
                 </TouchableOpacity>
               );
-            }) : mapLayer === 'ww1' ? (
-              (['germany', 'uk', 'france', 'usa', 'russia', 'ottoman', 'austria'] as const).map(country => {
-                const on = ww1Countries.has(country);
-                const isAxis = ['germany', 'austria', 'ottoman'].includes(country);
-                const col = isAxis ? '#DC2626' : '#2563EB';
-                return (
-                  <TouchableOpacity key={country} onPress={() => toggleWw1Country(country)}
-                    style={[styles.chip, { backgroundColor: on ? col + '22' : cardBg, borderColor: on ? col : borderCol }]}>
-                    <View style={[styles.chipDot, { backgroundColor: col }]} />
-                    <Text style={[styles.chipLabel, { color: on ? col : theme.subtext }]}>{country.charAt(0).toUpperCase() + country.slice(1)}</Text>
-                  </TouchableOpacity>
-                );
-              })
-            ) : mapLayer === 'ww2' ? (
-              (['germany', 'japan', 'usa', 'uk', 'france', 'ussr', 'italy'] as const).map(country => {
-                const on = ww2Countries.has(country);
-                const isAxis = ['germany', 'japan', 'italy'].includes(country);
-                const col = isAxis ? '#DC2626' : '#2563EB';
-                return (
-                  <TouchableOpacity key={country} onPress={() => toggleWw2Country(country)}
-                    style={[styles.chip, { backgroundColor: on ? col + '22' : cardBg, borderColor: on ? col : borderCol }]}>
-                    <View style={[styles.chipDot, { backgroundColor: col }]} />
-                    <Text style={[styles.chipLabel, { color: on ? col : theme.subtext }]}>{country.toUpperCase()}</Text>
-                  </TouchableOpacity>
-                );
-              })
-            ) : FAMOUS_BATTLES.map(battle => {
+            }) : mapLayer === 'battles' ? FAMOUS_BATTLES.map(battle => {
               const on = selectedBattle?.id === battle.id;
               return (
                 <TouchableOpacity key={battle.id} onPress={() => on ? setSelectedBattle(null) : selectBattle(battle)}
                   style={[styles.chip, { backgroundColor: on ? battle.color + '22' : cardBg, borderColor: on ? battle.color : borderCol }]}>
                   <Text style={styles.chipEmoji}>{battle.emoji}</Text>
-                  <Text style={[styles.chipLabel, { color: on ? battle.color : theme.subtext }]} numberOfLines={1}>{battle.name.replace('Battle of ', '')}</Text>
+                  <Text style={[styles.chipLabel, { color: on ? battle.color : theme.subtext }]} numberOfLines={1}>{((tLang && battle.translations?.[tLang]?.name) ?? battle.name).replace('Battle of ', '')}</Text>
                 </TouchableOpacity>
               );
-            })}
+            }) : mapLayer === 'plagues' ? PANDEMICS.map(p => {
+              const on = selectedPlagueId === p.id;
+              return (
+                <TouchableOpacity key={p.id} onPress={() => selectPandemic(on ? null : p.id)}
+                  style={[styles.chip, { backgroundColor: on ? p.color + '22' : cardBg, borderColor: on ? p.color : borderCol }]}>
+                  <Text style={styles.chipEmoji}>{p.emoji}</Text>
+                  <Text style={[styles.chipLabel, { color: on ? p.color : theme.subtext }]} numberOfLines={1}>{p.name.replace('Plague of ', '').replace(' Pandemic', '').slice(0, 18)}</Text>
+                </TouchableOpacity>
+              );
+            }) : mapLayer === 'pirates' ? PIRATE_ROUTES.map(route => {
+              const on = selectedPirateRoutes.has(route.id);
+              return (
+                <TouchableOpacity key={route.id} onPress={() => togglePirateRoute(route.id)}
+                  style={[styles.chip, { backgroundColor: on ? route.color + '22' : cardBg, borderColor: on ? route.color : borderCol }]}>
+                  <Text style={styles.chipEmoji}>{route.emoji}</Text>
+                  <Text style={[styles.chipLabel, { color: on ? route.color : theme.subtext }]} numberOfLines={1}>
+                    {route.captain.split('(')[0].split(',')[0].trim().replace('"', '').replace('"', '').slice(0, 14)}
+                  </Text>
+                </TouchableOpacity>
+              );
+            }) : mapLayer === 'nuclear' ? (() => {
+              const seen = new Map<string, { color: string; flag: string }>();
+              for (const site of NUCLEAR_SITES) {
+                if (!seen.has(site.country)) seen.set(site.country, { color: site.color, flag: site.flag });
+              }
+              return Array.from(seen.entries()).map(([country, info]) => {
+                const on = selectedNuclearCountries.has(country);
+                const label = country.replace(/_/g, ' ').replace('north korea', 'N.Korea').toUpperCase();
+                return (
+                  <TouchableOpacity key={country} onPress={() => toggleNuclearCountry(country)}
+                    style={[styles.chip, { backgroundColor: on ? info.color + '22' : cardBg, borderColor: on ? info.color : borderCol }]}>
+                    <Text style={styles.chipEmoji}>{info.flag}</Text>
+                    <Text style={[styles.chipLabel, { color: on ? info.color : theme.subtext }]} numberOfLines={1}>{label}</Text>
+                  </TouchableOpacity>
+                );
+              });
+            })() : mapLayer === 'dinosaurs' ? DINO_ERA_CONFIG.map(era => {
+              const on = selectedDinoEras.has(era.id);
+              return (
+                <TouchableOpacity key={era.id} onPress={() => toggleDinoEra(era.id)}
+                  style={[styles.chip, { backgroundColor: on ? era.color + '22' : cardBg, borderColor: on ? era.color : borderCol }]}>
+                  <Text style={styles.chipEmoji}>{era.emoji}</Text>
+                  <Text style={[styles.chipLabel, { color: on ? era.color : theme.subtext }]}>{tm(`era_${era.id}`)}</Text>
+                </TouchableOpacity>
+              );
+            }) : null}
           </ScrollView>
         </View>
       )}
@@ -1863,7 +2554,7 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
           <View style={{ flex: 1 }}>
             <Text style={[styles.keyStopTitle, { color: theme.text }]}>{selectedKeyStop.stop.label}</Text>
             <Text style={[styles.keyStopNote, { color: theme.subtext }]} numberOfLines={3}>{selectedKeyStop.stop.note}</Text>
-            <Text style={[styles.keyStopRouteName, { color: selectedKeyStop.route.color }]}>{selectedKeyStop.route.name}</Text>
+            <Text style={[styles.keyStopRouteName, { color: selectedKeyStop.route.color }]}>{(tLang && selectedKeyStop.route.translations?.[tLang]?.name) ?? selectedKeyStop.route.name}</Text>
           </View>
         </View>
       )}
@@ -1896,79 +2587,118 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
         </View>
       )}
 
-      {/* ── WW1 Year Slider ── */}
-      {mapLayer === 'ww1' && !selectedWarEvent && (
-        <View style={[styles.sliderCard, { bottom: insets.bottom + 12, backgroundColor: cardBg, borderColor: borderCol }]}>
-          <View style={styles.sliderHeader}>
-            <Text style={[styles.sliderYearLabel, { color: '#DC2626' }]}>{ww1Year}</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <View style={[mls.warLegend, { backgroundColor: '#DC262620' }]}>
-                <View style={[mls.warLegendDot, { backgroundColor: '#DC2626' }]} />
-                <Text style={[mls.warLegendText, { color: '#DC2626' }]}>Central</Text>
-              </View>
-              <View style={[mls.warLegend, { backgroundColor: '#2563EB20' }]}>
-                <View style={[mls.warLegendDot, { backgroundColor: '#2563EB' }]} />
-                <Text style={[mls.warLegendText, { color: '#2563EB' }]}>Allied</Text>
-              </View>
-            </View>
-          </View>
-          <View style={styles.sliderTrackWrap}
-            onLayout={e => { ww1SliderWidthRef.current = e.nativeEvent.layout.width; }}
-            {...ww1SliderPan.panHandlers}>
-            <View style={[styles.sliderTrack, { backgroundColor: borderCol }]}>
-              <View style={[styles.sliderFill, {
-                width: `${((ww1Year - WW1_YEAR_MIN) / (WW1_YEAR_MAX - WW1_YEAR_MIN)) * 100}%` as any,
-                backgroundColor: '#DC2626',
-              }]} />
-            </View>
-            <View style={[styles.sliderThumb, {
-              left: `${((ww1Year - WW1_YEAR_MIN) / (WW1_YEAR_MAX - WW1_YEAR_MIN)) * 100}%` as any,
-              backgroundColor: '#DC2626', borderColor: cardBg,
-            }]} />
-          </View>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
-            <Text style={[styles.sliderAllTime, { color: theme.subtext }]}>1914</Text>
-            <Text style={[styles.sliderAllTime, { color: theme.subtext }]}>1918</Text>
-          </View>
-        </View>
-      )}
+      {/* ── WW1 / WW2 Year Navigator ── */}
+      {(mapLayer === 'ww1' || mapLayer === 'ww2') && !selectedWarEvent && (() => {
+        const isWW1 = mapLayer === 'ww1';
+        const currentYear = isWW1 ? ww1Year : ww2Year;
+        const yearMin = isWW1 ? WW1_YEAR_MIN : WW2_YEAR_MIN;
+        const yearMax = isWW1 ? WW1_YEAR_MAX : WW2_YEAR_MAX;
+        const phase = isWW1
+          ? (WW1_PHASES[currentYear]?.[language] ?? WW1_PHASES[currentYear]?.en)
+          : (WW2_PHASES[currentYear]?.[language] ?? WW2_PHASES[currentYear]?.en);
+        const currentEvents = isWW1 ? visibleWW1Events : visibleWW2Events;
+        const decrement = isWW1 ? decrementWW1Year : decrementWW2Year;
+        const increment = isWW1 ? incrementWW1Year : incrementWW2Year;
+        const yearRange = Array.from({ length: yearMax - yearMin + 1 }, (_, i) => yearMin + i);
+        const centralLabel = tm(isWW1 ? 'central_powers' : 'axis_powers');
+        return (
+          <View style={[styles.warYearCard, { bottom: insets.bottom + 12, backgroundColor: cardBg, borderColor: isDark ? '#DC262628' : '#DC262618' }]}>
+            {/* Year navigation */}
+            <View style={styles.warYearNavRow}>
+              <TouchableOpacity
+                onPress={decrement}
+                disabled={currentYear <= yearMin}
+                style={[styles.warYearArrow, { opacity: currentYear <= yearMin ? 0.25 : 1, backgroundColor: '#DC262615' }]}
+              >
+                <ChevronLeft size={20} color="#DC2626" strokeWidth={2.5} />
+              </TouchableOpacity>
 
-      {/* ── WW2 Year Slider ── */}
-      {mapLayer === 'ww2' && !selectedWarEvent && (
-        <View style={[styles.sliderCard, { bottom: insets.bottom + 12, backgroundColor: cardBg, borderColor: borderCol }]}>
-          <View style={styles.sliderHeader}>
-            <Text style={[styles.sliderYearLabel, { color: '#DC2626' }]}>{ww2Year}</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <View style={[mls.warLegend, { backgroundColor: '#DC262620' }]}>
+              <View style={styles.warYearCenter}>
+                <Text style={styles.warYearNumber}>{currentYear}</Text>
+                {phase && (
+                  <Text style={[styles.warYearPhaseName, { color: theme.text }]}>{phase.name}</Text>
+                )}
+              </View>
+
+              <TouchableOpacity
+                onPress={increment}
+                disabled={currentYear >= yearMax}
+                style={[styles.warYearArrow, { opacity: currentYear >= yearMax ? 0.25 : 1, backgroundColor: '#DC262615' }]}
+              >
+                <ChevronRight size={20} color="#DC2626" strokeWidth={2.5} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Year progress dots */}
+            <View style={styles.warYearDots}>
+              {yearRange.map(y => (
+                <TouchableOpacity key={y} onPress={() => { haptic('selection'); isWW1 ? setWw1Year(y) : setWw2Year(y); setSelectedWarEvent(null); }} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
+                  <View style={{
+                    width: y === currentYear ? 20 : 7, height: 7, borderRadius: 3.5,
+                    backgroundColor: y === currentYear ? '#DC2626' : (isDark ? '#DC262635' : '#DC262625'),
+                  }} />
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Phase narrative */}
+            {phase && (
+              <Text style={[styles.warYearDesc, { color: theme.subtext }]}>{phase.description}</Text>
+            )}
+
+            {/* Key stat */}
+            {phase && (
+              <View style={[styles.warYearStatRow, { backgroundColor: '#DC262610', borderColor: '#DC262628' }]}>
+                <Text style={styles.warYearStatIcon}>⚔️</Text>
+                <Text style={[styles.warYearStatText, { color: theme.text }]}>{phase.stat}</Text>
+              </View>
+            )}
+
+            {/* Events this year — tappable chips */}
+            {currentEvents.length > 0 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -16, paddingHorizontal: 16 }}>
+                <View style={{ flexDirection: 'row', gap: 6, paddingRight: 4 }}>
+                  {currentEvents.map(e => {
+                    const col = sideColorOf(e.side);
+                    const iconKey = WAR_TYPE_ICON[e.type] ?? 'sword';
+                    return (
+                      <TouchableOpacity
+                        key={e.id}
+                        onPress={() => selectWarEvent(e)}
+                        activeOpacity={0.7}
+                        style={[styles.warEventChip, { backgroundColor: col + '15', borderColor: col + '40' }]}
+                      >
+                        <GameIcon iconKey={iconKey} size={11} color={col} />
+                        <Text style={[styles.warEventChipText, { color: col }]} numberOfLines={1}>
+                          {e.title.split(':')[0].split('–')[0].trim().slice(0, 28)}
+                        </Text>
+                        {e.significance === 3 && (
+                          <View style={[styles.warEventChipStar, { backgroundColor: col }]} />
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </ScrollView>
+            )}
+
+            {/* Alliance legend */}
+            <View style={styles.warYearLegendRow}>
+              <View style={[mls.warLegend, { backgroundColor: '#DC262612' }]}>
                 <View style={[mls.warLegendDot, { backgroundColor: '#DC2626' }]} />
-                <Text style={[mls.warLegendText, { color: '#DC2626' }]}>Axis</Text>
+                <Text style={[mls.warLegendText, { color: '#DC2626' }]}>{centralLabel}</Text>
               </View>
-              <View style={[mls.warLegend, { backgroundColor: '#2563EB20' }]}>
+              <Text style={[styles.warYearEventCount, { color: theme.subtext }]}>
+                {currentEvents.length} {tm('events')} · {tm('tap_to_explore')}
+              </Text>
+              <View style={[mls.warLegend, { backgroundColor: '#2563EB12' }]}>
                 <View style={[mls.warLegendDot, { backgroundColor: '#2563EB' }]} />
-                <Text style={[mls.warLegendText, { color: '#2563EB' }]}>Allied</Text>
+                <Text style={[mls.warLegendText, { color: '#2563EB' }]}>{tm('allied')}</Text>
               </View>
             </View>
           </View>
-          <View style={styles.sliderTrackWrap}
-            onLayout={e => { ww2SliderWidthRef.current = e.nativeEvent.layout.width; }}
-            {...ww2SliderPan.panHandlers}>
-            <View style={[styles.sliderTrack, { backgroundColor: borderCol }]}>
-              <View style={[styles.sliderFill, {
-                width: `${((ww2Year - WW2_YEAR_MIN) / (WW2_YEAR_MAX - WW2_YEAR_MIN)) * 100}%` as any,
-                backgroundColor: '#DC2626',
-              }]} />
-            </View>
-            <View style={[styles.sliderThumb, {
-              left: `${((ww2Year - WW2_YEAR_MIN) / (WW2_YEAR_MAX - WW2_YEAR_MIN)) * 100}%` as any,
-              backgroundColor: '#DC2626', borderColor: cardBg,
-            }]} />
-          </View>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
-            <Text style={[styles.sliderAllTime, { color: theme.subtext }]}>1939</Text>
-            <Text style={[styles.sliderAllTime, { color: theme.subtext }]}>1945</Text>
-          </View>
-        </View>
-      )}
+        );
+      })()}
 
       {/* ── War Event Detail Card ── */}
       {(mapLayer === 'ww1' || mapLayer === 'ww2') && selectedWarEvent && (
@@ -1992,9 +2722,9 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
                 </View>
               )}
             </View>
-            <Text style={[styles.warEventTitle, { color: theme.text }]}>{selectedWarEvent.title}</Text>
+            <Text style={[styles.warEventTitle, { color: theme.text }]}>{selectedWarEvent.translations?.[language]?.title ?? selectedWarEvent.title}</Text>
           </View>
-          <Text style={[styles.warEventDesc, { color: theme.subtext }]} numberOfLines={4}>{selectedWarEvent.description}</Text>
+          <Text style={[styles.warEventDesc, { color: theme.subtext }]} numberOfLines={4}>{selectedWarEvent.translations?.[language]?.description ?? selectedWarEvent.description}</Text>
           {selectedWarEvent.casualties && (
             <View style={[styles.warCasRow, { backgroundColor: '#DC262610', borderColor: '#DC262625' }]}>
               <Text style={styles.warCasIcon}>⚔️</Text>
@@ -2013,8 +2743,8 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
           <View style={styles.battleHeader}>
             <Text style={styles.battleEmoji}>{selectedBattle.emoji}</Text>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.battleName, { color: theme.text }]}>{selectedBattle.name}</Text>
-              <Text style={[styles.battleYear, { color: selectedBattle.color }]}>{selectedBattle.yearLabel} · {selectedBattle.outcome}</Text>
+              <Text style={[styles.battleName, { color: theme.text }]}>{(tLang && selectedBattle.translations?.[tLang]?.name) ?? selectedBattle.name}</Text>
+              <Text style={[styles.battleYear, { color: selectedBattle.color }]}>{selectedBattle.yearLabel} · {(tLang && selectedBattle.translations?.[tLang]?.outcome) ?? selectedBattle.outcome}</Text>
             </View>
           </View>
           {/* Phase navigation — prev / next arrows */}
@@ -2078,6 +2808,165 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
         </View>
       )}
 
+      {/* ── Plague Year Slider ── */}
+      {mapLayer === 'plagues' && (() => {
+        const activePandemic = selectedPlagueId ? PANDEMICS.find(p => p.id === selectedPlagueId) : null;
+        const plagueColor = activePandemic?.color ?? accent;
+        const ratio = (plagueYear - PLAGUE_YEAR_MIN) / (PLAGUE_YEAR_MAX - PLAGUE_YEAR_MIN);
+        const latestEntry = activePandemic
+          ? activePandemic.spread.filter(s => s.year <= plagueYear).slice(-1)[0]
+          : null;
+        return (
+          <View style={[styles.sliderCard, { bottom: insets.bottom + 12, backgroundColor: cardBg, borderColor: borderCol }]}>
+            {activePandemic ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                <Text style={{ fontSize: 22 }}>{activePandemic.emoji}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: theme.text }}>{activePandemic.name}</Text>
+                  {latestEntry ? (
+                    <Text style={{ fontSize: 10.5, color: plagueColor, fontWeight: '600' }} numberOfLines={1}>{latestEntry.label}</Text>
+                  ) : (
+                    <Text style={{ fontSize: 10.5, color: theme.subtext, fontWeight: '500' }}>{tm('plague_move_slider')}</Text>
+                  )}
+                </View>
+                <View style={[styles.layersPanelBadge, { backgroundColor: plagueColor + '20' }]}>
+                  <Text style={[styles.layersPanelBadgeText, { color: plagueColor }]}>{activePandemic.deathToll}</Text>
+                </View>
+              </View>
+            ) : (
+              <Text style={{ fontSize: 12, color: theme.subtext, marginBottom: 10, fontStyle: 'italic' }}>
+                {tm('plague_select_hint')}
+              </Text>
+            )}
+            <View style={styles.sliderHeader}>
+              <Text style={[styles.sliderYearLabel, { color: plagueColor }]}>{plagueYear} AD</Text>
+              {activePandemic && (
+                <Text style={[styles.sliderAllTime, { color: theme.subtext }]}>{activePandemic.period}</Text>
+              )}
+            </View>
+            <View style={styles.sliderTrackWrap}
+              onLayout={e => { plagueSliderWidthRef.current = e.nativeEvent.layout.width; }}
+              {...plagueSliderPan.panHandlers}>
+              <View style={[styles.sliderTrack, { backgroundColor: borderCol }]}>
+                <View style={[styles.sliderFill, { width: `${ratio * 100}%` as any, backgroundColor: plagueColor }]} />
+              </View>
+              <View style={[styles.sliderThumb, { left: `${ratio * 100}%` as any, backgroundColor: plagueColor, borderColor: cardBg }]} />
+            </View>
+          </View>
+        );
+      })()}
+
+      {/* ── Nuclear Site / Event Card ── */}
+      {mapLayer === 'nuclear' && (selectedNuclearSite || selectedNuclearEvent) && (() => {
+        const isEvent = !!selectedNuclearEvent;
+        const item = isEvent ? selectedNuclearEvent : selectedNuclearSite;
+        const color: string = item.color;
+        return (
+          <View style={[styles.cityCard, { bottom: insets.bottom + 16, backgroundColor: cardBg, borderColor: color + '60' }]}>
+            <TouchableOpacity onPress={() => { setSelectedNuclearSite(null); setSelectedNuclearEvent(null); }} style={styles.keyStopClose}>
+              <X size={14} color={theme.subtext} strokeWidth={2} />
+            </TouchableOpacity>
+            <View style={styles.cityCardHero}>
+              <View style={[styles.cityCardEmojiWrap, { backgroundColor: color + '18', borderColor: color + '40' }]}>
+                <Text style={styles.cityCardEmoji}>
+                  {isEvent ? (NUCLEAR_EVENT_EMOJI[item.type] ?? '☢️') : item.flag}
+                </Text>
+              </View>
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text style={[styles.cityCardName, { color: theme.text }]} numberOfLines={2}>
+                  {isEvent ? item.title : item.name}
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5 }}>
+                  {isEvent ? (
+                    <View style={[styles.cityStatusBadge, { backgroundColor: color + '20' }]}>
+                      <Text style={[styles.cityStatusText, { color }]}>{item.year} · {item.type.replace(/_/g, ' ')}</Text>
+                    </View>
+                  ) : (
+                    <>
+                      <View style={[styles.cityStatusBadge, { backgroundColor: color + '20' }]}>
+                        <Text style={[styles.cityStatusText, { color }]}>{item.period}</Text>
+                      </View>
+                      <View style={[styles.cityStatusBadge, { backgroundColor: isDark ? '#292524' : '#F5F5F4' }]}>
+                        <Text style={[styles.cityStatusText, { color: theme.subtext }]}>☢️ {item.totalTests} {tm('nuclear_tests')}</Text>
+                      </View>
+                      {item.maxYieldKt > 0 && (
+                        <View style={[styles.cityStatusBadge, { backgroundColor: isDark ? '#292524' : '#F5F5F4' }]}>
+                          <Text style={[styles.cityStatusText, { color: theme.subtext }]}>{tm('nuclear_max')} {item.maxYieldKt} KT</Text>
+                        </View>
+                      )}
+                    </>
+                  )}
+                  {isEvent && item.yieldKt != null && (
+                    <View style={[styles.cityStatusBadge, { backgroundColor: isDark ? '#292524' : '#F5F5F4' }]}>
+                      <Text style={[styles.cityStatusText, { color: theme.subtext }]}>{item.yieldKt} KT</Text>
+                    </View>
+                  )}
+                </View>
+                {!isEvent && (
+                  <Text style={[styles.cityCardCiv, { color }]}>
+                    {(item.country as string).replace(/_/g, ' ').toUpperCase()}
+                  </Text>
+                )}
+              </View>
+            </View>
+            <Text style={[styles.cityCardDesc, { color: theme.subtext }]} numberOfLines={3}>{item.description}</Text>
+            {!isEvent && item.notableFact && (
+              <View style={[styles.cityCardFactRow, { backgroundColor: color + '10', borderColor: color + '25' }]}>
+                <Text style={[styles.cityCardFactLabel, { color }]}>💡</Text>
+                <Text style={[styles.cityCardFact, { color: theme.text }]} numberOfLines={2}>{item.notableFact}</Text>
+              </View>
+            )}
+          </View>
+        );
+      })()}
+
+      {/* ── Dinosaur Fossil Site Card ── */}
+      {mapLayer === 'dinosaurs' && selectedDinoSite && (() => {
+        const site = selectedDinoSite;
+        const eraLabel = site.era === 'triassic' ? tm('era_triassic') : site.era === 'jurassic' ? tm('era_jurassic') : tm('era_cretaceous');
+        return (
+          <View style={[styles.cityCard, { bottom: insets.bottom + 16, backgroundColor: cardBg, borderColor: site.color + '60' }]}>
+            <TouchableOpacity onPress={() => setSelectedDinoSite(null)} style={styles.keyStopClose}>
+              <X size={14} color={theme.subtext} strokeWidth={2} />
+            </TouchableOpacity>
+            <View style={styles.cityCardHero}>
+              <View style={[styles.cityCardEmojiWrap, { backgroundColor: site.color + '18', borderColor: site.color + '40' }]}>
+                <Text style={styles.cityCardEmoji}>{site.emoji}</Text>
+              </View>
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text style={[styles.cityCardName, { color: theme.text }]}>{site.name}</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5 }}>
+                  <View style={[styles.cityStatusBadge, { backgroundColor: site.color + '20' }]}>
+                    <Text style={[styles.cityStatusText, { color: site.color }]}>{eraLabel}</Text>
+                  </View>
+                  <View style={[styles.cityStatusBadge, { backgroundColor: isDark ? '#292524' : '#F5F5F4' }]}>
+                    <Text style={[styles.cityStatusText, { color: theme.subtext }]}>{site.region}</Text>
+                  </View>
+                  <View style={[styles.cityStatusBadge, { backgroundColor: isDark ? '#292524' : '#F5F5F4' }]}>
+                    <Text style={[styles.cityStatusText, { color: theme.subtext }]}>📍 {site.discoveredYear}</Text>
+                  </View>
+                </View>
+                <Text style={[styles.cityCardCiv, { color: site.color }]}>{site.geologicalPeriod}</Text>
+              </View>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -14 }}>
+              <View style={{ flexDirection: 'row', gap: 5, paddingHorizontal: 14, paddingBottom: 2 }}>
+                {(site.famousSpecies as string[]).map((sp: string) => (
+                  <View key={sp} style={[styles.layersPanelBadge, { backgroundColor: site.color + '18' }]}>
+                    <Text style={[styles.layersPanelBadgeText, { color: site.color }]}>{sp}</Text>
+                  </View>
+                ))}
+              </View>
+            </ScrollView>
+            <Text style={[styles.cityCardDesc, { color: theme.subtext }]} numberOfLines={3}>{site.description}</Text>
+            <View style={[styles.cityCardFactRow, { backgroundColor: site.color + '10', borderColor: site.color + '25' }]}>
+              <Text style={[styles.cityCardFactLabel, { color: site.color }]}>💡</Text>
+              <Text style={[styles.cityCardFact, { color: theme.text }]} numberOfLines={2}>{site.funFact}</Text>
+            </View>
+          </View>
+        );
+      })()}
+
       {/* ── Ancient City Info Card ── */}
       {mapLayer === 'cities' && selectedCity && (
         <View style={[styles.cityCard, { bottom: insets.bottom + 16, backgroundColor: cardBg, borderColor: selectedCity.color + '60' }]}>
@@ -2095,7 +2984,7 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                 <View style={[styles.cityStatusBadge, { backgroundColor: selectedCity.color + '20' }]}>
                   <Text style={[styles.cityStatusText, { color: selectedCity.color }]}>
-                    {selectedCity.status === 'modern_city' ? '🏙 Active' : selectedCity.status === 'ruins' ? '🏚 Ruins' : selectedCity.status === 'lost' ? '❓ Lost' : '🌊 Submerged'}
+                    {selectedCity.status === 'modern_city' ? tm('city_active') : selectedCity.status === 'ruins' ? tm('city_ruins') : selectedCity.status === 'lost' ? tm('city_lost') : tm('city_submerged')}
                   </Text>
                 </View>
                 <View style={[styles.cityStatusBadge, { backgroundColor: isDark ? '#292524' : '#F5F5F4' }]}>
@@ -2108,11 +2997,11 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
             </View>
           </View>
 
-          <Text style={[styles.cityCardDesc, { color: theme.subtext }]} numberOfLines={3}>{selectedCity.description}</Text>
+          <Text style={[styles.cityCardDesc, { color: theme.subtext }]} numberOfLines={3}>{(tLang && selectedCity.translations?.[tLang]?.description) ?? selectedCity.description}</Text>
 
           <View style={[styles.cityCardFactRow, { backgroundColor: selectedCity.color + '10', borderColor: selectedCity.color + '25' }]}>
             <Text style={[styles.cityCardFactLabel, { color: selectedCity.color }]}>💡</Text>
-            <Text style={[styles.cityCardFact, { color: theme.text }]} numberOfLines={2}>{selectedCity.funFact}</Text>
+            <Text style={[styles.cityCardFact, { color: theme.text }]} numberOfLines={2}>{(tLang && selectedCity.translations?.[tLang]?.funFact) ?? selectedCity.funFact}</Text>
           </View>
         </View>
       )}
@@ -2789,6 +3678,66 @@ const styles = StyleSheet.create({
   },
   cityCardFactLabel: { fontSize: 14, flexShrink: 0 },
   cityCardFact: { flex: 1, fontSize: 11.5, lineHeight: 17, fontStyle: 'italic', fontWeight: '500' },
+
+  // ── WW1/WW2 Year Navigator card ──────────────────────────────────────────
+  warYearCard: {
+    position: 'absolute', left: 14, right: 14,
+    borderRadius: 20, borderWidth: 1.5, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 12,
+    zIndex: 30, gap: 10,
+    ...Platform.select({
+      ios: { shadowColor: '#DC2626', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 12 },
+      android: { elevation: 8 },
+    }),
+  },
+  warYearNavRow: {
+    flexDirection: 'row', alignItems: 'center',
+  },
+  warYearArrow: {
+    width: 42, height: 42, borderRadius: 13,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  warYearCenter: {
+    flex: 1, alignItems: 'center', gap: 2,
+  },
+  warYearNumber: {
+    fontSize: 42, fontWeight: '900', letterSpacing: -2, color: '#DC2626', lineHeight: 46,
+    includeFontPadding: false,
+  } as any,
+  warYearPhaseName: {
+    fontSize: 11, fontWeight: '800', letterSpacing: 0.6, textTransform: 'uppercase',
+  },
+  warYearDots: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
+  },
+  warYearDesc: {
+    fontSize: 12.5, lineHeight: 19, opacity: 0.8,
+  },
+  warYearStatRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    borderRadius: 10, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 8,
+  },
+  warYearStatIcon: { fontSize: 13 },
+  warYearStatText: {
+    flex: 1, fontSize: 12, fontWeight: '700',
+  },
+  warEventChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 10, paddingVertical: 7, borderRadius: 12, borderWidth: 1,
+    maxWidth: 200,
+  },
+  warEventChipText: {
+    fontSize: 10.5, fontWeight: '700', flexShrink: 1,
+  },
+  warEventChipStar: {
+    width: 5, height: 5, borderRadius: 2.5, flexShrink: 0,
+  },
+  warYearLegendRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginTop: 2,
+  },
+  warYearEventCount: {
+    fontSize: 9.5, fontWeight: '600', opacity: 0.45,
+  },
 
   // ── War Event card ────────────────────────────────────────────────────────
   warEventCard: {

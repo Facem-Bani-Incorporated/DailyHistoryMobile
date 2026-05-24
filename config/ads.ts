@@ -4,7 +4,7 @@ import { Platform } from 'react-native';
 
 // true  → test ads (debugging/testing)
 // false → real AdMob IDs (production)
-const USE_TEST_IDS = true;
+const USE_TEST_IDS = false;
 
 const PRODUCTION_IDS = {
   BANNER: Platform.OS === 'ios'

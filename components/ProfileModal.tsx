@@ -519,7 +519,7 @@ export default function ProfileModal({ visible, onClose }: Props) {
               </View>
 
               {/* ══ SUBSCRIPTION ══ */}
-              <SectionTitle label="Subscription" theme={theme} />
+              <SectionTitle label={t('subscription')} theme={theme} />
               <View style={[s.proCard, {
                 backgroundColor: isPremium ? '#0F0D14' : theme.card,
                 borderColor: isPro ? `${gold}55` : isPremium ? '#2A2230' : theme.border,
@@ -530,17 +530,17 @@ export default function ProfileModal({ visible, onClose }: Props) {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={[s.proTitle, { color: theme.text }]}>
-                      {isPro ? 'Daily History Pro' : 'Unlock Daily History Pro'}
+                      {isPro ? 'Daily History Pro' : t('unlock_pro')}
                     </Text>
                     <Text style={[s.proSub, { color: theme.subtext }]}>
                       {isPro
-                        ? 'Your subscription is active'
-                        : 'Curated PRO events, ad-free, and more'}
+                        ? t('subscription_active')
+                        : t('subscription_desc')}
                     </Text>
                   </View>
                   {isPro && (
                     <View style={[s.proActiveBadge, { backgroundColor: gold }]}>
-                      <Text style={s.proActiveBadgeT}>ACTIVE</Text>
+                      <Text style={s.proActiveBadgeT}>{t('active_badge')}</Text>
                     </View>
                   )}
                 </View>
@@ -552,7 +552,7 @@ export default function ProfileModal({ visible, onClose }: Props) {
                 >
                   <Ionicons name={isPro ? 'settings-outline' : 'sparkles'} size={15} color="#000" />
                   <Text style={s.proCtaT}>
-                    {isPro ? 'Manage subscription' : 'Unlock Pro'}
+                    {isPro ? t('manage_subscription') : t('unlock_pro_btn')}
                   </Text>
                 </TouchableOpacity>
 
@@ -561,7 +561,7 @@ export default function ProfileModal({ visible, onClose }: Props) {
                     {restoreLoading ? (
                       <ActivityIndicator size="small" color={theme.subtext} />
                     ) : (
-                      <Text style={[s.proRestoreT, { color: theme.subtext }]}>Restore purchases</Text>
+                      <Text style={[s.proRestoreT, { color: theme.subtext }]}>{t('restore_purchases')}</Text>
                     )}
                   </TouchableOpacity>
                 )}

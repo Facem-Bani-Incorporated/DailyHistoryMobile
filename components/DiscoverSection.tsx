@@ -43,14 +43,22 @@ const extractYear = (event: any): string => {
   return isNaN(y) ? '' : String(y);
 };
 
-const eraLabel = (year: number): string => {
-  if (year < 0) return 'Antiquity';
-  if (year < 500) return 'Classical';
-  if (year < 1500) return 'Medieval';
-  if (year < 1800) return 'Early Modern';
-  if (year < 1900) return 'XIX Century';
-  if (year < 2000) return 'XX Century';
-  return 'Contemporary';
+const ERA_LABELS: Record<string, Record<string, string>> = {
+  en: { antiquity: 'Antiquity', classical: 'Classical', medieval: 'Medieval', early_modern: 'Early Modern', xix: 'XIX Century', xx: 'XX Century', contemporary: 'Contemporary' },
+  ro: { antiquity: 'Antichitate', classical: 'Clasic', medieval: 'Medieval', early_modern: 'Epoca Modernă', xix: 'Sec. XIX', xx: 'Sec. XX', contemporary: 'Contemporan' },
+  fr: { antiquity: 'Antiquité', classical: 'Classique', medieval: 'Médiéval', early_modern: 'Époque Moderne', xix: 'XIXe siècle', xx: 'XXe siècle', contemporary: 'Contemporain' },
+  de: { antiquity: 'Antike', classical: 'Klassisch', medieval: 'Mittelalter', early_modern: 'Frühe Neuzeit', xix: 'XIX. Jh.', xx: 'XX. Jh.', contemporary: 'Gegenwart' },
+  es: { antiquity: 'Antigüedad', classical: 'Clásico', medieval: 'Medieval', early_modern: 'Edad Moderna', xix: 'S. XIX', xx: 'S. XX', contemporary: 'Contemporáneo' },
+};
+const eraLabel = (year: number, lang = 'en'): string => {
+  const L = ERA_LABELS[lang] ?? ERA_LABELS.en;
+  if (year < 0) return L.antiquity;
+  if (year < 500) return L.classical;
+  if (year < 1500) return L.medieval;
+  if (year < 1800) return L.early_modern;
+  if (year < 1900) return L.xix;
+  if (year < 2000) return L.xx;
+  return L.contemporary;
 };
 
 const toRoman = (num: number): string => {
@@ -218,7 +226,7 @@ const HeroCard = ({
               <View style={[st.heroMetaBar, { backgroundColor: accent + '70' }]} />
               <Text style={st.heroMetaYear}>{year}</Text>
               <View style={[st.heroMetaBar, { backgroundColor: accent + '40' }]} />
-              <Text style={st.heroMetaEra}>{eraLabel(yearNum)}</Text>
+              <Text style={st.heroMetaEra}>{eraLabel(yearNum, lang)}</Text>
             </>
           )}
         </View>
@@ -269,7 +277,7 @@ const EditorialCard = ({
           <View style={st.editYearPanel}>
             <Text style={st.editYearMain}>{year}</Text>
             <View style={[st.editYearRule, { backgroundColor: accent }]} />
-            <Text style={st.editYearEra}>{eraLabel(yearNum)}</Text>
+            <Text style={st.editYearEra}>{eraLabel(yearNum, lang)}</Text>
           </View>
         )}
       </View>

@@ -23,6 +23,12 @@ export interface Religion {
   description: string;
   currentFollowers: string;
   regions: ReligionRegion[];
+  translations?: {
+    ro?: { name: string; description: string };
+    fr?: { name: string; description: string };
+    de?: { name: string; description: string };
+    es?: { name: string; description: string };
+  };
 }
 
 export const RELIGIONS: Religion[] = [
@@ -36,6 +42,12 @@ export const RELIGIONS: Religion[] = [
     origin: { latitude: 31.7767, longitude: 35.2345, label: 'Jerusalem' },
     description: 'Founded by the followers of Jesus of Nazareth in Judea, Christianity spread rapidly through the Roman Empire\'s trade and road networks. From a persecuted Jewish sect, it became the official religion of Rome under Constantine in 313 AD and went on to shape the culture, law, and politics of Western civilization.',
     currentFollowers: '2.4 billion',
+    translations: {
+      ro: { name: 'Creștinism', description: 'Fondată de urmașii lui Isus din Nazaret în Iudeea, creștinismul s-a răspândit rapid prin rețelele comerciale ale Imperiului Roman. Dintr-o sectă evreiască persecutată, a devenit religia oficială a Romei sub Constantin în 313 d.Hr. și a modelat cultura, legile și politica civilizației occidentale.' },
+      fr: { name: 'Christianisme', description: 'Fondé par les disciples de Jésus de Nazareth en Judée, le christianisme s\'est répandu rapidement via les réseaux commerciaux de l\'Empire romain. D\'une secte juive persécutée, il devint la religion officielle de Rome sous Constantin en 313 apr. J.-C. et façonna la culture, le droit et la politique de la civilisation occidentale.' },
+      de: { name: 'Christentum', description: 'Von den Anhängern Jesu von Nazareth in Judäa gegründet, verbreitete sich das Christentum rasch über die Handels- und Straßennetzwerke des Römischen Reiches. Aus einer verfolgten jüdischen Sekte wurde es unter Konstantin 313 n. Chr. zur Staatsreligion Roms und prägte Kultur, Recht und Politik der westlichen Zivilisation.' },
+      es: { name: 'Cristianismo', description: 'Fundado por los seguidores de Jesús de Nazaret en Judea, el cristianismo se extendió rápidamente a través de las redes comerciales del Imperio Romano. De una secta judía perseguida, se convirtió en la religión oficial de Roma bajo Constantino en el 313 d.C. y moldeó la cultura, el derecho y la política de la civilización occidental.' },
+    },
     regions: [
       { id: 'c_judea', name: 'Judea/Palestine', latitude: 31.7767, longitude: 35.2345, radius: 200000, yearStart: 30, intensity: 1.0, note: 'Origin — Jerusalem, Galilee' },
       { id: 'c_antioch', name: 'Antioch & Syria', latitude: 36.2021, longitude: 36.1608, radius: 300000, yearStart: 40, intensity: 0.9, note: 'First called "Christians" in Antioch' },
@@ -66,6 +78,12 @@ export const RELIGIONS: Religion[] = [
     origin: { latitude: 21.4225, longitude: 39.8262, label: 'Mecca, Arabia' },
     description: 'Founded by the Prophet Muhammad in Arabia, Islam spread with extraordinary speed. Within 100 years of Muhammad\'s death, Muslim armies had conquered the Persian Empire, Egypt, North Africa, and Spain. Islam became a sophisticated civilization preserving Greek knowledge and advancing mathematics, astronomy, and medicine.',
     currentFollowers: '1.9 billion',
+    translations: {
+      ro: { name: 'Islam', description: 'Fondat de Profetul Muhammad în Arabia, islamul s-a răspândit cu o viteză extraordinară. În 100 de ani de la moartea lui Muhammad, armatele musulmane cuceriseră Imperiul Persan, Egiptul, Africa de Nord și Spania. Islamul a devenit o civilizație sofisticată care a păstrat cunoașterea greacă și a avansat matematica, astronomia și medicina.' },
+      fr: { name: 'Islam', description: 'Fondé par le prophète Muhammad en Arabie, l\'islam s\'est répandu à une vitesse extraordinaire. En 100 ans après la mort de Muhammad, les armées musulmanes avaient conquis l\'Empire perse, l\'Égypte, l\'Afrique du Nord et l\'Espagne. L\'islam est devenu une civilisation sophistiquée préservant le savoir grec et faisant avancer les mathématiques, l\'astronomie et la médecine.' },
+      de: { name: 'Islam', description: 'Vom Propheten Muhammad in Arabien gegründet, verbreitete sich der Islam mit außerordentlicher Geschwindigkeit. Innerhalb von 100 Jahren nach Muhammads Tod hatten muslimische Armeen das Persische Reich, Ägypten, Nordafrika und Spanien erobert. Der Islam wurde zu einer hochentwickelten Zivilisation, die griechisches Wissen bewahrte und Mathematik, Astronomie und Medizin voranbrachte.' },
+      es: { name: 'Islam', description: 'Fundado por el Profeta Muhammad en Arabia, el islam se extendió con una velocidad extraordinaria. En 100 años tras la muerte de Muhammad, los ejércitos musulmanes habían conquistado el Imperio Persa, Egipto, el Norte de África y España. El islam se convirtió en una civilización sofisticada que preservó el conocimiento griego y avanzó en matemáticas, astronomía y medicina.' },
+    },
     regions: [
       { id: 'i_mecca', name: 'Mecca & Arabia', latitude: 21.4225, longitude: 39.8262, radius: 400000, yearStart: 622, intensity: 1.0, note: 'Origin — the Hijaz region' },
       { id: 'i_medina', name: 'Medina & Northern Arabia', latitude: 24.4672, longitude: 39.6150, radius: 300000, yearStart: 622, intensity: 1.0, note: 'Muhammad\'s capital after Hijra' },
@@ -94,6 +112,12 @@ export const RELIGIONS: Religion[] = [
     origin: { latitude: 27.4860, longitude: 83.8500, label: 'Bodh Gaya, India' },
     description: 'Founded by Siddhartha Gautama (the Buddha) in northeastern India around 528 BC, Buddhism spread along trade routes across Asia. Emperor Ashoka\'s conversion in 261 BC was a turning point — he sent missionaries across Asia. Buddhism eventually faded in its homeland India but became dominant across Southeast and East Asia.',
     currentFollowers: '520 million',
+    translations: {
+      ro: { name: 'Buddhism', description: 'Fondat de Siddhartha Gautama (Buddha) în nord-estul Indiei în jurul anului 528 î.Hr., budismul s-a răspândit de-a lungul rutelor comerciale din Asia. Conversia împăratului Ashoka în 261 î.Hr. a fost un punct de cotitură — el a trimis misionari în toată Asia. Budismul a dispărut treptat din India natală, dar a devenit dominant în Asia de Sud-Est și de Est.' },
+      fr: { name: 'Bouddhisme', description: 'Fondé par Siddhartha Gautama (le Bouddha) dans le nord-est de l\'Inde vers 528 av. J.-C., le bouddhisme s\'est répandu le long des routes commerciales d\'Asie. La conversion de l\'empereur Ashoka en 261 av. J.-C. fut un tournant — il envoya des missionnaires à travers l\'Asie. Le bouddhisme disparut en Inde mais devint dominant en Asie du Sud-Est et de l\'Est.' },
+      de: { name: 'Buddhismus', description: 'Um 528 v. Chr. von Siddhartha Gautama (dem Buddha) in Nordostindien gegründet, verbreitete sich der Buddhismus entlang der Handelsrouten Asiens. Die Bekehrung von Kaiser Ashoka 261 v. Chr. war ein Wendepunkt — er sandte Missionare durch ganz Asien. Der Buddhismus verblasste in seiner Heimat Indien, wurde aber in Südost- und Ostasien vorherrschend.' },
+      es: { name: 'Budismo', description: 'Fundado por Siddhartha Gautama (el Buda) en el noreste de India alrededor del 528 a.C., el budismo se extendió a lo largo de las rutas comerciales de Asia. La conversión del emperador Ashoka en el 261 a.C. fue un punto de inflexión — envió misioneros por toda Asia. El budismo desapareció en su tierra natal India pero se volvió dominante en el Sudeste y Este de Asia.' },
+    },
     regions: [
       { id: 'b_india', name: 'Northeastern India (Origin)', latitude: 27.4860, longitude: 83.8500, radius: 400000, yearStart: -528, intensity: 1.0, note: 'Magadha kingdom — the Buddha\'s homeland' },
       { id: 'b_india_full', name: 'Indian Subcontinent', latitude: 20.0, longitude: 78.0, radius: 900000, yearStart: -261, intensity: 0.9, note: 'Ashoka converts and spreads Buddhism 261 BC' },
@@ -119,6 +143,12 @@ export const RELIGIONS: Religion[] = [
     origin: { latitude: 29.9667, longitude: 76.8000, label: 'Indus-Saraswati Region' },
     description: 'The world\'s oldest major living religion, Hinduism evolved from the Vedic traditions of the Indus Valley civilization. Unlike other religions it has no single founder or founding event — it grew organically over 4,000 years. Hinduism spread through trade and cultural influence to Southeast Asia, where it inspired magnificent temple complexes like Angkor Wat.',
     currentFollowers: '1.2 billion',
+    translations: {
+      ro: { name: 'Hinduism', description: 'Cea mai veche religie majoră vie din lume, hinduismul a evoluat din tradițiile vedice ale civilizației din Valea Indusului. Spre deosebire de alte religii, nu are un singur fondator sau eveniment fondator — a crescut organic în 4.000 de ani. Hinduismul s-a răspândit prin comerț și influență culturală în Asia de Sud-Est, unde a inspirat complexe magnifice de temple, precum Angkor Wat.' },
+      fr: { name: 'Hindouisme', description: 'Plus ancienne grande religion vivante du monde, l\'hindouisme a évolué à partir des traditions védiques de la civilisation de la vallée de l\'Indus. Contrairement aux autres religions, il n\'a pas de fondateur unique — il a grandi organiquement sur 4 000 ans. L\'hindouisme s\'est répandu par le commerce et l\'influence culturelle en Asie du Sud-Est, inspirant des complexes de temples comme Angkor Vat.' },
+      de: { name: 'Hinduismus', description: 'Die älteste große lebende Religion der Welt entwickelte sich aus den vedischen Traditionen der Indus-Tal-Zivilisation. Anders als andere Religionen hat sie keinen einzelnen Gründer — sie wuchs organisch über 4.000 Jahre. Der Hinduismus verbreitete sich durch Handel und kulturellen Einfluss nach Südostasien, wo er prächtige Tempelanlagen wie Angkor Wat inspirierte.' },
+      es: { name: 'Hinduismo', description: 'La religión mayor viva más antigua del mundo, el hinduismo evolucionó a partir de las tradiciones védicas de la civilización del Valle del Indo. A diferencia de otras religiones, no tiene un único fundador — creció orgánicamente durante 4.000 años. El hinduismo se extendió por el comercio e influencia cultural al Sudeste Asiático, donde inspiró magníficos complejos de templos como Angkor Wat.' },
+    },
     regions: [
       { id: 'h_indus', name: 'Indus Valley (Origin)', latitude: 29.0, longitude: 71.0, radius: 500000, yearStart: -1500, intensity: 1.0, note: 'Vedic civilization — Rig Veda composed here' },
       { id: 'h_ganges', name: 'Ganges Plain', latitude: 25.0, longitude: 82.0, radius: 600000, yearStart: -1000, intensity: 1.0, note: 'Heart of Vedic culture; Varanasi (Kashi) — oldest living city' },

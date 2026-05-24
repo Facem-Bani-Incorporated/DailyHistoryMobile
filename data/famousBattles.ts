@@ -41,6 +41,12 @@ export interface FamousBattle {
   duration: string;
   commanders: { name: string; side: string }[];
   phases: BattlePhase[];
+  translations?: {
+    ro?: { name: string; outcome: string; significance: string; description: string };
+    fr?: { name: string; outcome: string; significance: string; description: string };
+    de?: { name: string; outcome: string; significance: string; description: string };
+    es?: { name: string; outcome: string; significance: string; description: string };
+  };
 }
 
 export const FAMOUS_BATTLES: FamousBattle[] = [
@@ -117,6 +123,12 @@ export const FAMOUS_BATTLES: FamousBattle[] = [
         ],
       },
     ],
+    translations: {
+      ro: { name: 'Bătălia de la Maraton', outcome: 'Victoria Grecilor', significance: 'A oprit prima invazie persană a Greciei, salvând democrația occidentală', description: 'Atenienii și Plateenii au zdrobit o forță persană mult mai mare pe câmpiile de la Maraton, un moment definitoriu în nașterea civilizației occidentale. Cei 26 de mile parcurși de mesagerul Pheidippides pentru a anunța victoria au dat naștere cursei moderne de maraton.' },
+      fr: { name: 'Bataille de Marathon', outcome: 'Victoire grecque', significance: 'Arrêta la première invasion perse de la Grèce, sauva la démocratie occidentale', description: 'Les Athéniens et les Platéens écrasèrent une force perse bien plus nombreuse sur les plaines de Marathon, un moment décisif dans la naissance de la civilisation occidentale. La course de 42 km du messager Pheidippidès pour annoncer la victoire donna naissance à la course de marathon moderne.' },
+      de: { name: 'Schlacht bei Marathon', outcome: 'Griechischer Sieg', significance: 'Stoppte die erste persische Invasion Griechenlands und rettete die westliche Demokratie', description: 'Die Athener und Platäer zerschlugen eine weit überlegene persische Streitmacht auf den Ebenen von Marathon — ein wegweisender Moment in der Geburt der westlichen Zivilisation. Der 42-km-Lauf des Boten Pheidippides, um den Sieg zu verkünden, gab der modernen Marathondistanz ihren Namen.' },
+      es: { name: 'Batalla de Maratón', outcome: 'Victoria Griega', significance: 'Detuvo la primera invasión persa de Grecia, salvó la democracia occidental', description: 'Los atenienses y plateenses aplastaron una fuerza persa mucho más numerosa en las llanuras de Maratón, un momento definitorio en el nacimiento de la civilización occidental. La carrera de 42 km del mensajero Fidípides para anunciar la victoria dio origen a la carrera de maratón moderna.' },
+    },
   },
   {
     id: 'gaugamela',
@@ -190,6 +202,12 @@ export const FAMOUS_BATTLES: FamousBattle[] = [
         ],
       },
     ],
+    translations: {
+      ro: { name: 'Bătălia de la Gaugamela', outcome: 'Victoria Macedoneenilor — sfârșitul Imperiului Persan', significance: 'Alexandru a distrus Imperiul Persan Ahemenid și a deschis calea spre cuceriri în Asia', description: 'Pe vastele câmpii de la Gaugamela în Irakul modern, Alexandru cel Mare a înfrânt masiva armată persană a lui Darius III printr-o îndrăzneață încărcare de cavalerie care a despicat linia persană. Darius a fugit, iar Imperiul Persan a luat efectiv sfârșit în acea zi.' },
+      fr: { name: 'Bataille de Gaugamèles', outcome: 'Victoire macédonienne — fin de l\'Empire perse', significance: 'Alexandre a détruit l\'Empire perse achéménide et ouvert la voie à ses conquêtes en Asie', description: 'Sur les vastes plaines de Gaugamèles dans l\'Irak actuel, Alexandre le Grand battit la massive armée perse de Darius III par une audacieuse charge de cavalerie qui fendit la ligne perse. Darius s\'enfuit, et l\'Empire perse prit effectivement fin ce jour-là.' },
+      de: { name: 'Schlacht von Gaugamela', outcome: 'Makedonischer Sieg — Ende des Persischen Reiches', significance: 'Alexander zerstörte das Achämenidische Persische Reich und eröffnete den Weg für seine Eroberungen in Asien', description: 'Auf den weiten Ebenen von Gaugamela im heutigen Irak besiegte Alexander der Große das riesige persische Heer von Darius III. mit einem kühnen Kavallerieangriff, der die persische Linie spaltete. Darius floh, und das Persische Reich endete an diesem Tag effektiv.' },
+      es: { name: 'Batalla de Gaugamela', outcome: 'Victoria Macedonia — fin del Imperio Persa', significance: 'Alejandro destruyó el Imperio Persa Aqueménida y abrió el camino a sus conquistas en Asia', description: 'En las vastas llanuras de Gaugamela en el actual Irak, Alejandro Magno derrotó al masivo ejército persa de Darío III con una audaz carga de caballería que partió la línea persa. Darío huyó, y el Imperio Persa acabó efectivamente ese día.' },
+    },
   },
   {
     id: 'hastings',
@@ -261,6 +279,12 @@ export const FAMOUS_BATTLES: FamousBattle[] = [
         ],
       },
     ],
+    translations: {
+      ro: { name: 'Bătălia de la Hastings', outcome: 'Victoria Normanilor — Anglia transformată pentru totdeauna', significance: 'A schimbat permanent limba, cultura și guvernarea engleză; a introdus feudalismul în Anglia', description: 'Pe o creastă lângă Hastings, armata anglo-saxonă epuizată a regelui Harold a înfruntat forța normandă proaspătă a lui Wilhelm. O combinație de arcași și cavalerie normandă, plus o retragere simulată care a spart zidul de scuturi englezesc, a decis soarta Angliei.' },
+      fr: { name: 'Bataille de Hastings', outcome: 'Victoire normande — l\'Angleterre transformée pour toujours', significance: 'A modifié définitivement la langue, la culture et la gouvernance anglaises ; a introduit la féodalité en Angleterre', description: 'Sur une crête près de Hastings, l\'armée anglo-saxonne épuisée du roi Harold affronta la force normande fraîche de Guillaume. Une combinaison d\'archers et de cavalerie normands, ainsi qu\'une retraite feinte qui brisa le mur de boucliers anglais, décida du sort de l\'Angleterre.' },
+      de: { name: 'Schlachtvon Hastings', outcome: 'Normannischer Sieg — England für immer verändert', significance: 'Veränderte die englische Sprache, Kultur und Regierung dauerhaft; führte den Feudalismus in England ein', description: 'Auf einem Kamm bei Hastings traf König Harolds erschöpfte angelsächsische Armee auf Wilhelms frische normannische Streitmacht. Eine Kombination aus normannischen Bogenschützen und Kavallerie sowie ein vorgetäuschter Rückzug, der die englische Schildmauer brach, entschied über Englands Schicksal.' },
+      es: { name: 'Batalla de Hastings', outcome: 'Victoria Normanda — Inglaterra transformada para siempre', significance: 'Cambió permanentemente el idioma, la cultura y la gobernanza inglesa; introdujo el feudalismo en Inglaterra', description: 'En una cresta cerca de Hastings, el exhausto ejército anglosajón del rey Harold se enfrentó a la fresca fuerza normanda de Guillermo. Una combinación de arqueros y caballería normanda, más una retirada fingida que rompió el muro de escudos inglés, decidió el destino de Inglaterra.' },
+    },
   },
   {
     id: 'waterloo',
@@ -338,6 +362,12 @@ export const FAMOUS_BATTLES: FamousBattle[] = [
         ],
       },
     ],
+    translations: {
+      ro: { name: 'Bătălia de la Waterloo', outcome: 'Victoria Aliaților — înfrângerea finală a lui Napoleon', significance: 'A pus capăt Războaielor Napoleoniene și a restructurat Europa la Congresul de la Viena pentru un secol', description: 'Ultima tentativă a lui Napoleon de a restaura dominanța franceză s-a încheiat pe o creastă la sud de Bruxelles. Armata anglo-olandeză a lui Wellington a ținut ferm până la sosirea întăririlor prusiene, apoi un asalt combinat a zdrobit Garda Imperială și odată cu aceasta, imperiul lui Napoleon.' },
+      fr: { name: 'Bataille de Waterloo', outcome: 'Victoire alliée — défaite finale de Napoléon', significance: 'Mis fin aux guerres napoléoniennes et remodela l\'Europe au Congrès de Vienne pour un siècle', description: 'La dernière tentative de Napoléon de restaurer la domination française se termina sur une crête au sud de Bruxelles. L\'armée anglo-hollandaise de Wellington tint fermement jusqu\'à l\'arrivée des renforts prussiens, puis un assaut combiné brisa la Garde impériale et avec elle, l\'empire de Napoléon.' },
+      de: { name: 'Schlacht von Waterloo', outcome: 'Alliierter Sieg — Napoleons endgültige Niederlage', significance: 'Beendete die Napoleonischen Kriege und formte Europa beim Wiener Kongress für ein Jahrhundert neu', description: 'Napoleons letzter Versuch, die französische Vorherrschaft wiederherzustellen, endete auf einem Kamm südlich von Brüssel. Wellingtons Anglo-Niederländische Armee hielt standhaft, bis preußische Verstärkung eintraf, dann zerschmetterte ein kombinierter Angriff die Kaiserliche Garde und mit ihr Napoleons Reich.' },
+      es: { name: 'Batalla de Waterloo', outcome: 'Victoria Aliada — derrota final de Napoleón', significance: 'Puso fin a las Guerras Napoleónicas y remodeló Europa en el Congreso de Viena durante un siglo', description: 'El último intento de Napoleón de restaurar la dominación francesa terminó en una cresta al sur de Bruselas. El ejército anglo-holandés de Wellington aguantó tenazmente hasta que llegaron los refuerzos prusianos, luego un asalto combinado destrozó a la Guardia Imperial y con ella el imperio de Napoleón.' },
+    },
   },
   {
     id: 'stalingrad',
@@ -414,6 +444,12 @@ export const FAMOUS_BATTLES: FamousBattle[] = [
         ],
       },
     ],
+    translations: {
+      ro: { name: 'Bătălia de la Stalingrad', outcome: 'Victoria Sovietică — punct de cotitură al celui de-Al Doilea Război Mondial', significance: 'Cea mai mare bătălie din istorie ca pierderi; a întors soarta celui de-Al Doilea Război Mondial pe Frontul de Est', description: 'Lupta pentru Stalingrad a fost o bătălie urbană brutală, care a durat luni și a consumat o întreagă armată germană. De la luptele casă cu casă în ruinele orașului la o masivă încercuire sovietică, Stalingradul a zdrobit pentru totdeauna puterea ofensivă germană în Est.' },
+      fr: { name: 'Bataille de Stalingrad', outcome: 'Victoire soviétique — tournant de la Seconde Guerre mondiale', significance: 'La plus grande bataille de l\'histoire par les pertes ; a retourné le cours de la Seconde Guerre mondiale sur le Front de l\'Est', description: 'La bataille de Stalingrad fut un combat urbain brutal de plusieurs mois qui consuma une armée allemande entière. Des combats de maison en maison dans les ruines de la ville à une massive encirclement soviétique, Stalingrad brisa à jamais la puissance offensive allemande à l\'Est.' },
+      de: { name: 'Schachtvon Stalingrad', outcome: 'Sowjetischer Sieg — Wendepunkt des Zweiten Weltkriegs', significance: 'Die verlustreichste Schlacht der Geschichte; wendete das Blatt des Zweiten Weltkriegs an der Ostfront', description: 'Die Stalingrader Materialschlacht war ein brutaler, monatelanger Stadtkampf, der eine gesamte deutsche Armee verschlang. Von Haus-zu-Haus-Kämpfen im Trümmerhaufen der Stadt bis zu einer massiven sowjetischen Einkreisung — Stalingrad zerschlug für immer die deutsche Angriffskraft im Osten.' },
+      es: { name: 'Batalla de Stalingrado', outcome: 'Victoria Soviética — punto de inflexión de la Segunda Guerra Mundial', significance: 'La batalla más sangrienta de la historia; cambió el curso de la Segunda Guerra Mundial en el Frente Oriental', description: 'La batalla por Stalingrado fue una brutal lucha urbana de meses que consumió un ejército alemán entero. Desde los combates casa por casa en los escombros de la ciudad hasta un masivo cerco soviético, Stalingrado destruyó para siempre el poder ofensivo alemán en el Este.' },
+    },
   },
   {
     id: 'agincourt',
@@ -482,6 +518,12 @@ export const FAMOUS_BATTLES: FamousBattle[] = [
         ],
       },
     ],
+    translations: {
+      ro: { name: 'Bătălia de la Azincourt', outcome: 'Victoria Engleză', significance: 'A asigurat dominanța engleză în Războiul de O Sută de Ani; imortalizată de Shakespeare în Henric al V-lea', description: 'Depășiți numeric 5 la 1, armata engleză epuizată a lui Henric al V-lea a decimat nobilimea franceză cu foc masiv de arcași cu arc lung. Cavalerii francezi în armuri grele au atacat un câmp noroios și au fost masacrați înainte de a ajunge la liniile engleze.' },
+      fr: { name: 'Bataille d\'Azincourt', outcome: 'Victoire anglaise', significance: 'Assura la domination anglaise dans la Guerre de Cent Ans ; immortalisée par Shakespeare dans Henri V', description: 'Surpassés 5 contre 1, l\'armée anglaise épuisée de Henri V décima la noblesse française avec des tirs massifs d\'archers à longbow. Des chevaliers français en armure lourde chargèrent à travers un champ boueux et furent massacrés avant d\'atteindre les lignes anglaises.' },
+      de: { name: 'Schlachtvon Azincourt', outcome: 'Englischer Sieg', significance: 'Sicherte die englische Vorherrschaft im Hundertjährigen Krieg; von Shakespeare in Heinrich V. verewigt', description: 'Im Verhältnis 5 zu 1 zahlenmäßig unterlegen, dezimierte Heinrichs V. erschöpfte englische Armee den französischen Adel mit massivem Langbogenbeschuss. Französische Ritter in schwerer Rüstung stürmten über ein schlammiges Feld und wurden vor Erreichen der englischen Linien niedergemetzelt.' },
+      es: { name: 'Batalla de Agincourt', outcome: 'Victoria Inglesa', significance: 'Aseguró la dominación inglesa en la Guerra de los Cien Años; inmortalizada por Shakespeare en Enrique V', description: 'Superados 5 a 1, el exhausto ejército inglés de Enrique V diezmó a la nobleza francesa con fuego masivo de arqueros con arco largo. Caballeros franceses con armadura pesada cargaron a través de un campo fangoso y fueron masacrados antes de alcanzar las líneas inglesas.' },
+    },
   },
   {
     id: 'thermopylae',
@@ -558,6 +600,12 @@ export const FAMOUS_BATTLES: FamousBattle[] = [
         ],
       },
     ],
+    translations: {
+      ro: { name: 'Bătălia de la Termopile', outcome: 'Victorie tactică persană — triumf moral și strategic al Grecilor', significance: 'A câștigat timp pentru flota greacă la Salamina; a devenit simbolul etern al curajului în fața unor șanse copleșitoare', description: 'Regele Leonidas și 300 de spartani, alături de aproximativ 7.000 de alți greci, au ținut îngustul pas costier al Termopilelor trei zile împotriva vastei armate persane a lui Xerxes, estimată la peste 100.000 de oameni. Trădați de un grec local care a dezvăluit un drum de munte ocolitor, Leonidas i-a concediat pe cei mai mulți aliai și a luptat până la ultimul om.' },
+      fr: { name: 'Bataille des Thermopyles', outcome: 'Victoire tactique perse — triomphe moral et stratégique grec', significance: 'Gagna du temps pour la flotte grecque à Salamine ; devint le symbole éternel du courage face à des probabilités écrasantes', description: 'Le roi Léonidas et 300 Spartiates, aux côtés d\'environ 7 000 autres Grecs, tinrent le défilé côtier étroit des Thermopyles pendant trois jours contre la vaste armée perse de Xerxès, estimée à plus de 100 000 hommes. Trahis par un Grec local qui révéla un chemin de montagne contournant le défilé, Léonidas renvoya la plupart des contingents alliés et se battit jusqu\'au dernier homme.' },
+      de: { name: 'Schlacht an den Thermopylen', outcome: 'Persischer Taktiksieg — moralischer und strategischer griechischer Triumph', significance: 'Gewann Zeit für die griechische Flotte bei Salamis; wurde zum ewigen Symbol des Mutes gegen überwältigende Chancen', description: 'König Leonidas und 300 Spartaner hielten zusammen mit etwa 7.000 anderen Griechen drei Tage lang den engen Küstenpass der Thermopylen gegen Xerxes\' riesige persische Armee von über 100.000 Mann. Von einem lokalen Griechen verraten, der einen Bergpfad um den Pass preisgab, entließ Leonidas die meisten verbündeten Kontingente und kämpfte bis zum letzten Mann.' },
+      es: { name: 'Batalla de las Termópilas', outcome: 'Victoria táctica persa — triunfo moral y estratégico griego', significance: 'Ganó tiempo para la flota griega en Salamina; se convirtió en el símbolo eterno del coraje ante probabilidades abrumadoras', description: 'El rey Leónidas y 300 espartanos, junto con unos 7.000 griegos más, retuvieron el estrecho paso costero de las Termópilas durante tres días contra el vasto ejército persa de Jerjes, estimado en más de 100.000 hombres. Traicionados por un griego local que reveló un camino de montaña alrededor del paso, Leónidas despidió a la mayoría de los contingentes aliados y luchó hasta el último hombre.' },
+    },
   },
   {
     id: 'gettysburg',
@@ -639,6 +687,12 @@ export const FAMOUS_BATTLES: FamousBattle[] = [
         ],
       },
     ],
+    translations: {
+      ro: { name: 'Bătălia de la Gettysburg', outcome: 'Victoria Unioniștilor — punct de cotitură al Războiului Civil American', significance: 'A pus capăt ultimei invazii a generalului Lee în Nord; alături de Vicksburg, a transferat decisiv impulsul în favoarea Uniunii', description: 'Bătălia de trei zile de la Gettysburg, Pennsylvania, în iulie 1863 a fost cel mai sângeros angajament al Războiului Civil American și înfrângerea decisivă a Armatei Virginiei de Nord a lui Robert E. Lee. Eșecul confederat culminând cu catastrofala Sarcină a lui Pickett a zdrobit puterea ofensivă a Sudului.' },
+      fr: { name: 'Bataille de Gettysburg', outcome: 'Victoire de l\'Union — tournant de la guerre de Sécession', significance: 'Mit fin à la dernière invasion du Nord du général Lee ; combiné avec Vicksburg, il transféra décisivement l\'élan en faveur de l\'Union', description: 'La bataille de trois jours à Gettysburg, en Pennsylvanie, en juillet 1863, fut l\'engagement le plus sanglant de la guerre de Sécession et la défaite décisive de l\'Armée de Virginie du Nord de Robert E. Lee. L\'échec confédéré culminant dans la catastrophique Charge de Pickett brisa la puissance offensive du Sud.' },
+      de: { name: 'Schlachtvon Gettysburg', outcome: 'Unionssieg — Wendepunkt des Amerikanischen Bürgerkriegs', significance: 'Beendete General Lees zweite und letzte Invasion des Nordens; zusammen mit Vicksburg verschob sich der Schwung entscheidend zur Union', description: 'Die dreitägige Schlacht bei Gettysburg, Pennsylvania, im Juli 1863 war das blutigste Gefecht des Amerikanischen Bürgerkriegs und die entscheidende Niederlage von Robert E. Lees Armee von Nordvirginia. Das konfederierte Scheitern, gipfelnd im katastrophalen Pickett\'s Charge, zerschlug die Angriffskraft des Südens.' },
+      es: { name: 'Batalla de Gettysburg', outcome: 'Victoria de la Unión — punto de inflexión de la Guerra Civil Americana', significance: 'Puso fin a la segunda y última invasión del Norte del general Lee; junto con Vicksburg, cambió decisivamente el impulso a favor de la Unión', description: 'La batalla de tres días en Gettysburg, Pennsylvania, en julio de 1863 fue el enfrentamiento más sangriento de la Guerra Civil Americana y la derrota decisiva del Ejército de Virginia del Norte de Robert E. Lee. El fracaso confederado culminando en la catastrófica Carga de Pickett destrozó el poder ofensivo del Sur.' },
+    },
   },
   {
     id: 'dday-normandy',
@@ -715,6 +769,12 @@ export const FAMOUS_BATTLES: FamousBattle[] = [
         ],
       },
     ],
+    translations: {
+      ro: { name: 'Ziua Z: Bătălia Normandiei', outcome: 'Victoria Aliată — cap de pod în Franța asigurat', significance: 'A deschis atât de așteptatul al doilea front în Europa de Vest, ducând la eliberarea Franței și înfrângerea Germaniei Naziste', description: 'Operațiunea Overlord pe 6 iunie 1944 a fost cea mai mare invazie maritimă din istorie, debarcând peste 156.000 de trupe aliate pe cinci plaje normande într-o singură zi. În ciuda pierderilor catastrofale la Plaja Omaha, Aliații și-au asigurat capetele de pod și în câteva săptămâni au turnat suficienți oameni și materiale în Franța pentru a face de neoprit eliberarea Europei de Vest.' },
+      fr: { name: 'Jour J : Bataille de Normandie', outcome: 'Victoire alliée — tête de pont en France sécurisée', significance: 'Ouvrit le front occidental si longtemps attendu en Europe de l\'Ouest, menant à la libération de la France et à la défaite de l\'Allemagne nazie', description: 'L\'opération Overlord du 6 juin 1944 fut la plus grande invasion maritime de l\'histoire, débarquant plus de 156 000 soldats alliés sur cinq plages normandes en une seule journée. Malgré des pertes catastrophiques sur la plage d\'Omaha, les Alliés sécurisèrent leurs têtes de pont et en quelques semaines déversèrent assez d\'hommes et de matériel en France pour rendre irrésistible la libération de l\'Europe de l\'Ouest.' },
+      de: { name: 'D-Day: Normandieschlacht', outcome: 'Alliierter Sieg — Brückenkopf in Frankreich gesichert', significance: 'Eröffnete die lang ersehnte zweite Front in Westeuropa, was zur Befreiung Frankreichs und zur Niederlage Nazi-Deutschlands führte', description: 'Operation Overlord am 6. Juni 1944 war die größte Seeinvasion der Geschichte mit über 156.000 alliierten Truppen, die an einem einzigen Tag an fünf Normandie-Stränden landeten. Trotz katastrophaler Verluste am Omaha Beach sicherten die Alliierten ihre Brückenköpfe und schafften in den folgenden Wochen genug Nachschub nach Frankreich, um die Befreiung Westeuropas unaufhaltsam zu machen.' },
+      es: { name: 'Día D: Batalla de Normandía', outcome: 'Victoria Aliada — cabeza de playa en Francia asegurada', significance: 'Abrió el tan esperado segundo frente en Europa Occidental, llevando a la liberación de Francia y la derrota de la Alemania Nazi', description: 'La Operación Overlord del 6 de junio de 1944 fue la mayor invasión marítima de la historia, desembarcando más de 156.000 tropas aliadas en cinco playas normandas en un solo día. A pesar de las pérdidas catastróficas en la Playa Omaha, los Aliados aseguraron sus cabezas de playa y en pocas semanas vertieron suficientes hombres y material en Francia para hacer imparable la liberación de Europa Occidental.' },
+    },
   },
   {
     id: 'midway',
@@ -796,6 +856,12 @@ export const FAMOUS_BATTLES: FamousBattle[] = [
         ],
       },
     ],
+    translations: {
+      ro: { name: 'Bătălia de la Midway', outcome: 'Victoria Americană — Japonia pierde 4 portavioane', significance: 'A întors soarta Războiului din Pacific; Japonia nu și-a mai recuperat niciodată capacitatea ofensivă de portavion după Midway', description: 'Bătălia de la Midway, desfășurată din 4–7 iunie 1942, a fost cea mai decisivă bătălie navală a Războiului din Pacific. Decodificatorii americani au aflat din timp de atacul japonez, permițând lui Nimitz să-și pozitioneze cele trei portavioane într-o ambuscadă. Într-o clipă, bombardierele în picaj americane au scufundat trei portavioane japoneze, iar al patrulea a fost distrus câteva ore mai târziu.' },
+      fr: { name: 'Bataille de Midway', outcome: 'Victoire américaine — le Japon perd 4 porte-avions', significance: 'Retourna le cours de la guerre du Pacifique ; le Japon ne récupéra jamais sa capacité offensive après Midway', description: 'La Bataille de Midway, du 4 au 7 juin 1942, fut la bataille navale la plus décisive de la guerre du Pacifique. Les déchiffreurs américains apprirent à l\'avance l\'attaque japonaise, permettant à Nimitz de positionner ses trois porte-avions en embuscade. En quelques minutes, des bombardiers en piqué américains coulèrent trois porte-avions japonais, et un quatrième fut détruit quelques heures plus tard.' },
+      de: { name: 'Seeschlacht bei Midway', outcome: 'Amerikanischer Sieg — Japan verliert 4 Flugzeugträger', significance: 'Wendete das Blatt des Pazifikkriegs; Japan erholte sich nach Midway nie mehr von seinem Angriffs-Trägerverlust', description: 'Die Seeschlacht bei Midway vom 4. bis 7. Juni 1942 war die entscheidendste Seeschlacht des Pazifikkriegs. Amerikanische Codeknacker erfuhren im Voraus von dem japanischen Angriff, was Nimitz ermöglichte, seine drei Träger in einem Hinterhalt zu positionieren. In wenigen Minuten versenkten amerikanische Sturzkampfbomber drei japanische Träger, ein vierter wurde Stunden später zerstört.' },
+      es: { name: 'Batalla de Midway', outcome: 'Victoria Americana — Japón pierde 4 portaviones', significance: 'Cambió el curso de la guerra del Pacífico; Japón nunca recuperó su capacidad ofensiva de portaviones después de Midway', description: 'La Batalla de Midway, librada del 4 al 7 de junio de 1942, fue la batalla naval más decisiva de la guerra del Pacífico. Los descifradores americanos se enteraron con antelación del ataque japonés, lo que permitió a Nimitz posicionar sus tres portaviones en una emboscada. En cuestión de minutos, los bombarderos en picado americanos hundieron tres portaviones japoneses, y un cuarto fue destruido horas después.' },
+    },
   },
   {
     id: 'trafalgar',
@@ -872,6 +938,12 @@ export const FAMOUS_BATTLES: FamousBattle[] = [
         ],
       },
     ],
+    translations: {
+      ro: { name: 'Bătălia de la Trafalgar', outcome: 'Victoria Totală Britanică — Nelson ucis în momentul triumfului', significance: 'A asigurat supremația navală britanică pentru un secol și a spulberat speranța lui Napoleon de a invada Anglia', description: 'La Capul Trafalgar pe coasta spaniolă pe 21 octombrie 1805, amiralul Nelson a condus 27 de nave britanice în două coloane direct în linia a 33 de nave franco-spaniole, rupând-o în două locuri și capturând sau distrugând 22 de nave inamice fără a pierde nicio navă britanică. Nelson a murit din cauza rănilor știind că a obținut o victorie completă.' },
+      fr: { name: 'Bataille de Trafalgar', outcome: 'Victoire totale britannique — Nelson tué au moment du triomphe', significance: 'Assura la suprématie navale britannique pendant un siècle et brisa l\'espoir de Napoléon d\'envahir l\'Angleterre', description: 'Au cap Trafalgar au large des côtes espagnoles le 21 octobre 1805, l\'amiral Nelson conduisit 27 navires britanniques en deux colonnes directement dans la ligne de 33 navires franco-espagnols, la brisant en deux endroits et capturant ou détruisant 22 navires ennemis sans perdre un seul navire britannique. Nelson mourut de ses blessures en sachant qu\'il avait remporté une victoire complète.' },
+      de: { name: 'Schachtvon Trafalgar', outcome: 'Britischer Totalsieg — Nelson im Augenblick des Triumphs gefallen', significance: 'Sicherte die britische Seeherrschaft für ein Jahrhundert und zerschlug Napoleons Hoffnung, England zu invadieren', description: 'Beim Kap Trafalgar vor der spanischen Küste am 21. Oktober 1805 führte Admiral Nelson 27 britische Kriegsschiffe in zwei Kolonnen direkt in die Linie von 33 franco-spanischen Schiffen und durchbrach sie an zwei Stellen, wobei 22 feindliche Schiffe genommen oder vernichtet wurden ohne ein einziges britisches Schiff zu verlieren. Nelson starb an seinen Wunden in dem Wissen, dass er einen vollständigen Sieg errungen hatte.' },
+      es: { name: 'Batalla de Trafalgar', outcome: 'Victoria Total Británica — Nelson muerto en el momento del triunfo', significance: 'Aseguró la supremacía naval británica durante un siglo y destruyó la esperanza de Napoleón de invadir Inglaterra', description: 'En el Cabo Trafalgar frente a la costa española el 21 de octubre de 1805, el almirante Nelson condujo 27 buques de guerra británicos en dos columnas directamente hacia la línea de 33 barcos franco-españoles, rompiéndola en dos lugares y capturando o destruyendo 22 barcos enemigos sin perder un solo barco británico. Nelson murió por sus heridas sabiendo que había logrado una victoria completa.' },
+    },
   },
   {
     id: 'kursk',
@@ -956,6 +1028,12 @@ export const FAMOUS_BATTLES: FamousBattle[] = [
         ],
       },
     ],
+    translations: {
+      ro: { name: 'Bătălia de la Kursk', outcome: 'Victoria Sovietică — Germania nu mai recâștigă niciodată inițiativa strategică pe Frontul de Est', significance: 'Cea mai mare bătălie de tancuri din istorie; după Kursk, Germania a fost permanent pe defensivă în Est', description: 'În iulie 1943, Germania a lansat Operațiunea Citadelă pentru a reduce saillentul de la Kursk cu forțe blindate masive din nord și sud. Serviciile de informații sovietice știau că atacul vine și au pregătit cel mai elaborat sistem defensiv din istoria militară. Asaltul german s-a zdrobit de aceste apărări, iar contraofensivele sovietice ulterioare au împins Germania înapoi pentru restul războiului.' },
+      fr: { name: 'Bataille de Koursk', outcome: 'Victoire soviétique — l\'Allemagne ne retrouve jamais l\'initiative stratégique sur le Front de l\'Est', significance: 'La plus grande bataille de chars de l\'histoire ; après Koursk, l\'Allemagne fut définitivement sur la défensive à l\'Est', description: 'En juillet 1943, l\'Allemagne lança l\'opération Citadelle pour réduire le saillant de Koursk avec de massives forces blindées depuis le nord et le sud. Le renseignement soviétique savait que l\'attaque venait et prépara le système défensif le plus élaboré de l\'histoire militaire. L\'assaut allemand se brisa sur ces défenses, et les contre-offensives soviétiques ultérieures repoussèrent l\'Allemagne pour le reste de la guerre.' },
+      de: { name: 'Schachtvon Kursk', outcome: 'Sowjetischer Sieg — Deutschland gewinnt die strategische Initiative an der Ostfront nie zurück', significance: 'Die größte Panzerschlacht der Geschichte; nach Kursk war Deutschland dauerhaft in der Defensive im Osten', description: 'Im Juli 1943 startete Deutschland Unternehmen Zitadelle, um den Kursker Bogen mit massiven Panzerkräften von Nord und Süd abzuschneiden. Der sowjetische Geheimdienst wusste, dass der Angriff kam, und bereitete das ausgefeilteste Verteidigungssystem in der Militärgeschichte vor. Der deutsche Angriff zerschellte an diesen Verteidigungen, und die sowjetischen Gegenoffensiven trieben Deutschland für den Rest des Krieges zurück.' },
+      es: { name: 'Batalla de Kursk', outcome: 'Victoria Soviética — Alemania nunca recupera la iniciativa estratégica en el Frente Oriental', significance: 'La mayor batalla de tanques de la historia; después de Kursk, Alemania estuvo permanentemente a la defensiva en el Este', description: 'En julio de 1943, Alemania lanzó la Operación Ciudadela para eliminar el saliente de Kursk con masivas fuerzas blindadas desde el norte y el sur. La inteligencia soviética sabía que el ataque estaba llegando y preparó el sistema defensivo más elaborado de la historia militar. El asalto alemán se destrozó contra estas defensas, y las posteriores contraofensivas soviéticas empujaron a Alemania hacia atrás durante el resto de la guerra.' },
+    },
   },
   {
     id: 'cannae',
@@ -1034,6 +1112,12 @@ export const FAMOUS_BATTLES: FamousBattle[] = [
         ],
       },
     ],
+    translations: {
+      ro: { name: 'Bătălia de la Cannae', outcome: 'Victoria Cartaginezilor — Roma suferă cea mai mare înfrângere din istoria sa', significance: 'Bătălia perfectă de anihilare; dubla înconjurare a lui Hannibal la Cannae a devenit modelul studiat de comandanți timp de 2.200 de ani', description: 'Pe 2 august 216 î.Hr., Hannibal Barca a distrus o armată romană de aproximativ 86.000 de oameni cu o forță de 50.000 de cartaginezi printr-o capodoperă de înșelăciune tactică. Dubla sa înconjurare la Cannae a ucis aproximativ 70.000 de romani într-o singură zi — o rată a măcelului negalată în istoria militară occidentală.' },
+      fr: { name: 'Bataille de Cannes', outcome: 'Victoire carthaginoise — Rome subit la plus grande défaite de son histoire', significance: 'La bataille d\'anéantissement parfaite ; le double enveloppement de Hannibal à Cannes devint le modèle étudié par les commandants pendant 2 200 ans', description: 'Le 2 août 216 av. J.-C., Hannibal Barca détruisit une armée romaine d\'environ 86 000 hommes avec une force de 50 000 Carthaginois grâce à un chef-d\'œuvre de tromperie tactique. Son double enveloppement à Cannes tua environ 70 000 Romains en une seule journée — un taux de massacre sans égal dans l\'histoire militaire occidentale.' },
+      de: { name: 'Schachtvon Cannae', outcome: 'Karthagischer Sieg — Rom erleidet seine größte Niederlage in der Geschichte', significance: 'Die perfekte Vernichtungsschlacht; Hannibals Doppelumfassung bei Cannae wurde das Modell, das Kommandeure 2.200 Jahre lang studierten', description: 'Am 2. August 216 v. Chr. vernichtete Hannibal Barkas mit einer Streitmacht von 50.000 Karthagern durch ein Meisterwerk taktischer Täuschung eine römische Armee von etwa 86.000 Mann. Seine Doppelumfassung bei Cannae tötete an einem einzigen Tag etwa 70.000 Römer — eine Vernichtungsrate, die in der westlichen Militärgeschichte unübertroffen ist.' },
+      es: { name: 'Batalla de Cannas', outcome: 'Victoria Cartaginesa — Roma sufre la mayor derrota de su historia', significance: 'La batalla de aniquilación perfecta; el doble envolvimiento de Aníbal en Cannas se convirtió en el modelo estudiado por los comandantes durante 2.200 años', description: 'El 2 de agosto del 216 a.C., Aníbal Barca destruyó un ejército romano de aproximadamente 86.000 hombres con una fuerza de 50.000 cartagineses mediante una obra maestra de engaño táctico. Su doble envolvimiento en Cannas mató a aproximadamente 70.000 romanos en un solo día — una tasa de matanza sin igual en la historia militar occidental.' },
+    },
   },
   {
     id: 'battle-of-the-bulge',
@@ -1114,5 +1198,11 @@ export const FAMOUS_BATTLES: FamousBattle[] = [
         ],
       },
     ],
+    translations: {
+      ro: { name: 'Bătălia de la Bulge', outcome: 'Victoria Aliată — ultima ofensivă majoră germană a războiului', significance: 'Ultima ofensivă strategică a Germaniei în Vest și-a epuizat ultimele rezerve blindate; victoria aliată a făcut posibilă ofensiva finală în Germania', description: 'În decembrie 1944, Germania și-a lansat ultima ofensivă majoră în Vest prin Pădurea Ardeni, creând un proeminent în liniile aliate și înconjurând Divizia 101 Aeropurtată Americană la Bastogne. Întoarcerea rapidă de 90 de grade a lui Patton a Armatei a Treia pentru a elibera Bastogne și eșecul final al aprovizionării cu combustibil germane au pus capăt ofensivei și au distrus ultimele rezerve blindate ale Germaniei.' },
+      fr: { name: 'Bataille des Ardennes', outcome: 'Victoire alliée — dernière grande offensive allemande de la guerre', significance: 'La dernière offensive stratégique de l\'Allemagne à l\'Ouest épuisa ses dernières réserves blindées ; la victoire alliée rendit possible la poussée finale vers l\'Allemagne', description: 'En décembre 1944, l\'Allemagne lança sa dernière grande offensive à l\'Ouest à travers la forêt des Ardennes, créant un important saillant dans les lignes alliées et encerclant la 101e Division aéroportée américaine à Bastogne. Le rapide pivot de 90 degrés de Patton avec la Troisième armée pour secourir Bastogne et l\'échec final des approvisionnements en carburant allemands mirent fin à l\'offensive et détruisirent les dernières réserves blindées de l\'Allemagne.' },
+      de: { name: 'Ardennenoffensive', outcome: 'Alliierter Sieg — letzte große deutsche Offensive des Krieges', significance: 'Deutschlands letzte strategische Offensive im Westen erschöpfte seine letzten Panzerreserven; der alliierte Sieg machte den Endvorstoß nach Deutschland möglich', description: 'Im Dezember 1944 startete Deutschland seine letzte große Offensive im Westen durch den Ardennenwald, schuf einen großen Einbruch in den alliierten Linien und umzingelte die amerikanische 101. Luftlandedivision bei Bastogne. Pattons rasante 90-Grad-Wende der Dritten Armee zur Entlastung Bastognes und das schließliche Scheitern der deutschen Kraftstoffversorgung beendeten die Offensive und zerstörten Deutschlands letzte Panzerreserven.' },
+      es: { name: 'Batalla de las Ardenas', outcome: 'Victoria Aliada — última gran ofensiva alemana de la guerra', significance: 'La última ofensiva estratégica de Alemania en el Oeste agotó sus últimas reservas blindadas; la victoria aliada hizo posible el empuje final hacia Alemania', description: 'En diciembre de 1944, Alemania lanzó su última gran ofensiva en el Oeste a través del bosque de las Ardenas, creando un gran saliente en las líneas aliadas y rodeando la 101ª División Aerotransportada Americana en Bastogne. El rápido giro de 90 grados de Patton del Tercer Ejército para aliviar Bastogne y el eventual fracaso de los suministros de combustible alemanes pusieron fin a la ofensiva y destruyeron las últimas reservas blindadas de Alemania.' },
+    },
   },
 ];

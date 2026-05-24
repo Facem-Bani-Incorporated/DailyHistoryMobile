@@ -21,6 +21,12 @@ export interface TradeRoute {
   length: string;
   coordinates: { latitude: number; longitude: number }[];
   keyStops: TradeRouteStop[];
+  translations?: {
+    ro?: { name: string; description: string };
+    fr?: { name: string; description: string };
+    de?: { name: string; description: string };
+    es?: { name: string; description: string };
+  };
 }
 
 export const TRADE_ROUTES: TradeRoute[] = [
@@ -32,6 +38,12 @@ export const TRADE_ROUTES: TradeRoute[] = [
     color: '#DC2626',
     emoji: '🐪',
     description: 'The greatest trade network of the ancient world, the Silk Road was not a single road but a web of routes linking China to the Mediterranean. Caravans carried silk, spices, gold, and ideas — including Buddhism, Islam, and the Black Death — across 4,000 miles of deserts and mountains.',
+    translations: {
+      ro: { name: 'Drumul Mătăsii', description: 'Cea mai mare rețea comercială a lumii antice, Drumul Mătăsii nu era un singur drum, ci o rețea de rute care lega China de Mediterana. Caravanele transportau mătase, mirodenii, aur și idei — inclusiv budismul, islamul și Ciuma Neagră — prin 4.000 de mile de deșerturi și munți.' },
+      fr: { name: 'La Route de la Soie', description: 'Le plus grand réseau commercial du monde antique, la Route de la Soie n\'était pas une seule route mais un réseau reliant la Chine à la Méditerranée. Les caravanes transportaient soie, épices, or et idées — dont le bouddhisme, l\'islam et la Peste Noire — sur 4 000 miles de déserts et de montagnes.' },
+      de: { name: 'Die Seidenstraße', description: 'Das größte Handelsnetzwerk der antiken Welt war die Seidenstraße keine einzelne Straße, sondern ein Routennetz, das China mit dem Mittelmeer verband. Karawanen transportierten Seide, Gewürze, Gold und Ideen — darunter Buddhismus, Islam und die Pest — über 4.000 Meilen Wüsten und Gebirge.' },
+      es: { name: 'La Ruta de la Seda', description: 'La mayor red comercial del mundo antiguo, la Ruta de la Seda no era un solo camino sino una red de rutas que unía China con el Mediterráneo. Las caravanas transportaban seda, especias, oro e ideas — incluyendo el budismo, el islam y la Peste Negra — a través de 4.000 millas de desiertos y montañas.' },
+    },
     goods: ['Silk', 'Spices', 'Glass', 'Gold', 'Horses', 'Paper', 'Gunpowder', 'Buddhism'],
     significance: 'Connected East Asia to the Mediterranean for 1,600 years, transferring technologies, religions, and diseases that shaped world history',
     length: '6,400 km',
@@ -63,6 +75,12 @@ export const TRADE_ROUTES: TradeRoute[] = [
     color: '#D97706',
     emoji: '✨',
     description: 'From the Baltic coast to the Mediterranean, traders carried Baltic amber — "the gold of the north" — 2,000+ miles through the heart of Europe. Romans prized amber so highly that a small amber figurine cost more than a healthy slave. The route carried not just amber but ideas, languages, and peoples.',
+    translations: {
+      ro: { name: 'Drumul Chihlimbarului', description: 'De la coasta Baltică până la Mediterana, negustorii transportau chihlimbar baltic — "aurul nordului" — pe peste 2.000 de mile prin inima Europei. Romanii prețuiau chihlimbarul atât de mult încât o mică figurină valora mai mult decât un sclav sănătos. Ruta transporta nu doar chihlimbar, ci și idei, limbi și popoare.' },
+      fr: { name: 'La Route de l\'Ambre', description: 'De la côte baltique à la Méditerranée, les marchands transportaient l\'ambre baltique — "l\'or du Nord" — sur plus de 2 000 miles à travers le cœur de l\'Europe. Les Romains estimaient tellement l\'ambre qu\'une petite figurine en ambre coûtait plus cher qu\'un esclave en bonne santé. La route transportait non seulement de l\'ambre mais aussi des idées, des langues et des peuples.' },
+      de: { name: 'Die Bernsteinstraße', description: 'Von der Ostseeküste bis zum Mittelmeer transportierten Händler baltischen Bernstein — "das Gold des Nordens" — über 2.000 Meilen durch das Herz Europas. Römer schätzten Bernstein so hoch, dass eine kleine Bernsteinfigur mehr wert war als ein gesunder Sklave. Die Route trug nicht nur Bernstein, sondern auch Ideen, Sprachen und Völker.' },
+      es: { name: 'La Ruta del Ámbar', description: 'Desde la costa del Báltico hasta el Mediterráneo, los comerciantes transportaban ámbar báltico — "el oro del norte" — más de 2.000 millas por el corazón de Europa. Los romanos apreciaban tanto el ámbar que una pequeña figurita costaba más que un esclavo sano. La ruta transportaba no solo ámbar sino también ideas, lenguas y pueblos.' },
+    },
     goods: ['Amber', 'Fur', 'Slaves', 'Roman Glass', 'Bronze', 'Wine', 'Olive Oil'],
     significance: 'Connected Northern Europe to the Mediterranean for millennia, enabling cultural and technological exchange across the continent',
     length: '2,400 km',
@@ -91,6 +109,12 @@ export const TRADE_ROUTES: TradeRoute[] = [
     color: '#7C3AED',
     emoji: '💨',
     description: 'From the frankincense trees of Dhofar in Arabia to the harbors of Gaza and Egypt, camel caravans carried the world\'s most valued commodities — frankincense and myrrh. These aromatic resins were worth their weight in gold, burned in temples from Jerusalem to Rome.',
+    translations: {
+      ro: { name: 'Ruta Tămâiei', description: 'De la copacii de tămâie din Dhofar în Arabia până la porturile din Gaza și Egipt, caravanele de cămile transportau cele mai prețuite mărfuri din lume — tămâia și smirna. Aceste rășini aromatice valorau greutatea lor în aur, arse în temple de la Ierusalim până la Roma.' },
+      fr: { name: 'La Route de l\'Encens', description: 'Des arbres à encens de Dhofar en Arabie aux ports de Gaza et d\'Égypte, les caravanes de chameaux transportaient les marchandises les plus précieuses du monde — l\'encens et la myrrhe. Ces résines aromatiques valaient leur pesant d\'or, brûlées dans les temples de Jérusalem à Rome.' },
+      de: { name: 'Die Weihrauchstraße', description: 'Von den Weihrauchbäumen in Dhofar in Arabien bis zu den Häfen von Gaza und Ägypten transportierten Kamelkarawanen die wertvollsten Waren der Welt — Weihrauch und Myrrhe. Diese aromatischen Harze waren Gold wert und wurden in Tempeln von Jerusalem bis Rom verbrannt.' },
+      es: { name: 'La Ruta del Incienso', description: 'Desde los árboles de incienso de Dhofar en Arabia hasta los puertos de Gaza y Egipto, las caravanas de camellos transportaban las materias más preciadas del mundo — incienso y mirra. Estas resinas aromáticas valían su peso en oro, quemadas en templos desde Jerusalén hasta Roma.' },
+    },
     goods: ['Frankincense', 'Myrrh', 'Spices', 'Gold', 'Precious Stones', 'Indian Goods'],
     significance: 'Funded the Nabataean civilization and their rock city of Petra; connected Africa and Arabia to the Mediterranean world',
     length: '2,000 km',
@@ -118,6 +142,12 @@ export const TRADE_ROUTES: TradeRoute[] = [
     color: '#D97706',
     emoji: '🌵',
     description: 'Camel caravans crossing the Sahara Desert connected sub-Saharan Africa to North Africa and the Mediterranean. Gold, salt, and slaves were the primary commodities. The Mali Empire became stupendously wealthy — its emperor Mansa Musa\'s hajj to Mecca in 1324 distributed so much gold it crashed the Egyptian economy for years.',
+    translations: {
+      ro: { name: 'Rutele Trans-Sahariene', description: 'Caravanele de cămile care traversau Deșertul Sahara conectau Africa Sub-Sahariană cu Africa de Nord și Mediterana. Aurul, sarea și sclavii erau principalele mărfuri. Imperiul Mali a devenit fabuloasă de bogat — hajj-ul împăratului Mansa Musa la Mecca în 1324 a distribuit atât de mult aur încât a prăbușit economia egipteană pentru câțiva ani.' },
+      fr: { name: 'Routes Trans-Sahariennes', description: 'Les caravanes de chameaux traversant le Sahara reliaient l\'Afrique subsaharienne à l\'Afrique du Nord et à la Méditerranée. L\'or, le sel et les esclaves étaient les principales marchandises. L\'Empire du Mali devint fabuleusement riche — le hajj de son empereur Mansa Moussa à La Mecque en 1324 distribua tant d\'or qu\'il effondra l\'économie égyptienne pendant des années.' },
+      de: { name: 'Transsaharische Handelsrouten', description: 'Kamelkarawanen, die die Sahara durchquerten, verbanden Subsahara-Afrika mit Nordafrika und dem Mittelmeer. Gold, Salz und Sklaven waren die wichtigsten Waren. Das Mali-Reich wurde unermesslich reich — Kaiser Mansa Musas Hadsch nach Mekka 1324 verteilte so viel Gold, dass die ägyptische Wirtschaft jahrelang zusammenbrach.' },
+      es: { name: 'Rutas Trans-Saharianas', description: 'Las caravanas de camellos que cruzaban el Desierto del Sáhara conectaban el África subsahariana con el Norte de África y el Mediterráneo. El oro, la sal y los esclavos eran las materias principales. El Imperio de Malí se volvió fabulosamente rico — el hajj del emperador Mansa Musa a La Meca en 1324 distribuyó tanto oro que colapsó la economía egipcia durante años.' },
+    },
     goods: ['Gold', 'Salt', 'Slaves', 'Ivory', 'Kola Nuts', 'Leather goods', 'Textiles'],
     significance: 'Made West African empires (Ghana, Mali, Songhai) immensely wealthy and spread Islam throughout West Africa',
     length: '3,000 km',
@@ -144,6 +174,12 @@ export const TRADE_ROUTES: TradeRoute[] = [
     color: '#059669',
     emoji: '🌶️',
     description: 'Monsoon winds powered seasonal trading voyages connecting Southeast Asia, India, Arabia, and East Africa in a vast maritime network. Spices — pepper, cinnamon, nutmeg, cloves — were so valuable in Europe that the search for a direct sea route to the Spice Islands drove the entire Age of Exploration.',
+    translations: {
+      ro: { name: 'Ruta Mirodeniilor din Oceanul Indian', description: 'Vânturile de muson alimentau călătorii comerciale sezoniere care conectau Asia de Sud-Est, India, Arabia și Africa de Est într-o vastă rețea maritimă. Mirodeniile — piper, scorțișoară, nucșoară, cuișoare — erau atât de valoroase în Europa încât căutarea unui traseu maritim direct spre Insulele Mirodeniilor a condus întreaga Epocă a Explorărilor.' },
+      fr: { name: 'Route des Épices de l\'Océan Indien', description: 'Les vents de mousson alimentaient des voyages commerciaux saisonniers reliant l\'Asie du Sud-Est, l\'Inde, l\'Arabie et l\'Afrique de l\'Est dans un vaste réseau maritime. Les épices — poivre, cannelle, noix de muscade, girofle — étaient si précieuses en Europe que la recherche d\'une route maritime directe vers les Îles aux Épices a motivé toute l\'Ère des Explorations.' },
+      de: { name: 'Indischer Ozean Gewürzroute', description: 'Monsunwinde trieben saisonale Handelsreisen an, die Südostasien, Indien, Arabien und Ostafrika in einem riesigen maritimen Netzwerk verbanden. Gewürze — Pfeffer, Zimt, Muskat, Nelken — waren in Europa so wertvoll, dass die Suche nach einer direkten Seeroute zu den Gewürzinseln das gesamte Zeitalter der Entdeckungen antrieb.' },
+      es: { name: 'Ruta de las Especias del Océano Índico', description: 'Los vientos monzónicos impulsaban viajes comerciales estacionales que conectaban el Sudeste Asiático, India, Arabia y el Este de África en una vasta red marítima. Las especias — pimienta, canela, nuez moscada, clavo — eran tan valiosas en Europa que la búsqueda de una ruta marítima directa a las Islas de las Especias impulsó toda la Era de las Exploraciones.' },
+    },
     goods: ['Pepper', 'Cinnamon', 'Nutmeg', 'Cloves', 'Cotton', 'Porcelain', 'Silk', 'Slaves'],
     significance: 'Powered maritime civilizations from Arabia to Southeast Asia; the drive to control the spice trade motivated European exploration and colonization',
     length: '8,000 km',
@@ -174,6 +210,12 @@ export const TRADE_ROUTES: TradeRoute[] = [
     color: '#1D4ED8',
     emoji: '⚓',
     description: 'The Vikings were not just raiders — they were the greatest long-distance traders of the early medieval world. Their routes connected Scandinavia to Byzantium via Russian rivers (the Varangian Route), the British Isles, Iceland, Greenland, and even North America 500 years before Columbus.',
+    translations: {
+      ro: { name: 'Rutele Comerciale Vikinge', description: 'Vikingii nu erau doar jefuitori — erau cei mai mari comercianți de lungă distanță din lumea medievală timpurie. Rutele lor conectau Scandinavia cu Bizanțul prin râurile rusești (Ruta Variagă), Insulele Britanice, Islanda, Groenlanda și chiar America de Nord cu 500 de ani înaintea lui Columbus.' },
+      fr: { name: 'Routes Commerciales Vikings', description: 'Les Vikings n\'étaient pas seulement des pillards — ils étaient les plus grands commerçants à longue distance du haut Moyen Âge. Leurs routes reliaient la Scandinavie à Byzance via les fleuves russes (la Route varègue), les îles britanniques, l\'Islande, le Groenland et même l\'Amérique du Nord 500 ans avant Colomb.' },
+      de: { name: 'Wikinger-Handelsrouten', description: 'Die Wikinger waren nicht nur Räuber — sie waren die größten Fernhändler der frühmittelalterlichen Welt. Ihre Routen verbanden Skandinavien mit Byzanz über russische Flüsse (die Warägerroute), die Britischen Inseln, Island, Grönland und sogar Nordamerika 500 Jahre vor Kolumbus.' },
+      es: { name: 'Rutas Comerciales Vikingas', description: 'Los vikingos no eran solo saqueadores — eran los mayores comerciantes de larga distancia del mundo medieval temprano. Sus rutas conectaban Escandinavia con Bizancio a través de los ríos rusos (la Ruta Varega), las Islas Británicas, Islandia, Groenlandia e incluso América del Norte 500 años antes que Colón.' },
+    },
     goods: ['Amber', 'Furs', 'Slaves', 'Silver', 'Weapons', 'Wine', 'Byzantine Silks'],
     significance: 'Opened Eastern Europe to trade, founded cities (Dublin, Kyiv, Novgorod), and connected the Viking world from Greenland to Constantinople',
     length: '5,000+ km',
