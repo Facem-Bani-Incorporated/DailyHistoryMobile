@@ -154,6 +154,15 @@ export default function TabBar({ active, onSwitch, unseenSaved = 0, t }: TabBarP
           tint={isDark ? 'dark' : 'light'}
           style={StyleSheet.absoluteFill}
         />
+        {/* Tint overlay above the blur so the bar reads the same no matter
+            what's scrolling behind it (lists with dark rows were tinting the
+            BlurView, making the bar look noticeably darker on Timeline). */}
+        <View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, {
+            backgroundColor: isDark ? 'rgba(20,17,14,0.55)' : 'rgba(255,255,255,0.62)',
+          }]}
+        />
 
         {/* Specular top edge */}
         <View
