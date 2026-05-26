@@ -809,7 +809,9 @@ export default function TimelineScreen({ allEvents, onInterstitial }: Props) {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{
               paddingTop: insets.top + HEADER_H + 72,
-              paddingBottom: insets.bottom + 60,
+              // Clear the floating TabBar (paddingTop 5 + tabsRow 60 + bottomPad)
+              // so rows don't scroll under it and tint the BlurView.
+              paddingBottom: insets.bottom + 110,
               paddingRight: 24,
             }}
             removeClippedSubviews={true}
