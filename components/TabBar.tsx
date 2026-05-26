@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { haptic } from '../utils/haptics';
 
@@ -126,9 +127,13 @@ const TabItem = ({
 // ─────────────────────────────────────────────────────────────────────────────
 export default function TabBar({ active, onSwitch, unseenSaved = 0, t }: TabBarProps) {
   const { isDark } = useTheme();
+  const insets = useSafeAreaInsets();
+  // Lift the bar above the system nav bar (Android gesture / 3-button) and the
+  // iOS home indicator. Min 12dp so it still floats nicely on devices with no inset.
+  const bottomPad = Math.max(insets.bottom, 12);
 
   return (
-    <View style={s.outerWrap}>
+    <View style={[s.outerWrap, { paddingBottom: bottomPad }]}>
       <View style={[
         s.bar,
         {
@@ -183,7 +188,7 @@ const s = StyleSheet.create({
   outerWrap: {
     paddingHorizontal: 16,
     paddingTop: 5,
-    paddingBottom: Platform.OS === 'ios' ? 0 : 12,
+    // paddingBottom is set inline from useSafeAreaInsets so it adapts to each device
   },
 
   bar: {

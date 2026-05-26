@@ -1786,11 +1786,10 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
 
   const onMapPress = useCallback(() => {
     if (storyVisibleRef.current || justClosedStory.current) return;
-    if (previewItem) {
-      setPreviewItem(null);
-      return;
-    }
-  }, [previewItem]);
+    if (previewItem) { setPreviewItem(null); return; }
+    // Tap anywhere on the map (not a marker) to dismiss any open detail card.
+    if (selectedWarEvent) { setSelectedWarEvent(null); return; }
+  }, [previewItem, selectedWarEvent]);
 
   const onMapReady = useCallback(() => {
     mapRef.current?.animateCamera(INIT_CAM, { duration: 1000 });
@@ -2603,6 +2602,16 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
         const centralLabel = tm(isWW1 ? 'central_powers' : 'axis_powers');
         return (
           <View style={[styles.warYearCard, { bottom: insets.bottom + 12, backgroundColor: cardBg, borderColor: isDark ? '#DC262628' : '#DC262618' }]}>
+            {/* Close — exits the WW1/WW2 layer */}
+            <TouchableOpacity
+              onPress={() => { haptic('light'); setMapLayer('off'); setSelectedWarEvent(null); }}
+              activeOpacity={0.7}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              style={[styles.warCardClose, { backgroundColor: '#DC262618', borderColor: '#DC262650' }]}
+            >
+              <X size={18} color="#DC2626" strokeWidth={2.6} />
+            </TouchableOpacity>
+
             {/* Year navigation */}
             <View style={styles.warYearNavRow}>
               <TouchableOpacity
@@ -2703,8 +2712,13 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
       {/* ── War Event Detail Card ── */}
       {(mapLayer === 'ww1' || mapLayer === 'ww2') && selectedWarEvent && (
         <View style={[styles.warEventCard, { bottom: insets.bottom + 12, backgroundColor: cardBg, borderColor: warEventSideColor + '60' }]}>
-          <TouchableOpacity onPress={() => setSelectedWarEvent(null)} style={styles.keyStopClose}>
-            <X size={14} color={theme.subtext} strokeWidth={2} />
+          <TouchableOpacity
+            onPress={() => { haptic('light'); setSelectedWarEvent(null); }}
+            activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            style={[styles.warCardClose, { backgroundColor: warEventSideColor + '18', borderColor: warEventSideColor + '50' }]}
+          >
+            <X size={18} color={warEventSideColor} strokeWidth={2.6} />
           </TouchableOpacity>
           <View style={styles.warEventHeader}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
@@ -3682,7 +3696,7 @@ const styles = StyleSheet.create({
   // ── WW1/WW2 Year Navigator card ──────────────────────────────────────────
   warYearCard: {
     position: 'absolute', left: 14, right: 14,
-    borderRadius: 20, borderWidth: 1.5, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 12,
+    borderRadius: 20, borderWidth: 1.5, paddingHorizontal: 16, paddingTop: 48, paddingBottom: 12,
     zIndex: 30, gap: 10,
     ...Platform.select({
       ios: { shadowColor: '#DC2626', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 12 },
@@ -3748,7 +3762,16 @@ const styles = StyleSheet.create({
       android: { elevation: 8 },
     }),
   },
-  warEventHeader: { paddingRight: 24 },
+  warEventHeader: { paddingRight: 44 },
+  warCardClose: {
+    position: 'absolute', top: 10, right: 10, zIndex: 5,
+    width: 32, height: 32, borderRadius: 16, borderWidth: 1.5,
+    alignItems: 'center', justifyContent: 'center',
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 3, shadowOffset: { width: 0, height: 1 } },
+      android: { elevation: 3 },
+    }),
+  },
   warSideBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
   warSideText: { fontSize: 9, fontWeight: '800', letterSpacing: 0.6 },
   warEventType: { fontSize: 11, fontWeight: '600', textTransform: 'capitalize', opacity: 0.6 },
