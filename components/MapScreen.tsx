@@ -2606,10 +2606,10 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
             <TouchableOpacity
               onPress={() => { haptic('light'); setMapLayer('off'); setSelectedWarEvent(null); }}
               activeOpacity={0.7}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              style={[styles.warCardClose, { backgroundColor: '#DC262618', borderColor: '#DC262650' }]}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              style={[styles.warCardClose, { backgroundColor: '#DC2626', borderColor: '#FFFFFF' }]}
             >
-              <X size={18} color="#DC2626" strokeWidth={2.6} />
+              <X size={20} color="#FFFFFF" strokeWidth={3} />
             </TouchableOpacity>
 
             {/* Year navigation */}
@@ -2715,10 +2715,10 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
           <TouchableOpacity
             onPress={() => { haptic('light'); setSelectedWarEvent(null); }}
             activeOpacity={0.7}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={[styles.warCardClose, { backgroundColor: warEventSideColor + '18', borderColor: warEventSideColor + '50' }]}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            style={[styles.warCardClose, { backgroundColor: warEventSideColor, borderColor: '#FFFFFF' }]}
           >
-            <X size={18} color={warEventSideColor} strokeWidth={2.6} />
+            <X size={20} color="#FFFFFF" strokeWidth={3} />
           </TouchableOpacity>
           <View style={styles.warEventHeader}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
