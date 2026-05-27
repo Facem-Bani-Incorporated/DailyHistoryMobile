@@ -840,6 +840,7 @@ export default function TimelineScreen({ allEvents, onInterstitial }: Props) {
         prevEvent={prevEvent}
         nextEvent={nextEvent}
         onNavigate={setSelectedEvent}
+        swipeable
       />
       <TimelineQuizModal visible={quizVisible} onClose={() => setQuizVisible(false)} allEvents={allEvents} />
       <HistoricalFiguresModal visible={figuresVisible} onClose={() => setFiguresVisible(false)} allEvents={allEvents} />

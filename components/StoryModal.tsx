@@ -63,6 +63,9 @@ export interface StoryModalProps {
   prevEvent?: any | null;
   nextEvent?: any | null;
   onNavigate?: (event: any) => void;
+  // When true, enable left/right swipe gesture for prev/next and hide arrows.
+  // Default false — all other callers see exactly the existing behaviour.
+  swipeable?: boolean;
 }
 
 // ─── Single zoomable image (PanResponder pinch — works on Android + iOS) ──────
@@ -294,7 +297,7 @@ const sy = StyleSheet.create({
 // ═════════════════════════════════════════════════════════════════════════════
 // STORY MODAL
 // ═════════════════════════════════════════════════════════════════════════════
-export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEventsProp, prevEvent, nextEvent, onNavigate }: StoryModalProps) => {
+export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEventsProp, prevEvent, nextEvent, onNavigate, swipeable = false }: StoryModalProps) => {
   const { language, t } = useLanguage();
   const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
@@ -437,11 +440,58 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
 
   const handleTTS = () => speak(`${title}. ${narrative}`, language);
 
+  // ── Optional horizontal swipe nav (only when `swipeable` AND `onNavigate`) ────
+  // Refs keep PanResponder's closure pointing at the latest props/handlers without
+  // recreating the PanResponder on every render.
+  const onNavigateRef = useRef(onNavigate);
+  const prevEventRef = useRef(prevEvent);
+  const nextEventRef = useRef(nextEvent);
+  const handleNavigateRef = useRef<(evt: any) => void>(() => {});
+  useEffect(() => { onNavigateRef.current = onNavigate; }, [onNavigate]);
+  useEffect(() => { prevEventRef.current = prevEvent; }, [prevEvent]);
+  useEffect(() => { nextEventRef.current = nextEvent; }, [nextEvent]);
+  useEffect(() => { handleNavigateRef.current = handleNavigate; });
+
+  const swipeX = useRef(new Animated.Value(0)).current;
+  const swipePan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, g) =>
+        !!onNavigateRef.current && Math.abs(g.dx) > 14 && Math.abs(g.dx) > Math.abs(g.dy) * 2,
+      onPanResponderMove: (_, g) => {
+        const hasTarget = g.dx > 0 ? !!prevEventRef.current : !!nextEventRef.current;
+        swipeX.setValue(hasTarget ? g.dx : g.dx / 3);
+      },
+      onPanResponderRelease: (_, g) => {
+        const thresh = W * 0.22;
+        if ((g.dx > thresh || g.vx > 0.7) && prevEventRef.current) {
+          Animated.timing(swipeX, { toValue: W, duration: 180, useNativeDriver: true }).start(() => {
+            handleNavigateRef.current?.(prevEventRef.current);
+            swipeX.setValue(0);
+          });
+        } else if ((g.dx < -thresh || g.vx < -0.7) && nextEventRef.current) {
+          Animated.timing(swipeX, { toValue: -W, duration: 180, useNativeDriver: true }).start(() => {
+            handleNavigateRef.current?.(nextEventRef.current);
+            swipeX.setValue(0);
+          });
+        } else {
+          Animated.spring(swipeX, { toValue: 0, tension: 200, friction: 18, useNativeDriver: true }).start();
+        }
+      },
+      onPanResponderTerminate: () => {
+        Animated.spring(swipeX, { toValue: 0, tension: 200, friction: 18, useNativeDriver: true }).start();
+      },
+    }),
+  ).current;
+
   return (
     <>
       <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={handleClose} statusBarTranslucent>
         <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-        <View style={[st.root, { backgroundColor: theme.background }]}>
+        <Animated.View
+          {...(swipeable ? swipePan.panHandlers : {})}
+          style={[st.root, { backgroundColor: theme.background }, swipeable && { transform: [{ translateX: swipeX }] }]}
+        >
 
           {/* Reading progress bar */}
           <View style={[st.progressTrack, { top: insets.top }]} pointerEvents="none">
@@ -644,8 +694,8 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
             </View>
           </Animated.ScrollView>
 
-          {/* Sibling nav arrows (only when caller provides onNavigate + a neighbour) */}
-          {onNavigate && prevEvent && (
+          {/* Sibling nav arrows — only when not using swipe */}
+          {!swipeable && onNavigate && prevEvent && (
             <TouchableOpacity
               onPress={() => handleNavigate(prevEvent)}
               activeOpacity={0.8}
@@ -655,7 +705,7 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
               <ChevronLeft color="#fff" size={22} strokeWidth={2.6} />
             </TouchableOpacity>
           )}
-          {onNavigate && nextEvent && (
+          {!swipeable && onNavigate && nextEvent && (
             <TouchableOpacity
               onPress={() => handleNavigate(nextEvent)}
               activeOpacity={0.8}
@@ -674,7 +724,7 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
             <BookOpen color="#fff" size={14} strokeWidth={2.4} />
             <Text style={st.resumeToastText}>{RESUME_LABELS[language] ?? RESUME_LABELS.en}</Text>
           </Animated.View>
-        </View>
+        </Animated.View>
       </Modal>
 
       {viewerVisible && gallery.length > 0 && (
