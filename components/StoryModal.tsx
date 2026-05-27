@@ -2,7 +2,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Bookmark, BookOpen, Pause, Play, Share2, X } from 'lucide-react-native';
+import { Bookmark, BookOpen, ChevronLeft, ChevronRight, Pause, Play, Share2, X } from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated, Dimensions, Linking, Modal, PanResponder, Platform, ScrollView,
@@ -437,51 +437,11 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
 
   const handleTTS = () => speak(`${title}. ${narrative}`, language);
 
-  // ── Horizontal swipe for prev / next (only when onNavigate is provided) ──
-  // Captures only clearly-horizontal gestures so vertical scroll + the hero's
-  // own horizontal gallery aren't interrupted.
-  const swipeX = useRef(new Animated.Value(0)).current;
-  const swipePan = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, g) =>
-        !!onNavigate && Math.abs(g.dx) > 14 && Math.abs(g.dx) > Math.abs(g.dy) * 2,
-      onPanResponderMove: (_, g) => {
-        // Light resistance when there's no neighbour to swipe to
-        const hasTarget = g.dx > 0 ? !!prevEvent : !!nextEvent;
-        swipeX.setValue(hasTarget ? g.dx : g.dx / 3);
-      },
-      onPanResponderRelease: (_, g) => {
-        const thresh = W * 0.22;
-        const fast = Math.abs(g.vx) > 0.7;
-        if ((g.dx > thresh || (g.vx > 0.7 && g.dx > 30)) && prevEvent) {
-          Animated.timing(swipeX, { toValue: W, duration: 180, useNativeDriver: true }).start(() => {
-            handleNavigate(prevEvent);
-            swipeX.setValue(0);
-          });
-        } else if ((g.dx < -thresh || (g.vx < -0.7 && g.dx < -30)) && nextEvent) {
-          Animated.timing(swipeX, { toValue: -W, duration: 180, useNativeDriver: true }).start(() => {
-            handleNavigate(nextEvent);
-            swipeX.setValue(0);
-          });
-        } else {
-          Animated.spring(swipeX, { toValue: 0, tension: 200, friction: 18, useNativeDriver: true }).start();
-        }
-      },
-      onPanResponderTerminate: () => {
-        Animated.spring(swipeX, { toValue: 0, tension: 200, friction: 18, useNativeDriver: true }).start();
-      },
-    }),
-  ).current;
-
   return (
     <>
       <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={handleClose} statusBarTranslucent>
         <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-        <Animated.View
-          {...swipePan.panHandlers}
-          style={[st.root, { backgroundColor: theme.background, transform: [{ translateX: swipeX }] }]}
-        >
+        <View style={[st.root, { backgroundColor: theme.background }]}>
 
           {/* Reading progress bar */}
           <View style={[st.progressTrack, { top: insets.top }]} pointerEvents="none">
@@ -684,6 +644,28 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
             </View>
           </Animated.ScrollView>
 
+          {/* Sibling nav arrows (only when caller provides onNavigate + a neighbour) */}
+          {onNavigate && prevEvent && (
+            <TouchableOpacity
+              onPress={() => handleNavigate(prevEvent)}
+              activeOpacity={0.8}
+              hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+              style={[st.navArrow, { left: 10 }]}
+            >
+              <ChevronLeft color="#fff" size={22} strokeWidth={2.6} />
+            </TouchableOpacity>
+          )}
+          {onNavigate && nextEvent && (
+            <TouchableOpacity
+              onPress={() => handleNavigate(nextEvent)}
+              activeOpacity={0.8}
+              hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+              style={[st.navArrow, { right: 10 }]}
+            >
+              <ChevronRight color="#fff" size={22} strokeWidth={2.6} />
+            </TouchableOpacity>
+          )}
+
           {/* Resume-reading toast — fades in/out after restoring saved scroll */}
           <Animated.View
             pointerEvents="none"
@@ -692,7 +674,7 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
             <BookOpen color="#fff" size={14} strokeWidth={2.4} />
             <Text style={st.resumeToastText}>{RESUME_LABELS[language] ?? RESUME_LABELS.en}</Text>
           </Animated.View>
-        </Animated.View>
+        </View>
       </Modal>
 
       {viewerVisible && gallery.length > 0 && (
@@ -790,6 +772,19 @@ const st = StyleSheet.create({
   saveBtnText: { fontSize: 13, fontWeight: '700', letterSpacing: 0.4 },
 
   watermark: { textAlign: 'center', fontSize: 10, fontWeight: '600', letterSpacing: 3.5, opacity: 0.25, marginBottom: 8 },
+
+  navArrow: {
+    position: 'absolute', top: H * 0.5 - 22,
+    width: 44, height: 44, borderRadius: 22,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)',
+    zIndex: 50,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
+      android: { elevation: 8 },
+    }),
+  },
 
   resumeToast: {
     position: 'absolute', alignSelf: 'center', left: 0, right: 0,
