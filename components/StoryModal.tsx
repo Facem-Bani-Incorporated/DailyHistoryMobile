@@ -1,7 +1,8 @@
 // components/StoryModal.tsx
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Bookmark, BookOpen, Pause, Play, Share2, X } from 'lucide-react-native';
+import { Bookmark, BookOpen, ChevronLeft, ChevronRight, Pause, Play, Share2, X } from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated, Dimensions, Linking, Modal, PanResponder, Platform, ScrollView,
@@ -39,12 +40,29 @@ const SAME_YEAR_LABELS: Record<string, string> = {
   es: 'Qué más pasó en',
 };
 
+const RESUME_LABELS: Record<string, string> = {
+  en: 'Continuing where you left off',
+  ro: 'Continuă de unde ai rămas',
+  fr: 'Reprise là où vous vous êtes arrêté',
+  de: 'Weiter, wo Sie aufgehört haben',
+  es: 'Continuando donde lo dejaste',
+};
+
+// AsyncStorage key for per-event resume-reading scroll position
+const readPosKey = (eid: string) => `read_pos_v1:${eid}`;
+const READ_POS_MIN = 250; // only save/restore if scrolled past this
+
 export interface StoryModalProps {
   visible: boolean;
   event: any;
   onClose: () => void;
   theme: any;
   allEvents?: any[];
+  // Optional sibling navigation (e.g. from Timeline) — when provided,
+  // floating prev/next arrows appear and tapping them swaps the open event.
+  prevEvent?: any | null;
+  nextEvent?: any | null;
+  onNavigate?: (event: any) => void;
 }
 
 // ─── Single zoomable image (PanResponder pinch — works on Android + iOS) ──────
@@ -276,7 +294,7 @@ const sy = StyleSheet.create({
 // ═════════════════════════════════════════════════════════════════════════════
 // STORY MODAL
 // ═════════════════════════════════════════════════════════════════════════════
-export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEventsProp }: StoryModalProps) => {
+export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEventsProp, prevEvent, nextEvent, onNavigate }: StoryModalProps) => {
   const { language, t } = useLanguage();
   const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
@@ -299,22 +317,57 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
   const eventId = currentEvent ? getEventId(currentEvent) : null;
   const { images: gallery } = useEventImages(currentEvent ?? {});
 
+  // ── Resume reading: per-event scroll position persisted to AsyncStorage ────────
+  const lastScrollYRef = useRef(0);                       // most recent observed scrollY
+  const savePosTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingResumeRef = useRef<number | null>(null);   // saved pos to restore once content is laid out
+  const resumedThisEventRef = useRef(false);              // restored already? avoid loops
+  const resumeToastOpacity = useRef(new Animated.Value(0)).current;
+
+  const persistReadPos = (eid: string | null, y: number) => {
+    if (!eid) return;
+    if (y > READ_POS_MIN) AsyncStorage.setItem(readPosKey(eid), String(Math.round(y))).catch(() => {});
+    else AsyncStorage.removeItem(readPosKey(eid)).catch(() => {});
+  };
+
+  const showResumeToast = () => {
+    Animated.sequence([
+      Animated.timing(resumeToastOpacity, { toValue: 1, duration: 250, useNativeDriver: true }),
+      Animated.delay(2200),
+      Animated.timing(resumeToastOpacity, { toValue: 0, duration: 400, useNativeDriver: true }),
+    ]).start();
+  };
+
   const resetScroll = () => {
     scrollY.setValue(0);
     setGalleryIndex(0);
+    // NOTE: deliberately not touching lastScrollYRef here — the [eventId] useEffect
+    // resets it after React commits the new event, so explicit saves above don't
+    // capture a stale 0 for the just-departed event.
     requestAnimationFrame(() => scrollViewRef.current?.scrollTo?.({ y: 0, animated: false }));
   };
 
   const pushRelated = (evt: any) => {
     if (!evt) return;
+    // save scroll position of the event we're leaving
+    persistReadPos(eventId, lastScrollYRef.current);
     stop();
     setEventStack(prev => [...prev, evt]);
     resetScroll();
   };
 
   const handleClose = () => {
+    persistReadPos(eventId, lastScrollYRef.current);
     if (eventStack.length > 0) { setEventStack(prev => prev.slice(0, -1)); resetScroll(); }
     else onClose();
+  };
+
+  const handleNavigate = (evt: any | null | undefined) => {
+    if (!evt || !onNavigate) return;
+    persistReadPos(eventId, lastScrollYRef.current);
+    stop();
+    resetScroll();
+    onNavigate(evt);
   };
 
   const { speak, stop, isPlaying } = useTTS();
@@ -324,10 +377,45 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
       markEventRead(eventId, currentEvent.category ?? 'history', String(currentEvent.eventDate ?? currentEvent.event_date ?? currentEvent.year ?? '').trim());
   }, [visible, eventId]);
 
+  // When the visible event changes (open / external nav / push related),
+  // reset state, then look up a saved reading position to restore once content lays out.
   useEffect(() => {
     if (visible) { setGalleryIndex(0); setEventStack([]); }
     if (!visible) stop();
+    resumedThisEventRef.current = false;
+    pendingResumeRef.current = null;
+    if (visible && eventId) {
+      AsyncStorage.getItem(readPosKey(eventId)).then(raw => {
+        const pos = raw ? parseInt(raw, 10) || 0 : 0;
+        if (pos > READ_POS_MIN) pendingResumeRef.current = pos;
+      }).catch(() => {});
+    }
   }, [visible, event]);
+
+  // When the currently-displayed event changes (push related / pop / external nav),
+  // reset scroll tracking, fetch saved position, and schedule a fallback restore
+  // in case onContentSizeChange doesn't fire (e.g. similar content height).
+  useEffect(() => {
+    if (!eventId) return;
+    lastScrollYRef.current = 0;
+    resumedThisEventRef.current = false;
+    pendingResumeRef.current = null;
+    AsyncStorage.getItem(readPosKey(eventId)).then(raw => {
+      const pos = raw ? parseInt(raw, 10) || 0 : 0;
+      if (pos > READ_POS_MIN) pendingResumeRef.current = pos;
+    }).catch(() => {});
+
+    const fallback = setTimeout(() => {
+      const pending = pendingResumeRef.current;
+      if (!resumedThisEventRef.current && pending) {
+        resumedThisEventRef.current = true;
+        pendingResumeRef.current = null;
+        scrollViewRef.current?.scrollTo?.({ y: pending, animated: true });
+        showResumeToast();
+      }
+    }, 900);
+    return () => clearTimeout(fallback);
+  }, [eventId]);
 
   if (!currentEvent) return null;
 
@@ -387,9 +475,32 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
             ref={scrollViewRef}
             bounces
             showsVerticalScrollIndicator={false}
-            onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
+            onScroll={Animated.event(
+              [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+              {
+                useNativeDriver: false,
+                listener: (e: any) => {
+                  const y = e.nativeEvent.contentOffset.y;
+                  lastScrollYRef.current = y;
+                  if (savePosTimer.current) clearTimeout(savePosTimer.current);
+                  savePosTimer.current = setTimeout(() => persistReadPos(eventId, y), 800);
+                },
+              },
+            )}
             scrollEventThrottle={16}
-            onContentSizeChange={(_, h) => setContentH(h)}
+            onContentSizeChange={(_, h) => {
+              setContentH(h);
+              // Restore saved reading position once content is tall enough to scroll to it
+              const pending = pendingResumeRef.current;
+              if (!resumedThisEventRef.current && pending && pending > READ_POS_MIN && h > pending + 120) {
+                resumedThisEventRef.current = true;
+                pendingResumeRef.current = null;
+                requestAnimationFrame(() => {
+                  scrollViewRef.current?.scrollTo?.({ y: pending, animated: true });
+                  showResumeToast();
+                });
+              }
+            }}
             contentContainerStyle={{ paddingBottom: insets.bottom + 48 }}
           >
             {/* ── Hero ── */}
@@ -532,6 +643,37 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
               <Text style={[st.watermark, { color: theme.subtext }]}>Daily History</Text>
             </View>
           </Animated.ScrollView>
+
+          {/* Sibling nav arrows (only when caller provides onNavigate + a neighbour) */}
+          {onNavigate && prevEvent && (
+            <TouchableOpacity
+              onPress={() => handleNavigate(prevEvent)}
+              activeOpacity={0.8}
+              hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+              style={[st.navArrow, { left: 10 }]}
+            >
+              <ChevronLeft color="#fff" size={22} strokeWidth={2.6} />
+            </TouchableOpacity>
+          )}
+          {onNavigate && nextEvent && (
+            <TouchableOpacity
+              onPress={() => handleNavigate(nextEvent)}
+              activeOpacity={0.8}
+              hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+              style={[st.navArrow, { right: 10 }]}
+            >
+              <ChevronRight color="#fff" size={22} strokeWidth={2.6} />
+            </TouchableOpacity>
+          )}
+
+          {/* Resume-reading toast — fades in/out after restoring saved scroll */}
+          <Animated.View
+            pointerEvents="none"
+            style={[st.resumeToast, { opacity: resumeToastOpacity, bottom: insets.bottom + 24 }]}
+          >
+            <BookOpen color="#fff" size={14} strokeWidth={2.4} />
+            <Text style={st.resumeToastText}>{RESUME_LABELS[language] ?? RESUME_LABELS.en}</Text>
+          </Animated.View>
         </View>
       </Modal>
 
@@ -630,4 +772,33 @@ const st = StyleSheet.create({
   saveBtnText: { fontSize: 13, fontWeight: '700', letterSpacing: 0.4 },
 
   watermark: { textAlign: 'center', fontSize: 10, fontWeight: '600', letterSpacing: 3.5, opacity: 0.25, marginBottom: 8 },
+
+  navArrow: {
+    position: 'absolute', top: H * 0.5 - 22,
+    width: 44, height: 44, borderRadius: 22,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)',
+    zIndex: 50,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
+      android: { elevation: 8 },
+    }),
+  },
+
+  resumeToast: {
+    position: 'absolute', alignSelf: 'center', left: 0, right: 0,
+    marginHorizontal: 'auto',
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 22,
+    backgroundColor: 'rgba(20,17,14,0.92)',
+    borderWidth: 1, borderColor: 'rgba(255,215,0,0.4)',
+    maxWidth: 320,
+    zIndex: 60,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } },
+      android: { elevation: 12 },
+    }),
+  },
+  resumeToastText: { color: '#fff', fontSize: 13, fontWeight: '700', letterSpacing: 0.2 },
 });
