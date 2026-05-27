@@ -88,9 +88,11 @@ const HeroProgress = ({ percent, gold, isDark, label }: {
       <View style={[hs.ringOuter, { borderColor: gold + '20' }]}>
         <View style={[hs.ringMid, { borderColor: gold + '40' }]}>
           <View style={[hs.ringInner, { backgroundColor: isDark ? '#0F0D0A' : '#FFFDF6' }]}>
-            <Text style={[hs.percent, { color: gold }]}>{Math.round(percent)}</Text>
-            <Text style={[hs.percentSign, { color: gold }]}>%</Text>
-            <Text style={[hs.percentLabel, { color: gold + 'AA' }]}>{label}</Text>
+            <View style={hs.percentRow}>
+              <Text style={[hs.percent, { color: gold }]} numberOfLines={1}>{Math.round(percent)}</Text>
+              <Text style={[hs.percentSign, { color: gold }]}>%</Text>
+            </View>
+            <Text style={[hs.percentLabel, { color: gold + 'AA' }]} numberOfLines={1}>{label}</Text>
           </View>
         </View>
       </View>
@@ -118,9 +120,10 @@ const hs = StyleSheet.create({
     flex: 1, alignSelf: 'stretch', borderRadius: 46,
     alignItems: 'center', justifyContent: 'center',
   },
-  percent: { fontSize: 32, fontWeight: '900', letterSpacing: -1, fontFamily: SERIF, lineHeight: 36 },
-  percentSign: { position: 'absolute', top: 28, right: 22, fontSize: 14, fontWeight: '800', opacity: 0.7 },
-  percentLabel: { fontSize: 8.5, fontWeight: '800', letterSpacing: 1.8, marginTop: -2 },
+  percentRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center' },
+  percent: { fontSize: 30, fontWeight: '900', letterSpacing: -1, fontFamily: SERIF, lineHeight: 34, includeFontPadding: false },
+  percentSign: { fontSize: 15, fontWeight: '800', opacity: 0.7, marginLeft: 2, includeFontPadding: false },
+  percentLabel: { fontSize: 8.5, fontWeight: '800', letterSpacing: 1.8, marginTop: 4 },
   arcBar: { height: 2, borderRadius: 1, marginTop: 12, alignSelf: 'stretch', maxWidth: 112 },
 });
 

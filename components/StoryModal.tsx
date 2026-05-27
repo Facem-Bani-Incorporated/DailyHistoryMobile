@@ -1,7 +1,8 @@
 // components/StoryModal.tsx
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Bookmark, BookOpen, Pause, Play, Share2, X } from 'lucide-react-native';
+import { Bookmark, BookOpen, ChevronLeft, ChevronRight, Pause, Play, Share2, X } from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated, Dimensions, Linking, Modal, PanResponder, Platform, ScrollView,
@@ -39,12 +40,29 @@ const SAME_YEAR_LABELS: Record<string, string> = {
   es: 'Qué más pasó en',
 };
 
+const RESUME_LABELS: Record<string, string> = {
+  en: 'You stopped here',
+  ro: 'Aici ai rămas',
+  fr: 'Vous vous êtes arrêté ici',
+  de: 'Hier hast du aufgehört',
+  es: 'Aquí lo dejaste',
+};
+
+// AsyncStorage key for per-event resume-reading scroll position
+const readPosKey = (eid: string) => `read_pos_v1:${eid}`;
+const READ_POS_MIN = 150; // only persist / restore if past this (avoids saving trivial scrolls)
+
 export interface StoryModalProps {
   visible: boolean;
   event: any;
   onClose: () => void;
   theme: any;
   allEvents?: any[];
+  // Optional sibling nav (Timeline) — when both onNavigate and a neighbour
+  // are provided, tappable edge strips appear on the left/right of the modal.
+  prevEvent?: any | null;
+  nextEvent?: any | null;
+  onNavigate?: (event: any) => void;
 }
 
 // ─── Single zoomable image (PanResponder pinch — works on Android + iOS) ──────
@@ -276,7 +294,7 @@ const sy = StyleSheet.create({
 // ═════════════════════════════════════════════════════════════════════════════
 // STORY MODAL
 // ═════════════════════════════════════════════════════════════════════════════
-export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEventsProp }: StoryModalProps) => {
+export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEventsProp, prevEvent, nextEvent, onNavigate }: StoryModalProps) => {
   const { language, t } = useLanguage();
   const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
@@ -299,6 +317,27 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
   const eventId = currentEvent ? getEventId(currentEvent) : null;
   const { images: gallery } = useEventImages(currentEvent ?? {});
 
+  // ── Resume-reading bookkeeping ─────────────────────────────────────────────
+  const lastScrollYRef = useRef(0);                                                // latest observed scrollY
+  const savePosTimer = useRef<ReturnType<typeof setTimeout> | null>(null);         // debounced AsyncStorage save
+  const pendingResumeRef = useRef<number | null>(null);                            // pos to scroll to once content lays out
+  const resumedThisEventRef = useRef(false);                                       // ensures we only restore once per event
+  const resumeToastOpacity = useRef(new Animated.Value(0)).current;
+
+  const persistReadPos = (eid: string | null, y: number) => {
+    if (!eid) return;
+    if (y > READ_POS_MIN) AsyncStorage.setItem(readPosKey(eid), String(Math.round(y))).catch(() => {});
+    else AsyncStorage.removeItem(readPosKey(eid)).catch(() => {});
+  };
+
+  const showResumeToast = () => {
+    Animated.sequence([
+      Animated.timing(resumeToastOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+      Animated.delay(500),
+      Animated.timing(resumeToastOpacity, { toValue: 0, duration: 300, useNativeDriver: true }),
+    ]).start();
+  };
+
   const resetScroll = () => {
     scrollY.setValue(0);
     setGalleryIndex(0);
@@ -307,14 +346,25 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
 
   const pushRelated = (evt: any) => {
     if (!evt) return;
+    persistReadPos(eventId, lastScrollYRef.current);  // save before leaving
     stop();
     setEventStack(prev => [...prev, evt]);
     resetScroll();
   };
 
   const handleClose = () => {
+    persistReadPos(eventId, lastScrollYRef.current);  // save before leaving
     if (eventStack.length > 0) { setEventStack(prev => prev.slice(0, -1)); resetScroll(); }
     else onClose();
+  };
+
+  // Sibling event navigation (Timeline edge-tap zones)
+  const handleNavigate = (evt: any | null | undefined) => {
+    if (!evt || !onNavigate) return;
+    persistReadPos(eventId, lastScrollYRef.current);  // save before leaving
+    stop();
+    resetScroll();
+    onNavigate(evt);
   };
 
   const { speak, stop, isPlaying } = useTTS();
@@ -328,6 +378,33 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
     if (visible) { setGalleryIndex(0); setEventStack([]); }
     if (!visible) stop();
   }, [visible, event]);
+
+  // When the displayed event changes OR the modal becomes visible again,
+  // reset scroll tracking and fetch the saved position (if any) to restore.
+  // Depending on `visible` ensures we re-restore when the user reopens the
+  // same event after closing — its eventId hasn't changed.
+  useEffect(() => {
+    if (!visible || !eventId) return;
+    lastScrollYRef.current = 0;
+    resumedThisEventRef.current = false;
+    pendingResumeRef.current = null;
+    AsyncStorage.getItem(readPosKey(eventId)).then(raw => {
+      const pos = raw ? parseInt(raw, 10) || 0 : 0;
+      if (pos > READ_POS_MIN) pendingResumeRef.current = pos;
+    }).catch(() => {});
+
+    // Fallback restore in case onContentSizeChange doesn't fire (same content height)
+    const fallback = setTimeout(() => {
+      const pending = pendingResumeRef.current;
+      if (!resumedThisEventRef.current && pending) {
+        resumedThisEventRef.current = true;
+        pendingResumeRef.current = null;
+        scrollViewRef.current?.scrollTo?.({ y: pending, animated: true });
+        showResumeToast();
+      }
+    }, 900);
+    return () => clearTimeout(fallback);
+  }, [eventId, visible]);
 
   if (!currentEvent) return null;
 
@@ -387,9 +464,32 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
             ref={scrollViewRef}
             bounces
             showsVerticalScrollIndicator={false}
-            onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
+            onScroll={Animated.event(
+              [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+              {
+                useNativeDriver: false,
+                listener: (e: any) => {
+                  const y = e.nativeEvent.contentOffset.y;
+                  lastScrollYRef.current = y;
+                  if (savePosTimer.current) clearTimeout(savePosTimer.current);
+                  savePosTimer.current = setTimeout(() => persistReadPos(eventId, y), 800);
+                },
+              },
+            )}
             scrollEventThrottle={16}
-            onContentSizeChange={(_, h) => setContentH(h)}
+            onContentSizeChange={(_, h) => {
+              setContentH(h);
+              // Restore the saved reading position once content is tall enough.
+              const pending = pendingResumeRef.current;
+              if (!resumedThisEventRef.current && pending && pending > READ_POS_MIN && h > pending + 120) {
+                resumedThisEventRef.current = true;
+                pendingResumeRef.current = null;
+                requestAnimationFrame(() => {
+                  scrollViewRef.current?.scrollTo?.({ y: pending, animated: true });
+                  showResumeToast();
+                });
+              }
+            }}
             contentContainerStyle={{ paddingBottom: insets.bottom + 48 }}
           >
             {/* ── Hero ── */}
@@ -532,6 +632,42 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
               <Text style={[st.watermark, { color: theme.subtext }]}>Daily History</Text>
             </View>
           </Animated.ScrollView>
+
+          {/* Edge tap zones — Timeline-only, present when caller provides
+              onNavigate AND a neighbour event. Vertical strips on each side,
+              centered ~middle 50% of the screen so they don't block the
+              header buttons up top or the save/share bar at the bottom. */}
+          {onNavigate && prevEvent && (
+            <TouchableOpacity
+              activeOpacity={0.5}
+              onPress={() => handleNavigate(prevEvent)}
+              style={[st.edgeNavZone, { left: 0 }]}
+            >
+              <View style={st.edgeNavPill}>
+                <ChevronLeft color="rgba(255,255,255,0.92)" size={22} strokeWidth={2.6} />
+              </View>
+            </TouchableOpacity>
+          )}
+          {onNavigate && nextEvent && (
+            <TouchableOpacity
+              activeOpacity={0.5}
+              onPress={() => handleNavigate(nextEvent)}
+              style={[st.edgeNavZone, { right: 0 }]}
+            >
+              <View style={st.edgeNavPill}>
+                <ChevronRight color="rgba(255,255,255,0.92)" size={22} strokeWidth={2.6} />
+              </View>
+            </TouchableOpacity>
+          )}
+
+          {/* Resume-reading toast — brief, non-intrusive pill at the bottom */}
+          <Animated.View
+            pointerEvents="none"
+            style={[st.resumeToast, { opacity: resumeToastOpacity, bottom: insets.bottom + 28 }]}
+          >
+            <BookOpen color="#fff" size={13} strokeWidth={2.4} />
+            <Text style={st.resumeToastText}>{RESUME_LABELS[language] ?? RESUME_LABELS.en}</Text>
+          </Animated.View>
         </View>
       </Modal>
 
@@ -630,4 +766,40 @@ const st = StyleSheet.create({
   saveBtnText: { fontSize: 13, fontWeight: '700', letterSpacing: 0.4 },
 
   watermark: { textAlign: 'center', fontSize: 10, fontWeight: '600', letterSpacing: 3.5, opacity: 0.25, marginBottom: 8 },
+
+  // Resume-reading toast — discreet pill at the bottom, fades in for ~0.5s
+  resumeToast: {
+    position: 'absolute', alignSelf: 'center', left: 0, right: 0,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+    backgroundColor: 'rgba(20,17,14,0.88)',
+    borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,215,0,0.35)',
+    maxWidth: 280, zIndex: 60,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
+      android: { elevation: 10 },
+    }),
+  },
+  resumeToastText: { color: '#fff', fontSize: 12.5, fontWeight: '700', letterSpacing: 0.2 },
+
+  // Edge tap zones for prev/next navigation (Timeline only).
+  // Middle 50% vertically so they don't block header / save bar.
+  // Mostly transparent — the visible part is the pill with the chevron.
+  edgeNavZone: {
+    position: 'absolute',
+    top: '25%', height: '50%',
+    width: 44,
+    alignItems: 'center', justifyContent: 'center',
+    zIndex: 40,
+  },
+  edgeNavPill: {
+    width: 34, height: 56, borderRadius: 17,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center', justifyContent: 'center',
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
+      android: { elevation: 6 },
+    }),
+  },
 });
