@@ -601,15 +601,6 @@ export default function TimelineScreen({ allEvents, onInterstitial }: Props) {
 
   const press = useCallback((ev: any) => { haptic('light'); setSelectedEvent(ev); }, []);
 
-  // Sibling event list (chronological order on Timeline) for prev/next nav in StoryModal
-  const eventList = useMemo(
-    () => items.filter(i => i.k === 'ev').map(i => (i as any).event),
-    [items],
-  );
-  const selectedIdx = selectedEvent ? eventList.indexOf(selectedEvent) : -1;
-  const prevEvent = selectedIdx > 0 ? eventList[selectedIdx - 1] : null;
-  const nextEvent = selectedIdx >= 0 && selectedIdx < eventList.length - 1 ? eventList[selectedIdx + 1] : null;
-
   // renderItem passes stable `press` ref — EvRow/EraRow React.memo works correctly
   const renderItem = useCallback(({ item }: { item: TItem }) => {
     if (item.k === 'quiz') {
@@ -832,16 +823,7 @@ export default function TimelineScreen({ allEvents, onInterstitial }: Props) {
         </View>
       )}
 
-      <StoryModal
-        visible={!!selectedEvent}
-        event={selectedEvent}
-        onClose={() => setSelectedEvent(null)}
-        theme={theme}
-        prevEvent={prevEvent}
-        nextEvent={nextEvent}
-        onNavigate={setSelectedEvent}
-        swipeable
-      />
+      <StoryModal visible={!!selectedEvent} event={selectedEvent} onClose={() => setSelectedEvent(null)} theme={theme} />
       <TimelineQuizModal visible={quizVisible} onClose={() => setQuizVisible(false)} allEvents={allEvents} />
       <HistoricalFiguresModal visible={figuresVisible} onClose={() => setFiguresVisible(false)} allEvents={allEvents} />
     </View>
