@@ -16,7 +16,10 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.rexinus.DailyHistoryMobile",
       "googleServicesFile": "./GoogleService-Info.plist",
-      "appleTeamId": "G2T895H353"
+      "appleTeamId": "G2T895H353",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.rexinus.dailyhistorymobile",
@@ -36,7 +39,6 @@
         "android.permission.RECEIVE_BOOT_COMPLETED"
       ]
     },
-
     "plugins": [
       "expo-router",
       "expo-notifications",
@@ -48,7 +50,13 @@
         }
       ],
       "@react-native-firebase/app",
-      "expo-apple-authentication"
+      "expo-apple-authentication",
+      [
+        "expo-tracking-transparency",
+        {
+          "userTrackingPermission": "Allow tracking so we can show you ads that are more relevant to you. Your data is never sold."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

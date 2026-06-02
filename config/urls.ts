@@ -7,9 +7,19 @@ import { Platform } from 'react-native';
 // ── Website / app store ──
 export const WEBSITE_URL = 'https://dailyhistory.app';
 
-export const APP_STORE_URL = 'https://apps.apple.com/app/id000000000';
+// Legal — required in-app for App Store (Guideline 3.1.2) + Google Play.
+// Hosted on Notion. Make sure each page is published "to web" before submitting.
+export const PRIVACY_POLICY_URL =
+  'https://eight-canidae-58f.notion.site/Privacy-Policy-36a136050c2080f7963eee6e73c39990';
+export const TERMS_URL =
+  'https://eight-canidae-58f.notion.site/Terms-of-use-373136050c2080df9c15cdcb4862c2e9';
+export const ACCOUNT_DELETION_URL =
+  'https://eight-canidae-58f.notion.site/Account-Data-Deletion-Policy-373136050c2080b19521fd0af1a5f617';
+
+// TODO: replace id0000000000 with the real App Store ID once the listing exists.
+export const APP_STORE_URL = 'https://apps.apple.com/app/id0000000000';
 export const PLAY_STORE_URL =
-  'https://play.google.com/store/apps/details?id=com.dailyhistory';
+  'https://play.google.com/store/apps/details?id=com.rexinus.dailyhistorymobile';
 
 export const getStoreUrl = (): string =>
   Platform.OS === 'ios' ? APP_STORE_URL : PLAY_STORE_URL;

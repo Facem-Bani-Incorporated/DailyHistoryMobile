@@ -20,9 +20,9 @@ export default function AdBanner({ size = BannerAdSize.ANCHORED_ADAPTIVE_BANNER,
       <BannerAd
         unitId={AD_UNIT_IDS.BANNER}
         size={size}
-        requestOptions={{
-          requestNonPersonalizedAdsOnly: true,
-        }}
+        // No requestNonPersonalizedAdsOnly override — the SDK serves
+        // personalized vs. non-personalized based on UMP consent + ATT status
+        // gathered in useAdsInit.
         onAdLoaded={() => {
           setLoaded(true);
           console.log('[Ads] Banner loaded');

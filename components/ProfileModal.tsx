@@ -26,7 +26,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import api from '../api';
 import { ENDPOINTS } from '../config/api';
-import { buildAvatarUrl, getStoreUrl, WEBSITE_URL } from '../config/urls';
+import { buildAvatarUrl, getStoreUrl, PRIVACY_POLICY_URL, TERMS_URL, WEBSITE_URL } from '../config/urls';
 import { haptic } from '../utils/haptics';
 import { Language, useLanguage } from '../context/LanguageContext';
 import { GameIcon } from '../utils/GameIcon';
@@ -646,6 +646,10 @@ export default function ProfileModal({ visible, onClose }: Props) {
                 <SettingRow icon="heart-outline" iconColor="#FF2D55" iconBg={'#FF2D5510'} title={t('rate_app')} subtitle={t('rate_app_desc')} theme={theme} onPress={handleRateApp} />
                 <Hairline theme={theme} inset />
                 <SettingRow icon="paper-plane-outline" iconColor="#34C759" iconBg={'#34C75910'} title={t('share_app')} subtitle={t('share_app_desc')} theme={theme} onPress={handleShareApp} />
+                <Hairline theme={theme} inset />
+                <SettingRow icon="shield-checkmark-outline" iconColor="#8E8E93" iconBg={'#8E8E9310'} title={t('privacy_policy')} theme={theme} onPress={() => Linking.openURL(PRIVACY_POLICY_URL)} />
+                <Hairline theme={theme} inset />
+                <SettingRow icon="document-text-outline" iconColor="#8E8E93" iconBg={'#8E8E9310'} title={t('terms_of_use')} theme={theme} onPress={() => Linking.openURL(TERMS_URL)} />
               </View>
 
               {/* ══ SIGN OUT ══ */}

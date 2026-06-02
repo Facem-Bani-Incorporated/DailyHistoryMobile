@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ArrowLeft, Eye, EyeOff } from 'lucide-react-native';
@@ -25,6 +26,7 @@ import Svg, { Path } from 'react-native-svg';
 
 import api from '../../api';
 import { ENDPOINTS } from '../../config/api';
+import { PRIVACY_POLICY_URL, TERMS_URL } from '../../config/urls';
 import { authService } from '../../services/authService';
 import { useAuthStore } from '../../store/useAuthStore';
 
@@ -429,8 +431,8 @@ export default function RegisterScreen() {
           {/* Terms */}
           <Text style={styles.termsText}>
             By creating an account, you agree to our{' '}
-            <Text style={styles.termsLink}>Terms</Text> and{' '}
-            <Text style={styles.termsLink}>Privacy Policy</Text>
+            <Text style={styles.termsLink} onPress={() => Linking.openURL(TERMS_URL)}>Terms</Text> and{' '}
+            <Text style={styles.termsLink} onPress={() => Linking.openURL(PRIVACY_POLICY_URL)}>Privacy Policy</Text>
           </Text>
         </Animated.View>
 

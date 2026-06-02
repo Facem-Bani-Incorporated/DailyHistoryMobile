@@ -46,6 +46,10 @@
     </array>
     <key>CFBundleVersion</key>
     <string>1</string>
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
+    <key>NSUserTrackingUsageDescription</key>
+    <string>Allow tracking so we can show you ads that are more relevant to you. Your data is never sold.</string>
     <key>LSMinimumSystemVersion</key>
     <string>12.0</string>
     <key>LSRequiresIPhoneOS</key>
