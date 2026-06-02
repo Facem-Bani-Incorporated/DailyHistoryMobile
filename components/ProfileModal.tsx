@@ -8,6 +8,7 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   Image,
   Modal,
@@ -17,11 +18,14 @@ import {
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import api from '../api';
+import { ENDPOINTS } from '../config/api';
 import { buildAvatarUrl, getStoreUrl, WEBSITE_URL } from '../config/urls';
 import { haptic } from '../utils/haptics';
 import { Language, useLanguage } from '../context/LanguageContext';
@@ -207,12 +211,18 @@ const _pm = StyleSheet.create({
 export default function ProfileModal({ visible, onClose }: Props) {
   const user = useAuthStore(s => s.user);
   const logout = useAuthStore(s => s.logout);
+  const deleteAccountCleanup = useAuthStore(s => s.deleteAccountCleanup);
   const router = useRouter();
   const { mode, setMode, theme, isDark, isPremium } = useTheme();
   const { t, language, setLanguage } = useLanguage();
   const insets = useSafeAreaInsets();
   const [langExpanded, setLangExpanded] = useState(false);
   const [supportVisible, setSupportVisible] = useState(false);
+
+  // ── Delete account flow ──
+  const [deleteVisible, setDeleteVisible] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
 
   // ── RevenueCat subscription ──
   const { isPro, presentPaywall, presentCustomerCenter, restorePurchases } = useRevenueCat();
@@ -265,6 +275,7 @@ export default function ProfileModal({ visible, onClose }: Props) {
   if (!user) return null;
 
   const isGoogleUser = user.provider === 'google';
+  const isAppleUser = user.provider === 'apple';
   const displayName = user.username || user.email?.split('@')[0] || 'Explorer';
   const displayEmail = user.email || '';
   const appVersion = Application.nativeApplicationVersion ?? '1.0.0';
@@ -282,6 +293,64 @@ export default function ProfileModal({ visible, onClose }: Props) {
     try { if (isGoogleUser) await GoogleSignin.signOut(); } catch {} finally {
       onClose(); logout(); router.replace('/(auth)/welcome');
     }
+  };
+
+  // ── Account deletion — DELETE /users/me, then provider + local cleanup ──
+  const confirmReady = confirmText.trim().toUpperCase() === 'DELETE';
+
+  const closeDeleteModal = () => {
+    if (deleteLoading) return;
+    setDeleteVisible(false);
+    setConfirmText('');
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteLoading || !confirmReady) return;
+    haptic('heavy');
+    setDeleteLoading(true);
+
+    const provider = user.provider;
+
+    // (a) Call the backend. Same endpoint for LOCAL / GOOGLE / APPLE.
+    try {
+      await api.delete(ENDPOINTS.ME);
+    } catch (e: any) {
+      const status = e?.response?.status;
+      // 404 → user already deleted; 401 → token expired. Both: proceed with
+      // local cleanup + redirect to welcome. Anything else (network / 5xx) →
+      // surface an error and DO NOT clear anything locally.
+      if (status !== 404 && status !== 401) {
+        setDeleteLoading(false);
+        Alert.alert(t('delete_failed_title'), t('delete_failed_msg'));
+        return;
+      }
+    }
+
+    // (b) Provider-specific cleanup, after a successful delete.
+    try {
+      if (provider === 'google') {
+        await GoogleSignin.signOut();
+        await GoogleSignin.revokeAccess();
+      }
+      // TODO(apple): Apple App Store Guideline 5.1.1(v) requires revoking the
+      // Apple refresh token on account deletion. There is no client-side revoke
+      // in expo-apple-authentication — it must go through Apple's server-to-server
+      // /auth/revoke using the stored refresh token. The backend does not expose a
+      // revoke endpoint yet, so open a separate task and call it here once it exists.
+    } catch {
+      // Provider sign-out failed — backend already deleted the account, so
+      // continue with local cleanup regardless.
+    }
+
+    // (c)+(d) Clear JWT + all in-memory/persisted user data (no server push).
+    deleteAccountCleanup();
+
+    // (e) Reset navigation to welcome — user must not be able to go "back".
+    setDeleteLoading(false);
+    setDeleteVisible(false);
+    setConfirmText('');
+    onClose();
+    router.replace('/(auth)/welcome');
   };
 
   const handleRateApp = () => {
@@ -570,7 +639,7 @@ export default function ProfileModal({ visible, onClose }: Props) {
               {/* ══ ACCOUNT ══ */}
               <SectionTitle label={t('account')} theme={theme} />
               <View style={[s.card, { backgroundColor: isPremium ? '#0F0D14' : theme.card, borderColor: isPremium ? '#2A2230' : theme.border }]}>
-                <SettingRow icon={isGoogleUser ? 'logo-google' : 'mail-outline'} iconColor="#007AFF" iconBg={'#007AFF10'} title={t('sign_in_method')} subtitle={isGoogleUser ? 'Google' : 'Email'} theme={theme} right={<View />} />
+                <SettingRow icon={isGoogleUser ? 'logo-google' : isAppleUser ? 'logo-apple' : 'mail-outline'} iconColor="#007AFF" iconBg={'#007AFF10'} title={t('sign_in_method')} subtitle={isGoogleUser ? 'Google' : isAppleUser ? 'Apple' : 'Email'} theme={theme} right={<View />} />
                 <Hairline theme={theme} inset />
                 <SettingRow icon="chatbubbles-outline" iconColor="#5856D6" iconBg={'#5856D610'} title={t('contact_support')} subtitle={t('contact_support_desc')} theme={theme} onPress={() => setSupportVisible(true)} />
                 <Hairline theme={theme} inset />
@@ -585,6 +654,16 @@ export default function ProfileModal({ visible, onClose }: Props) {
                 <Text style={s.logoutText}>{t('sign_out')}</Text>
               </TouchableOpacity>
 
+              {/* ══ DELETE ACCOUNT ══ */}
+              <TouchableOpacity
+                style={s.deleteBtn}
+                onPress={() => { haptic('medium'); setConfirmText(''); setDeleteVisible(true); }}
+                activeOpacity={0.6}
+              >
+                <Ionicons name="trash-outline" size={14} color="#FF3B30" />
+                <Text style={s.deleteText}>{t('delete_account')}</Text>
+              </TouchableOpacity>
+
               <View style={s.footer}>
                 <View style={[s.footerDot, { backgroundColor: gold }]} />
                 <Text style={[s.footerBrand, { color: theme.subtext }]}>Daily History</Text>
@@ -597,6 +676,66 @@ export default function ProfileModal({ visible, onClose }: Props) {
       </Modal>
 
       <SupportModal visible={supportVisible} onClose={() => setSupportVisible(false)} />
+
+      {/* ══ DELETE ACCOUNT CONFIRMATION ══ */}
+      <Modal
+        visible={deleteVisible}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={closeDeleteModal}
+      >
+        <View style={s.delOverlay}>
+          <View style={[s.delDialog, { backgroundColor: isPremium ? '#0F0D14' : theme.card, borderColor: isPremium ? '#2A2230' : theme.border }]}>
+            <View style={s.delIconWrap}>
+              <Ionicons name="warning-outline" size={26} color="#FF3B30" />
+            </View>
+
+            <Text style={[s.delTitle, { color: theme.text }]}>{t('delete_account_title')}</Text>
+            <Text style={[s.delMsg, { color: theme.subtext }]}>{t('delete_account_warning')}</Text>
+
+            <Text style={[s.delLabel, { color: theme.subtext }]}>{t('delete_account_confirm_label')}</Text>
+            <TextInput
+              style={[s.delInput, {
+                color: theme.text,
+                borderColor: confirmReady ? '#FF3B30' : theme.border,
+                backgroundColor: isDark ? '#141210' : '#FAFAF8',
+              }]}
+              value={confirmText}
+              onChangeText={setConfirmText}
+              placeholder="DELETE"
+              placeholderTextColor={theme.subtext}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              editable={!deleteLoading}
+            />
+
+            <View style={s.delActions}>
+              <TouchableOpacity
+                style={[s.delCancelBtn, { borderColor: theme.border }]}
+                onPress={closeDeleteModal}
+                activeOpacity={0.6}
+                disabled={deleteLoading}
+              >
+                <Text style={[s.delCancelText, { color: theme.text }]}>{t('cancel')}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[s.delConfirmBtn, { opacity: confirmReady && !deleteLoading ? 1 : 0.4 }]}
+                onPress={handleDeleteAccount}
+                activeOpacity={0.85}
+                disabled={!confirmReady || deleteLoading}
+              >
+                {deleteLoading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={s.delConfirmText}>{t('delete_permanently')}</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </>
   );
 }
@@ -658,8 +797,23 @@ const makeStyles = (theme: any, isDark: boolean, gold: string, isPremium: boolea
 
   proBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 2.5, borderRadius: 6 },
   proBadgeT: { fontSize: 8.5, fontWeight: '900', color: '#000', letterSpacing: 0.8 },
-  logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 14, backgroundColor: '#FF3B3008', borderWidth: 1, borderColor: '#FF3B3018', gap: 7, marginTop: 4, marginBottom: 34 },
+  logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 14, backgroundColor: '#FF3B3008', borderWidth: 1, borderColor: '#FF3B3018', gap: 7, marginTop: 4, marginBottom: 12 },
   logoutText: { color: '#FF3B30', fontSize: 13.5, fontWeight: '600', letterSpacing: 0.2 },
+  deleteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 11, gap: 6, marginBottom: 30 },
+  deleteText: { color: '#FF3B30', fontSize: 12.5, fontWeight: '600', letterSpacing: 0.2, opacity: 0.85 },
+  // Delete confirmation dialog
+  delOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
+  delDialog: { width: '100%', maxWidth: 360, borderRadius: 22, borderWidth: 1, padding: 22, alignItems: 'center' },
+  delIconWrap: { width: 52, height: 52, borderRadius: 26, backgroundColor: '#FF3B3014', alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
+  delTitle: { fontSize: 18, fontWeight: '800', letterSpacing: -0.2, marginBottom: 8, textAlign: 'center', fontFamily: SERIF },
+  delMsg: { fontSize: 13, fontWeight: '400', lineHeight: 19, textAlign: 'center', opacity: 0.7, marginBottom: 18 },
+  delLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', opacity: 0.5, alignSelf: 'flex-start', marginBottom: 7 },
+  delInput: { width: '100%', height: 48, borderRadius: 12, borderWidth: 1.5, paddingHorizontal: 14, fontSize: 15, fontWeight: '700', letterSpacing: 2, marginBottom: 18 },
+  delActions: { flexDirection: 'row', gap: 10, width: '100%' },
+  delCancelBtn: { flex: 1, height: 48, borderRadius: 12, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  delCancelText: { fontSize: 14, fontWeight: '700', letterSpacing: 0.2 },
+  delConfirmBtn: { flex: 1.4, height: 48, borderRadius: 12, backgroundColor: '#FF3B30', alignItems: 'center', justifyContent: 'center' },
+  delConfirmText: { fontSize: 14, fontWeight: '800', color: '#fff', letterSpacing: 0.2 },
   footer: { alignItems: 'center', gap: 5, paddingBottom: 10 },
   footerDot: { width: 4, height: 4, borderRadius: 2, opacity: 0.3, marginBottom: 6 },
   footerBrand: { fontSize: 11, fontWeight: '700', letterSpacing: 3.5, opacity: 0.18, fontFamily: SERIF },
