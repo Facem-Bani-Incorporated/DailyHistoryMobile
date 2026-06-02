@@ -1204,7 +1204,7 @@ export default function HomeScreen() {
           {tab === 'saved' ? <SavedScreen />
             : tab === 'map' ? <MapScreen onInterstitial={!isPro ? showInterstitial : undefined} />
             : tab === 'search' ? <SearchScreen allEvents={allEvents} />
-            : tab === 'timeline' ? <TimelineScreen allEvents={allEvents} onInterstitial={!isPro ? showInterstitial : undefined} />
+            : tab === 'timeline' ? <TimelineScreen allEvents={allEvents} onInterstitial={!isPro ? showInterstitial : undefined} topInset={shouldShowBanner ? 0 : undefined} />
             : loading ? (
               <View style={ms.loadW}>
                 <View style={[ms.loadP, { borderColor: goldColor + '25' }]}>

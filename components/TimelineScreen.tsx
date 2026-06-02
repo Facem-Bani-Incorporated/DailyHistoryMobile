@@ -168,7 +168,7 @@ type TItem =
   | { k: 'era';  century: number; count: number; y: number; h: number }
   | { k: 'ev';   event: any;      y: number; h: number }
   | { k: 'quiz'; y: number; h: number };
-interface Props { allEvents: any[]; onInterstitial?: () => void; }
+interface Props { allEvents: any[]; onInterstitial?: () => void; topInset?: number; }
 
 // ══════════════════════════════════════════════════════════════════════════════
 // EVENT ROW — no per-frame worklets, fully static styling
@@ -497,11 +497,14 @@ const es = StyleSheet.create({
 // ══════════════════════════════════════════════════════════════════════════════
 // MAIN
 // ══════════════════════════════════════════════════════════════════════════════
-export default function TimelineScreen({ allEvents, onInterstitial }: Props) {
+export default function TimelineScreen({ allEvents, onInterstitial, topInset }: Props) {
   const { theme, isDark, isPremium } = useTheme();
   const { language, t } = useLanguage();
   const { isPro, presentPaywall } = useRevenueCat();
   const insets = useSafeAreaInsets();
+  // When a banner sits above this screen the notch is already cleared, so the
+  // caller passes topInset=0 to avoid a doubled top gap. Otherwise use the safe area.
+  const topPad = topInset ?? insets.top;
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
   const [quizVisible, setQuizVisible] = useState(false);
   const [figuresVisible, setFiguresVisible] = useState(false);
@@ -674,10 +677,10 @@ export default function TimelineScreen({ allEvents, onInterstitial }: Props) {
       {isPremium && <LinearGradient colors={['#0A0815', '#05040A']} style={StyleSheet.absoluteFill} />}
 
       {/* ── HEADER ── */}
-      <View style={[m.hdrWrap, { paddingTop: insets.top }]}>
+      <View style={[m.hdrWrap, { paddingTop: topPad }]}>
         <LinearGradient
           colors={[theme.background, theme.background + 'F0', theme.background + '00']}
-          style={[StyleSheet.absoluteFill, { height: insets.top + HEADER_H + 80 }]}
+          style={[StyleSheet.absoluteFill, { height: topPad + HEADER_H + 80 }]}
           pointerEvents="none"
         />
         <View style={m.hdr}>
@@ -781,7 +784,7 @@ export default function TimelineScreen({ allEvents, onInterstitial }: Props) {
         <View style={{ flex: 1 }}>
           <LinearGradient
             colors={[theme.background, theme.background + '00']}
-            style={[m.fadeTop, { top: insets.top + HEADER_H, height: 40 }]}
+            style={[m.fadeTop, { top: topPad + HEADER_H, height: 40 }]}
             pointerEvents="none"
           />
           <LinearGradient
@@ -793,13 +796,13 @@ export default function TimelineScreen({ allEvents, onInterstitial }: Props) {
           {/* Progress rail — single Reanimated worklet only */}
           <View style={[m.progRail, {
             backgroundColor: theme.border + '80',
-            top: insets.top + HEADER_H + 20,
+            top: topPad + HEADER_H + 20,
             bottom: insets.bottom + 20,
           }]} pointerEvents="none">
             <Animated.View style={[m.progFill, { backgroundColor: gold }, progressStyle]} />
           </View>
 
-          <View style={[m.railTop, { top: insets.top + HEADER_H + 8 }]} pointerEvents="none">
+          <View style={[m.railTop, { top: topPad + HEADER_H + 8 }]} pointerEvents="none">
             <Text style={[m.railYear, { color: theme.subtext }]}>{formatYear(yearRange.first, language)}</Text>
           </View>
           <View style={[m.railBot, { bottom: insets.bottom + 8 }]} pointerEvents="none">
@@ -817,7 +820,7 @@ export default function TimelineScreen({ allEvents, onInterstitial }: Props) {
             scrollEventThrottle={16}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{
-              paddingTop: insets.top + HEADER_H + 72,
+              paddingTop: topPad + HEADER_H + 72,
               // Clear the floating TabBar (paddingTop 5 + tabsRow 60 + bottomPad)
               // so rows don't scroll under it and tint the BlurView.
               paddingBottom: insets.bottom + 110,
