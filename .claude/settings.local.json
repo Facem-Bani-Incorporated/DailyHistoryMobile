@@ -170,7 +170,9 @@
       "PowerShell($env:NODE_OPTIONS = \"--use-system-ca\"; npx expo install expo-tracking-transparency 2>&1 | Select-Object -Last 25)",
       "WebFetch(domain:eight-canidae-58f.notion.site)",
       "Bash(git commit -m 'Store-compliance pass + legal docs for launch *)",
-      "PowerShell($env:NODE_OPTIONS = \"--use-system-ca\"; npx expo config --type introspect 2>&1 | Select-String -Pattern \"google-mobile-ads|firebase|tracking|ITSApp|UserTracking|error|Error\" | Select-Object -First 30)"
+      "PowerShell($env:NODE_OPTIONS = \"--use-system-ca\"; npx expo config --type introspect 2>&1 | Select-String -Pattern \"google-mobile-ads|firebase|tracking|ITSApp|UserTracking|error|Error\" | Select-Object -First 30)",
+      "PowerShell($env:NODE_OPTIONS = \"--use-system-ca\"; eas build --profile production --platform android --non-interactive --no-wait 2>&1 | Select-Object -Last 30)",
+      "Bash(git commit -m 'Remove unused SYSTEM_ALERT_WINDOW permission *)"
     ]
   }
 }
