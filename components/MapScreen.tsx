@@ -237,6 +237,7 @@ const T: Record<string, Record<string, string>> = {
     significance: 'Significance',
     casualties: 'Casualties',
     // Layer descriptions
+    map_layers: 'Map Layers',
     layer_time_desc: 'Explore events through time',
     layer_heatmap_desc: 'Density of historical events',
     layer_empires_desc: 'great empires at peak',
@@ -316,6 +317,7 @@ const T: Record<string, Record<string, string>> = {
     significance: 'Semnificație',
     casualties: 'Pierderi',
     // Layer descriptions
+    map_layers: 'Straturi Hartă',
     layer_time_desc: 'Explorează evenimentele în timp',
     layer_heatmap_desc: 'Densitatea evenimentelor istorice',
     layer_empires_desc: 'mari imperii la apogeu',
@@ -395,6 +397,7 @@ const T: Record<string, Record<string, string>> = {
     significance: 'Importance',
     casualties: 'Pertes',
     // Layer descriptions
+    map_layers: 'Calques',
     layer_time_desc: 'Explorer les événements dans le temps',
     layer_heatmap_desc: 'Densité des événements historiques',
     layer_empires_desc: 'grands empires à leur apogée',
@@ -474,6 +477,7 @@ const T: Record<string, Record<string, string>> = {
     significance: 'Bedeutung',
     casualties: 'Verluste',
     // Layer descriptions
+    map_layers: 'Kartenebenen',
     layer_time_desc: 'Ereignisse durch die Zeit erkunden',
     layer_heatmap_desc: 'Dichte historischer Ereignisse',
     layer_empires_desc: 'große Reiche auf dem Höhepunkt',
@@ -553,6 +557,7 @@ const T: Record<string, Record<string, string>> = {
     significance: 'Importancia',
     casualties: 'Bajas',
     // Layer descriptions
+    map_layers: 'Capas del Mapa',
     layer_time_desc: 'Explorar eventos a través del tiempo',
     layer_heatmap_desc: 'Densidad de eventos históricos',
     layer_empires_desc: 'grandes imperios en su apogeo',
@@ -2304,17 +2309,20 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
         </TouchableOpacity>
       )}
 
-      {/* ── Single Layers button ── */}
+      {/* ── Single Layers button (labeled pill so users know what it opens) ── */}
       <TouchableOpacity
         onPress={() => { haptic('medium'); setLayersOpen(v => !v); }}
         activeOpacity={0.8}
-        style={[styles.layerBtn, styles.layerBtnSingle, {
+        style={[styles.layerBtnPill, styles.layerBtnSingle, {
           top: insets.top + (activeCountry || isZoomedIn ? 110 : 62),
           backgroundColor: (mapLayer !== 'off' || layersOpen) ? accent : cardBg,
           borderColor: (mapLayer !== 'off' || layersOpen) ? accent : borderCol,
         }]}
       >
-        <Layers size={17} color={(mapLayer !== 'off' || layersOpen) ? '#FFF' : theme.subtext} strokeWidth={2} />
+        <Layers size={16} color={(mapLayer !== 'off' || layersOpen) ? '#FFF' : theme.subtext} strokeWidth={2} />
+        <Text style={[styles.layerBtnLabel, { color: (mapLayer !== 'off' || layersOpen) ? '#FFF' : theme.text }]}>
+          {tm('map_layers')}
+        </Text>
       </TouchableOpacity>
 
       {/* ── Layers selection panel ── */}
@@ -3553,6 +3561,18 @@ const styles = StyleSheet.create({
       ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 6 },
       android: { elevation: 4 },
     }),
+  },
+  layerBtnPill: {
+    height: 40, borderRadius: 12, borderWidth: 1,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 7, paddingHorizontal: 13,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 6 },
+      android: { elevation: 4 },
+    }),
+  },
+  layerBtnLabel: {
+    fontSize: 12.5, fontWeight: '700', letterSpacing: 0.2,
   },
   layerBtnSingle: {
     position: 'absolute', right: 12, zIndex: 22,

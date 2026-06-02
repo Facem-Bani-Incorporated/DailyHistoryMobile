@@ -1163,6 +1163,9 @@ export default function HomeScreen() {
           <View
             style={[
               ms.topBannerWrap,
+              // On tabs without the chrome header (timeline, saved) there is no
+              // top safe-area padding, so push the banner below the camera notch.
+              !showChrome && bannerLoaded && { marginTop: insets.top + 8 },
               !bannerLoaded && { height: 0, minHeight: 0, marginVertical: 0, marginHorizontal: 0, overflow: 'hidden', borderWidth: 0 },
               {
                 borderColor: isPremium
