@@ -21,11 +21,11 @@ import { useLanguage } from '../context/LanguageContext';
 import { getEventId } from '../store/useSavedStore';
 
 const T: Record<string, Record<string, string>> = {
-  en: { related: 'History Connections', sameCategory: 'Same category', sameEra: 'Same era', sameCentury: 'Same century' },
-  ro: { related: 'Conexiuni Istorice', sameCategory: 'Aceeași categorie', sameEra: 'Aceeași eră', sameCentury: 'Același secol' },
-  fr: { related: 'Connexions Historiques', sameCategory: 'Même catégorie', sameEra: 'Même époque', sameCentury: 'Même siècle' },
-  de: { related: 'Historische Verbindungen', sameCategory: 'Gleiche Kategorie', sameEra: 'Gleiche Ära', sameCentury: 'Gleiches Jahrhundert' },
-  es: { related: 'Conexiones Históricas', sameCategory: 'Misma categoría', sameEra: 'Misma era', sameCentury: 'Mismo siglo' },
+  en: { related: 'Related Events', sameCategory: 'Same category', sameEra: 'Same era', sameCentury: 'Same century' },
+  ro: { related: 'Evenimente Similare', sameCategory: 'Aceeași categorie', sameEra: 'Aceeași eră', sameCentury: 'Același secol' },
+  fr: { related: 'Événements Similaires', sameCategory: 'Même catégorie', sameEra: 'Même époque', sameCentury: 'Même siècle' },
+  de: { related: 'Ähnliche Ereignisse', sameCategory: 'Gleiche Kategorie', sameEra: 'Gleiche Ära', sameCentury: 'Gleiches Jahrhundert' },
+  es: { related: 'Eventos Relacionados', sameCategory: 'Misma categoría', sameEra: 'Misma era', sameCentury: 'Mismo siglo' },
 };
 const tx = (lang: string, key: string) => (T[lang] ?? T.en)[key] ?? T.en[key] ?? key;
 
