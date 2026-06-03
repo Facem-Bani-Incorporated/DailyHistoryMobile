@@ -172,7 +172,14 @@
       "Bash(git commit -m 'Store-compliance pass + legal docs for launch *)",
       "PowerShell($env:NODE_OPTIONS = \"--use-system-ca\"; npx expo config --type introspect 2>&1 | Select-String -Pattern \"google-mobile-ads|firebase|tracking|ITSApp|UserTracking|error|Error\" | Select-Object -First 30)",
       "PowerShell($env:NODE_OPTIONS = \"--use-system-ca\"; eas build --profile production --platform android --non-interactive --no-wait 2>&1 | Select-Object -Last 30)",
-      "Bash(git commit -m 'Remove unused SYSTEM_ALERT_WINDOW permission *)"
+      "Bash(git commit -m 'Remove unused SYSTEM_ALERT_WINDOW permission *)",
+      "PowerShell($env:NODE_OPTIONS = \"--use-system-ca\"; eas build --profile production --platform android --non-interactive --no-wait 2>&1 | Select-Object -Last 25)",
+      "Bash(git commit -m 'StoryModal: rename '\\\\''History Connections'\\\\'' to '\\\\''Related Events'\\\\'' *)",
+      "Bash(git commit -m 'Map: label the layers button; fix banner under notch on timeline/saved *)",
+      "PowerShell($env:NODE_OPTIONS = \"--use-system-ca\"; eas update --branch production --platform android --message \"Related Events label, map layers button, banner notch fix\" 2>&1 | Select-Object -Last 20)",
+      "Bash(git commit -m 'Timeline: remove doubled top gap below banner *)",
+      "Bash(git commit -m 'Saved: remove doubled top gap below banner \\(match Timeline/Discover\\) *)",
+      "PowerShell($env:NODE_OPTIONS = \"--use-system-ca\"; eas update --branch production --platform android --message \"Timeline + Saved: tighten gap between banner and content \\(match Discover\\)\" 2>&1 | Select-Object -Last 12)"
     ]
   }
 }
