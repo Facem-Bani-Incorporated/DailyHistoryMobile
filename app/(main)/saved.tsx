@@ -484,7 +484,7 @@ const cc = StyleSheet.create({
 /* ══════════════════════════════════
    Main Screen
 ══════════════════════════════════ */
-export default function SavedScreen() {
+export default function SavedScreen({ topInset }: { topInset?: number } = {}) {
   const { theme, isDark } = useTheme();
   const { language } = useLanguage();
   const { isPro, presentPaywall } = useRevenueCat();
@@ -492,6 +492,9 @@ export default function SavedScreen() {
   const savedEvents = useUserSavedEvents();
   const collections = useUserCollections();
   const insets = useSafeAreaInsets();
+  // When a banner sits above this screen the notch is already cleared, so the
+  // caller passes topInset (e.g. 0) to avoid a doubled top gap.
+  const headerTop = topInset ?? (insets.top + 10);
 
   const [activeTab, setActiveTab] = useState<'saved' | 'collections'>('saved');
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
@@ -570,7 +573,7 @@ export default function SavedScreen() {
 
   /* ── EDITORIAL HEADER ── */
   const renderHeader = () => (
-    <View style={[st.header, { paddingTop: insets.top + 10, backgroundColor: theme.background }]}>
+    <View style={[st.header, { paddingTop: headerTop, backgroundColor: theme.background }]}>
       <View style={st.masthead}>
         <View style={[st.mastheadLine, { backgroundColor: theme.gold + '30' }]} />
         <Text style={[st.mastheadLabel, { color: theme.text }]}>THE ARCHIVE</Text>

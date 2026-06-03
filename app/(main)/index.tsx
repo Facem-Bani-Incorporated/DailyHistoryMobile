@@ -1201,7 +1201,7 @@ export default function HomeScreen() {
 
         {/* ═════════════════ CONTENT ═════════════════ */}
         <View style={{ flex: 1 }}>
-          {tab === 'saved' ? <SavedScreen />
+          {tab === 'saved' ? <SavedScreen topInset={shouldShowBanner ? 0 : undefined} />
             : tab === 'map' ? <MapScreen onInterstitial={!isPro ? showInterstitial : undefined} />
             : tab === 'search' ? <SearchScreen allEvents={allEvents} />
             : tab === 'timeline' ? <TimelineScreen allEvents={allEvents} onInterstitial={!isPro ? showInterstitial : undefined} topInset={shouldShowBanner ? 0 : undefined} />
