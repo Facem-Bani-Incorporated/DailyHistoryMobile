@@ -7,16 +7,12 @@ import {
   Bell,
   BookmarkCheck,
   Calendar,
-  CheckCircle2,
+  Check,
   ChevronRight,
-  Clock,
   Crown,
-  Globe2,
   Layers3,
-  Map as MapIcon,
-  Rocket,
-  ShieldCheck,
   Sparkles,
+  Trophy,
 } from 'lucide-react-native';
 
 import { useRevenueCat } from '../context/RevenueCatContext';
@@ -41,218 +37,87 @@ import { ENDPOINTS } from '../config/api';
 
 const { width: W } = Dimensions.get('window');
 
+const GOLD = '#D4A017';
+const GOLD_LIGHT = '#F3CB55';
+const INK = '#0A0B0E';
+
+type Step = 'features' | 'notifications' | 'subscription';
+
 interface Props {
   onComplete: () => void;
+  /** Where to start. 'subscription' = returning account, show only the PRO upsell. */
+  startStep?: Step;
 }
 
 const FEATURES = [
   {
     icon: Calendar,
-    title: '5 events, every day',
-    desc: 'Each morning you get 5 events that happened on this exact date throughout history.',
-    accent: '#D4A017',
+    title: 'A fresh story every day',
+    desc: 'New events from this exact day in history, waiting each morning.',
   },
   {
     icon: Layers3,
-    title: 'Interactive timeline',
-    desc: 'Scroll through centuries and see how events connect across eras.',
-    accent: '#3B82F6',
-  },
-  {
-    icon: Globe2,
-    title: 'Events on the map',
-    desc: 'Every event is pinned on a globe. Tap any marker to explore.',
-    accent: '#10B981',
+    title: 'Timeline & map',
+    desc: 'Wander through the centuries, or see exactly where it all happened.',
   },
   {
     icon: BookmarkCheck,
-    title: 'Save your favorites',
-    desc: 'Bookmark any event and build a personal collection.',
-    accent: '#A855F7',
+    title: 'Save & test yourself',
+    desc: 'Keep the moments you love and take quizzes to make them stick.',
+  },
+  {
+    icon: Trophy,
+    title: 'Climb the leaderboard',
+    desc: 'Earn XP, build a streak, and rank against fellow history buffs.',
   },
   {
     icon: Sparkles,
-    title: 'AI-powered stories',
-    desc: 'Rich narratives crafted to bring every moment to life.',
-    accent: '#F59E0B',
+    title: 'Brought to life by AI',
+    desc: 'Every story enriched for richer detail and an effortless read.',
   },
 ];
 
-// ── Feature row ──────────────────────────────────────────────────────────────
-const FeatureRow = ({
-  feature,
-  animValue,
-}: {
-  feature: (typeof FEATURES)[0];
-  animValue: Animated.Value;
-}) => {
-  const Icon = feature.icon;
-  return (
-    <Animated.View
-      style={[
-        s.featureRow,
-        {
-          opacity: animValue,
-          transform: [
-            {
-              translateY: animValue.interpolate({
-                inputRange: [0, 1],
-                outputRange: [16, 0],
-              }),
-            },
-          ],
-        },
-      ]}
-    >
-      <View
-        style={[
-          s.featureIcon,
-          { backgroundColor: feature.accent + '10', borderColor: feature.accent + '18' },
-        ]}
-      >
-        <Icon color={feature.accent} size={18} strokeWidth={2} />
-      </View>
-      <View style={s.featureText}>
-        <Text style={s.featureTitle}>{feature.title}</Text>
-        <Text style={s.featureDesc}>{feature.desc}</Text>
-      </View>
-    </Animated.View>
-  );
-};
+// ── Step progress dots ────────────────────────────────────────────────────────
+const Dots = ({ index }: { index: number }) => (
+  <View style={ui.dots}>
+    {[0, 1, 2].map((i) => (
+      <View key={i} style={[ui.dot, i === index && ui.dotActive]} />
+    ))}
+  </View>
+);
 
-// ── Pulse ring for notification step ─────────────────────────────────────────
-const PulseRing = ({ size, delay, duration }: { size: number; delay: number; duration: number }) => {
-  const scale = useRef(new Animated.Value(0.85)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    const animate = () => {
-      scale.setValue(0.85);
-      opacity.setValue(0.5);
-      Animated.parallel([
-        Animated.timing(scale, {
-          toValue: 1.15,
-          duration,
-          delay,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacity, {
-          toValue: 0,
-          duration,
-          delay,
-          easing: Easing.in(Easing.cubic),
-          useNativeDriver: true,
-        }),
-      ]).start(() => animate());
-    };
-    animate();
-  }, []);
-
-  return (
-    <Animated.View
-      style={{
-        position: 'absolute',
-        width: size,
-        height: size,
-        borderRadius: size / 2,
-        borderWidth: 1,
-        borderColor: '#D4A017',
-        opacity,
-        transform: [{ scale }],
-      }}
-    />
-  );
-};
-
-// ── Main component ───────────────────────────────────────────────────────────
-export default function OnboardingScreen({ onComplete }: Props) {
+// ── Main component ────────────────────────────────────────────────────────────
+export default function OnboardingScreen({ onComplete, startStep = 'features' }: Props) {
   const insets = useSafeAreaInsets();
-  const [step, setStep] = useState<'features' | 'notifications' | 'subscription'>('features');
+  const [step, setStep] = useState<Step>(startStep);
   const { isPro, presentPaywall } = useRevenueCat();
 
-  // ── Features step animations ──
-  const headerFade = useRef(new Animated.Value(0)).current;
-  const headerSlide = useRef(new Animated.Value(20)).current;
-  const featureAnims = useRef(FEATURES.map(() => new Animated.Value(0))).current;
-  const ctaFade = useRef(new Animated.Value(0)).current;
-  const ctaSlide = useRef(new Animated.Value(12)).current;
+  // Standalone PRO upsell (returning account). If they're already PRO there's
+  // nothing to show — exit straight away (handles late RevenueCat hydration).
+  const standalonePro = startStep === 'subscription';
+  useEffect(() => {
+    if (standalonePro && isPro) onComplete();
+  }, [standalonePro, isPro]);
 
-  // ── Notifications step animations ──
-  const notifFade = useRef(new Animated.Value(0)).current;
-  const notifSlide = useRef(new Animated.Value(30)).current;
-
-  // ── Subscription step animations ──
-  const subFade = useRef(new Animated.Value(0)).current;
-  const subSlide = useRef(new Animated.Value(30)).current;
+  // One shared enter animation, restarted per step.
+  const fade = useRef(new Animated.Value(0)).current;
+  const slide = useRef(new Animated.Value(24)).current;
 
   useEffect(() => {
-    if (step === 'features') {
-      Animated.sequence([
-        Animated.parallel([
-          Animated.timing(headerFade, { toValue: 1, duration: 500, useNativeDriver: true }),
-          Animated.timing(headerSlide, {
-            toValue: 0,
-            duration: 500,
-            easing: Easing.out(Easing.cubic),
-            useNativeDriver: true,
-          }),
-        ]),
-        Animated.stagger(
-          80,
-          featureAnims.map((anim) =>
-            Animated.timing(anim, {
-              toValue: 1,
-              duration: 350,
-              easing: Easing.out(Easing.cubic),
-              useNativeDriver: true,
-            })
-          )
-        ),
-        Animated.parallel([
-          Animated.timing(ctaFade, { toValue: 1, duration: 350, useNativeDriver: true }),
-          Animated.timing(ctaSlide, {
-            toValue: 0,
-            duration: 350,
-            easing: Easing.out(Easing.cubic),
-            useNativeDriver: true,
-          }),
-        ]),
-      ]).start();
-    }
+    fade.setValue(0);
+    slide.setValue(24);
+    Animated.parallel([
+      Animated.timing(fade, { toValue: 1, duration: 480, useNativeDriver: true }),
+      Animated.timing(slide, {
+        toValue: 0,
+        duration: 560,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
   }, [step]);
 
-  useEffect(() => {
-    if (step === 'notifications') {
-      notifFade.setValue(0);
-      notifSlide.setValue(30);
-      Animated.parallel([
-        Animated.timing(notifFade, { toValue: 1, duration: 500, useNativeDriver: true }),
-        Animated.timing(notifSlide, {
-          toValue: 0,
-          duration: 500,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }
-  }, [step]);
-
-  useEffect(() => {
-    if (step === 'subscription') {
-      subFade.setValue(0);
-      subSlide.setValue(30);
-      Animated.parallel([
-        Animated.timing(subFade, { toValue: 1, duration: 500, useNativeDriver: true }),
-        Animated.timing(subSlide, {
-          toValue: 0,
-          duration: 500,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }
-  }, [step]);
+  const enterStyle = { opacity: fade, transform: [{ translateY: slide }] };
 
   // ── Push permissions ──
   const requestPushPermissions = async () => {
@@ -286,7 +151,6 @@ export default function OnboardingScreen({ onComplete }: Props) {
 
   // ── Background image for subscription step ──
   const [bgImageUri, setBgImageUri] = useState<string | null>(null);
-
   useEffect(() => {
     if (step !== 'subscription') return;
     api.get(ENDPOINTS.GUEST_CONTENT).then(res => {
@@ -304,7 +168,7 @@ export default function OnboardingScreen({ onComplete }: Props) {
     }).catch(() => {});
   }, [step]);
 
-  // ── Subscription step handlers ──
+  // ── Subscription handlers ──
   const [paywallLoading, setPaywallLoading] = useState(false);
   const handleUnlockPro = async () => {
     if (paywallLoading) return;
@@ -318,950 +182,659 @@ export default function OnboardingScreen({ onComplete }: Props) {
   };
   const handleSkipPro = () => onComplete();
 
-  // ── FEATURES STEP ──
+  // ─────────────────────────────────────────────────────────────────────────────
+  // FEATURES
+  // ─────────────────────────────────────────────────────────────────────────────
   if (step === 'features') {
     return (
-      <View style={s.container}>
+      <View style={ui.screen}>
+        <View style={ui.glow} pointerEvents="none" />
         <ScrollView
           contentContainerStyle={[
-            s.scrollContent,
-            { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 },
+            ui.featuresScroll,
+            { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 },
           ]}
           showsVerticalScrollIndicator={false}
           bounces={false}
         >
-          {/* Header */}
-          <Animated.View
-            style={[s.header, { opacity: headerFade, transform: [{ translateY: headerSlide }] }]}
-          >
-            <View style={s.logoPill}>
+          {/* Top bar */}
+          <View style={ui.topBar}>
+            <View style={ui.brand}>
               <LinearGradient
-                colors={['#D4A017', '#F5CE50']}
+                colors={[GOLD_LIGHT, GOLD]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
-                style={s.logoIcon}
+                style={ui.brandMark}
               >
-                <Text style={s.logoLetter}>D</Text>
+                <Text style={ui.brandLetter}>D</Text>
               </LinearGradient>
-              <Text style={s.logoText}>DailyHistory</Text>
+              <Text style={ui.brandName}>DailyHistory</Text>
             </View>
-
-            <Text style={s.title}>Here's what{'\n'}you can do.</Text>
-            <Text style={s.subtitle}>A quick look at everything inside the app.</Text>
-          </Animated.View>
-
-          {/* Features */}
-          <View style={s.featuresContainer}>
-            {FEATURES.map((feature, i) => (
-              <FeatureRow key={i} feature={feature} animValue={featureAnims[i]} />
-            ))}
+            <Dots index={0} />
           </View>
 
+          <Animated.View style={enterStyle}>
+            {/* Headline */}
+            <View style={ui.headline}>
+              <Text style={ui.h1}>
+                Every day has a{'\n'}story worth{' '}
+                <Text style={ui.h1Gold}>telling.</Text>
+              </Text>
+              <Text style={ui.lede}>And we'll bring you the best of them — here's what's inside.</Text>
+            </View>
+
+            {/* Feature list — airy, borderless, hairline dividers */}
+            <View style={ui.list}>
+              {FEATURES.map((f, i) => {
+                const Icon = f.icon;
+                return (
+                  <View key={i}>
+                    <View style={ui.row}>
+                      <View style={ui.rowIcon}>
+                        <Icon color={GOLD} size={20} strokeWidth={2} />
+                      </View>
+                      <View style={ui.rowText}>
+                        <Text style={ui.rowTitle}>{f.title}</Text>
+                        <Text style={ui.rowDesc}>{f.desc}</Text>
+                      </View>
+                    </View>
+                    {i < FEATURES.length - 1 && <View style={ui.divider} />}
+                  </View>
+                );
+              })}
+            </View>
+          </Animated.View>
+
           {/* CTA */}
-          <Animated.View
-            style={[s.ctaArea, { opacity: ctaFade, transform: [{ translateY: ctaSlide }] }]}
-          >
-            <Pressable
-              onPress={() => setStep('notifications')}
-              style={({ pressed }) => [s.ctaButton, pressed && { opacity: 0.85 }]}
-            >
-              <Text style={s.ctaText}>Continue</Text>
-              <ChevronRight color="#0B0D11" size={18} strokeWidth={2.5} />
-            </Pressable>
+          <Animated.View style={[ui.ctaWrap, enterStyle]}>
+            <PrimaryButton label="Continue" onPress={() => setStep('notifications')} trailingChevron />
           </Animated.View>
         </ScrollView>
       </View>
     );
   }
 
-  // ── NOTIFICATIONS + SUBSCRIPTION STEPS ──
-  return (
-    <View style={s.container}>
-      {step === 'notifications' && (
-      <Animated.View
-        style={[
-          s.notifContent,
-          {
-            paddingTop: insets.top + 16,
-            paddingBottom: insets.bottom + 24,
-            opacity: notifFade,
-            transform: [{ translateY: notifSlide }],
-          },
-        ]}
-      >
-        {/* Skip */}
-        <View style={s.notifTopRow}>
-          <View style={{ flex: 1 }} />
-          <TouchableOpacity
-            onPress={handleSkipNotifs}
-            style={s.skipButton}
-            activeOpacity={0.5}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          >
-            <Text style={s.skipText}>Skip</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Hero */}
-        <View style={s.notifHero}>
-          <View style={s.notifIconArea}>
-            <PulseRing size={130} delay={0} duration={2800} />
-            <PulseRing size={130} delay={1400} duration={2800} />
-            <View style={s.notifRingOuter} />
-            <LinearGradient
-              colors={['#D4A017', '#F5CE50']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={s.notifIconCircle}
-            >
-              <Bell color="#0B0D11" size={28} strokeWidth={2.2} />
-            </LinearGradient>
-          </View>
-
-          <Text style={s.notifTitle}>
-            Never miss a{'\n'}
-            <Text style={s.notifTitleGold}>golden moment.</Text>
-          </Text>
-          <Text style={s.notifSubtitle}>
-            One story from history, delivered each morning.{'\n'}No noise, no clutter.
-          </Text>
-        </View>
-
-        {/* Feature cards */}
-        <View style={s.notifFeatures}>
-          <View style={s.notifFeatureCard}>
-            <View style={s.notifFeatureIconWrap}>
-              <Clock color="#D4A017" size={16} strokeWidth={2} />
-            </View>
-            <View style={s.notifFeatureTextWrap}>
-              <Text style={s.notifFeatureTitle}>Every morning at 9 AM</Text>
-              <Text style={s.notifFeatureDesc}>
-                Start your day with a fascinating piece of history
-              </Text>
-            </View>
-          </View>
-
-          <View style={s.notifFeatureCard}>
-            <View style={s.notifFeatureIconWrap}>
-              <ShieldCheck color="#D4A017" size={16} strokeWidth={2} />
-            </View>
-            <View style={s.notifFeatureTextWrap}>
-              <Text style={s.notifFeatureTitle}>No spam, ever</Text>
-              <Text style={s.notifFeatureDesc}>
-                One notification per day — we respect your attention
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* CTA */}
-        <View style={s.notifCtaArea}>
-          <Pressable
-            onPress={handleEnableNotifs}
-            style={({ pressed }) => [s.ctaButton, pressed && { opacity: 0.85 }]}
-          >
-            <Bell color="#0B0D11" size={17} strokeWidth={2.5} style={{ marginRight: 8 }} />
-            <Text style={s.ctaText}>Enable Notifications</Text>
-          </Pressable>
-
-          <TouchableOpacity onPress={handleSkipNotifs} activeOpacity={0.5} style={s.laterButton}>
-            <Text style={s.laterText}>I'll check manually</Text>
-          </TouchableOpacity>
-        </View>
-      </Animated.View>
-      )}
-
-      {step === 'subscription' && renderSubscriptionStep()}
-    </View>
-  );
-
-  // ── SUBSCRIPTION STEP — Liquid Glass Premium ──
-  function renderSubscriptionStep() {
-    const benefits = [
-      { icon: Sparkles,    title: 'Exclusive PRO stories',  desc: 'Curated premium events with deeper research and visuals.' },
-      { icon: MapIcon,     title: 'Unlock every category',  desc: 'Full access to all topics — science, art, war, culture.' },
-      { icon: ShieldCheck, title: 'Ad-free experience',     desc: 'Read without interruptions. Just history, nothing else.' },
-      { icon: Rocket,      title: 'Early access',           desc: 'Be the first to try new features as we release them.' },
-    ];
-
+  // ─────────────────────────────────────────────────────────────────────────────
+  // NOTIFICATIONS
+  // ─────────────────────────────────────────────────────────────────────────────
+  if (step === 'notifications') {
     return (
-      <View style={{ flex: 1 }}>
-        {/* Full-screen PRO event photo background */}
-        {bgImageUri ? (
-          <Image
-            source={{ uri: bgImageUri }}
-            style={StyleSheet.absoluteFill}
-            resizeMode="cover"
-          />
-        ) : (
-          /* Fallback solid dark gradient if no image yet */
-          <LinearGradient
-            colors={['#050308', '#0A0715', '#08050F']}
-            locations={[0, 0.5, 1]}
-            style={StyleSheet.absoluteFill}
-          />
-        )}
-
-        {/* Dark overlay so glass content stays readable */}
-        <LinearGradient
-          colors={['rgba(5,3,8,0.72)', 'rgba(10,7,21,0.80)', 'rgba(8,5,15,0.90)']}
-          locations={[0, 0.5, 1]}
-          style={StyleSheet.absoluteFill}
-          pointerEvents="none"
-        />
-
-        {/* Gold ambient glow — top center */}
-        <View style={gl.ambientGlow} pointerEvents="none" />
-
-        <Animated.View
-          style={[
-            gl.content,
-            {
-              paddingTop: insets.top + 12,
-              paddingBottom: insets.bottom + 20,
-              opacity: subFade,
-              transform: [{ translateY: subSlide }],
-            },
-          ]}
-        >
-          {/* Skip */}
-          <View style={s.notifTopRow}>
-            <View style={{ flex: 1 }} />
+      <View style={ui.screen}>
+        <View style={ui.glow} pointerEvents="none" />
+        <View style={[ui.pad, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 }]}>
+          {/* Top bar */}
+          <View style={ui.topBar}>
+            <Dots index={1} />
             <TouchableOpacity
-              onPress={handleSkipPro}
-              style={gl.skipBtn}
-              activeOpacity={0.5}
+              onPress={handleSkipNotifs}
+              style={ui.skip}
+              activeOpacity={0.6}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
-              <Text style={gl.skipTxt}>Skip</Text>
+              <Text style={ui.skipText}>Skip</Text>
             </TouchableOpacity>
           </View>
 
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 16 }}
-            bounces={false}
-          >
-            {/* ── Hero ── */}
-            <View style={gl.hero}>
-              {/* Crown glass orb */}
-              <View style={gl.orbWrap}>
-                {/* Outer glow ring */}
-                <View style={[gl.orbRing, { width: 120, height: 120, borderRadius: 60, borderColor: 'rgba(212,168,67,0.12)' }]} />
-                <View style={[gl.orbRing, { width: 90, height: 90, borderRadius: 45, borderColor: 'rgba(212,168,67,0.20)' }]} />
-                {/* Glass orb */}
-                <View style={gl.glassOrb}>
-                  <LinearGradient
-                    colors={['rgba(255,255,255,0.18)', 'rgba(255,255,255,0.04)', 'rgba(212,168,67,0.15)']}
-                    locations={[0, 0.4, 1]}
-                    style={StyleSheet.absoluteFill}
-                  />
-                  {/* Specular highlight */}
-                  <LinearGradient
-                    colors={['rgba(255,255,255,0.28)', 'transparent']}
-                    locations={[0, 0.5]}
-                    style={gl.orbSpecular}
-                  />
-                  <Crown color="#D4A843" size={28} strokeWidth={1.8} />
+          <Animated.View style={[ui.notifBody, enterStyle]}>
+            {/* Hero icon */}
+            <View style={ui.notifIconWrap}>
+              <View style={ui.notifIconGlow} />
+              <LinearGradient
+                colors={[GOLD_LIGHT, GOLD]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={ui.notifIcon}
+              >
+                <Bell color={INK} size={30} strokeWidth={2.2} />
+              </LinearGradient>
+            </View>
+
+            <Text style={ui.notifH1}>
+              Wake up to{'\n'}
+              <Text style={ui.h1Gold}>history.</Text>
+            </Text>
+            <Text style={ui.notifLede}>
+              One story each morning — the one worth knowing. No spam, no noise.
+            </Text>
+
+            {/* Realistic push preview */}
+            <View style={ui.preview}>
+              <LinearGradient
+                colors={[GOLD_LIGHT, GOLD]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={ui.previewIcon}
+              >
+                <Text style={ui.previewIconLetter}>D</Text>
+              </LinearGradient>
+              <View style={ui.previewBody}>
+                <View style={ui.previewTop}>
+                  <Text style={ui.previewApp}>DailyHistory</Text>
+                  <Text style={ui.previewTime}>9:00 AM</Text>
                 </View>
+                <Text style={ui.previewTitle}>On this day · 1969</Text>
+                <Text style={ui.previewMsg} numberOfLines={2}>
+                  Apollo 11 lands on the Moon — humanity's first steps on another world.
+                </Text>
               </View>
-
-              {/* PRO badge pill */}
-              <View style={gl.proPill}>
-                <LinearGradient
-                  colors={['rgba(212,168,67,0.22)', 'rgba(212,168,67,0.10)']}
-                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                  style={StyleSheet.absoluteFill}
-                />
-                <View style={gl.proPillShine} />
-                <Sparkles color="#D4A843" size={10} strokeWidth={2.5} />
-                <Text style={gl.proPillText}>DAILY HISTORY PRO</Text>
-              </View>
-
-              <Text style={gl.heroTitle}>
-                History,{'\n'}
-                <Text style={gl.heroTitleGold}>without limits.</Text>
-              </Text>
-              <Text style={gl.heroSub}>
-                One upgrade. Every story, unlocked.
-              </Text>
             </View>
+          </Animated.View>
 
-            {/* ── Liquid glass benefit cards ── */}
-            <View style={gl.benefitsList}>
-              {benefits.map((b, i) => {
-                const Icon = b.icon;
-                return (
-                  <View key={i} style={gl.glassCard}>
-                    {/* Glass fill */}
-                    <LinearGradient
-                      colors={['rgba(255,255,255,0.07)', 'rgba(255,255,255,0.025)']}
-                      locations={[0, 1]}
-                      style={StyleSheet.absoluteFill}
-                    />
-                    {/* Top specular shine */}
-                    <LinearGradient
-                      colors={['rgba(255,255,255,0.10)', 'transparent']}
-                      locations={[0, 0.6]}
-                      style={gl.cardTopShine}
-                    />
-                    {/* Gold left accent line */}
-                    <View style={gl.cardAccentLine} />
-
-                    <View style={gl.cardIconWrap}>
-                      <LinearGradient
-                        colors={['rgba(212,168,67,0.22)', 'rgba(212,168,67,0.08)']}
-                        style={StyleSheet.absoluteFill}
-                      />
-                      <Icon color="#D4A843" size={16} strokeWidth={2} />
-                    </View>
-
-                    <View style={{ flex: 1 }}>
-                      <Text style={gl.cardTitle}>{b.title}</Text>
-                      <Text style={gl.cardDesc}>{b.desc}</Text>
-                    </View>
-
-                    <CheckCircle2 color="#D4A843" size={16} strokeWidth={2} />
-                  </View>
-                );
-              })}
-            </View>
-          </ScrollView>
-
-          {/* ── CTA ── */}
-          <View style={gl.ctaArea}>
-            {/* CTA gold glow */}
-            <View style={gl.ctaGlow} pointerEvents="none" />
-
-            <Pressable
-              onPress={handleUnlockPro}
-              disabled={paywallLoading}
-              style={({ pressed }) => [gl.ctaBtn, pressed && { opacity: 0.88 }, paywallLoading && { opacity: 0.7 }]}
-            >
-              <LinearGradient
-                colors={['#F5CE50', '#D4A017', '#C49010']}
-                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                style={StyleSheet.absoluteFill}
-              />
-              {/* Specular shine on button */}
-              <LinearGradient
-                colors={['rgba(255,255,255,0.25)', 'transparent']}
-                locations={[0, 0.5]}
-                style={gl.btnShine}
-              />
-              {paywallLoading ? (
-                <ActivityIndicator color="#0B0D11" size="small" />
-              ) : (
-                <>
-                  <Crown color="#0B0D11" size={16} strokeWidth={2.5} />
-                  <Text style={gl.ctaBtnText}>Unlock PRO</Text>
-                </>
-              )}
-            </Pressable>
-
-            <TouchableOpacity onPress={handleSkipPro} activeOpacity={0.5} style={s.laterButton}>
-              <Text style={gl.laterTxt}>Continue with free</Text>
+          {/* CTA */}
+          <Animated.View style={enterStyle}>
+            <PrimaryButton label="Turn on notifications" onPress={handleEnableNotifs} leadingIcon={Bell} />
+            <TouchableOpacity onPress={handleSkipNotifs} activeOpacity={0.6} style={ui.ghostBtn}>
+              <Text style={ui.ghostText}>Not now</Text>
             </TouchableOpacity>
-          </View>
-        </Animated.View>
+          </Animated.View>
+        </View>
       </View>
     );
   }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // SUBSCRIPTION — minimalist image paywall
+  // ─────────────────────────────────────────────────────────────────────────────
+  const benefits = [
+    'Every story, every day — fully unlocked',
+    'All topics: science, art, war, culture & more',
+    'No ads getting in the way',
+    'First to try every new feature',
+  ];
+
+  return (
+    <View style={ui.screen}>
+      {/* Photo */}
+      {bgImageUri ? (
+        <Image source={{ uri: bgImageUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+      ) : (
+        <LinearGradient colors={['#1C1608', INK]} locations={[0, 1]} style={StyleSheet.absoluteFill} />
+      )}
+
+      {/* Readability fade anchored to the bottom */}
+      <LinearGradient
+        colors={['rgba(10,11,14,0.10)', 'rgba(10,11,14,0.72)', 'rgba(10,11,14,0.99)']}
+        locations={[0, 0.4, 0.76]}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
+
+      <Animated.View
+        style={[
+          ui.pad,
+          { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20, flex: 1 },
+          { opacity: fade },
+        ]}
+      >
+        {/* Top bar */}
+        <View style={ui.topBar}>
+          {standalonePro ? <View /> : <Dots index={2} />}
+          <TouchableOpacity
+            onPress={handleSkipPro}
+            style={ui.skipOnPhoto}
+            activeOpacity={0.6}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Text style={ui.skipText}>Skip</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Bottom-anchored content */}
+        <Animated.View style={[ui.proBottom, { transform: [{ translateY: slide }] }]}>
+          <View style={ui.proTag}>
+            <Crown color={GOLD} size={14} strokeWidth={2.4} />
+            <Text style={ui.proTagText}>DAILY HISTORY PRO</Text>
+          </View>
+
+          <Text style={ui.proH1}>
+            Go beyond{'\n'}the <Text style={ui.h1Gold}>headlines.</Text>
+          </Text>
+          <Text style={ui.proLede}>
+            Pro opens up every story and every topic — no limits, no ads, just history.
+          </Text>
+
+          <View style={ui.proList}>
+            {benefits.map((b, i) => (
+              <View key={i} style={ui.proRow}>
+                <View style={ui.proCheck}>
+                  <Check color={INK} size={12} strokeWidth={3} />
+                </View>
+                <Text style={ui.proRowText}>{b}</Text>
+              </View>
+            ))}
+          </View>
+
+          <PrimaryButton
+            label="Start Daily History Pro"
+            onPress={handleUnlockPro}
+            loading={paywallLoading}
+          />
+          <Text style={ui.reassure}>Cancel anytime · No commitment</Text>
+          <TouchableOpacity onPress={handleSkipPro} activeOpacity={0.6} style={ui.ghostBtn}>
+            <Text style={ui.ghostTextDim}>Maybe later</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      </Animated.View>
+    </View>
+  );
 }
 
-// ─── STYLES ──────────────────────────────────────────────────────────────────
-const s = StyleSheet.create({
-  container: {
+// ── Shared primary button ─────────────────────────────────────────────────────
+function PrimaryButton({
+  label,
+  onPress,
+  loading,
+  leadingIcon: Leading,
+  trailingChevron,
+}: {
+  label: string;
+  onPress: () => void;
+  loading?: boolean;
+  leadingIcon?: typeof Bell;
+  trailingChevron?: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={loading}
+      style={({ pressed }) => [ui.cta, pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] }, loading && { opacity: 0.7 }]}
+    >
+      <LinearGradient
+        colors={[GOLD_LIGHT, GOLD]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      {loading ? (
+        <ActivityIndicator color={INK} size="small" />
+      ) : (
+        <>
+          {Leading && <Leading color={INK} size={18} strokeWidth={2.4} style={{ marginRight: 8 }} />}
+          <Text style={ui.ctaText}>{label}</Text>
+          {trailingChevron && <ChevronRight color={INK} size={18} strokeWidth={2.6} style={{ marginLeft: 4 }} />}
+        </>
+      )}
+    </Pressable>
+  );
+}
+
+// ─── STYLES ───────────────────────────────────────────────────────────────────
+const ui = StyleSheet.create({
+  screen: {
     flex: 1,
-    backgroundColor: '#0B0D11',
+    backgroundColor: INK,
   },
-  scrollContent: {
-    paddingHorizontal: 24,
+  glow: {
+    position: 'absolute',
+    top: -120,
+    alignSelf: 'center',
+    width: W * 1.1,
+    height: W * 1.1,
+    borderRadius: W,
+    backgroundColor: GOLD,
+    opacity: 0.06,
+  },
+  pad: {
+    flex: 1,
+    paddingHorizontal: 26,
+  },
+  featuresScroll: {
+    paddingHorizontal: 26,
     flexGrow: 1,
   },
 
-  // ── Features step ──
-  header: {
-    marginBottom: 28,
-  },
-  logoPill: {
+  // Top bar
+  topBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 100,
-    paddingRight: 14,
-    paddingLeft: 4,
-    paddingVertical: 4,
-    marginBottom: 28,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    justifyContent: 'space-between',
+    marginBottom: 30,
   },
-  logoIcon: {
+  brand: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+  },
+  brandMark: {
     width: 28,
     height: 28,
-    borderRadius: 100,
+    borderRadius: 9,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 8,
   },
-  logoLetter: {
-    fontSize: 14,
+  brandLetter: {
+    fontSize: 15,
     fontWeight: '800',
-    color: '#0B0D11',
+    color: INK,
     letterSpacing: -0.5,
   },
-  logoText: {
-    fontSize: 13,
+  brandName: {
+    fontSize: 14,
     fontWeight: '600',
-    color: 'rgba(255,255,255,0.5)',
-    letterSpacing: 0.1,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: -0.8,
-    lineHeight: 39,
-    marginBottom: 10,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#6B6F7B',
-    lineHeight: 23,
+    color: 'rgba(255,255,255,0.55)',
     letterSpacing: 0.1,
   },
 
-  featuresContainer: {
-    gap: 6,
-    marginBottom: 28,
-  },
-  featureRow: {
+  // Progress dots
+  dots: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    backgroundColor: '#13151B',
-    borderWidth: 1,
-    borderColor: '#1A1D25',
-    gap: 14,
-  },
-  featureIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-  },
-  featureText: {
-    flex: 1,
-  },
-  featureTitle: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '600',
-    letterSpacing: 0.1,
-    marginBottom: 3,
-  },
-  featureDesc: {
-    color: '#555B67',
-    fontSize: 13,
-    lineHeight: 19,
-    letterSpacing: 0.1,
-  },
-
-  ctaArea: {
-    marginTop: 'auto',
-    paddingTop: 8,
-  },
-  ctaButton: {
-    backgroundColor: '#D4A017',
-    borderRadius: 14,
-    height: 54,
-    flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
     gap: 6,
-    shadowColor: '#D4A017',
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
   },
-  ctaText: {
-    color: '#0B0D11',
-    fontWeight: '700',
-    fontSize: 16,
-    letterSpacing: 0.1,
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  dotActive: {
+    width: 20,
+    backgroundColor: GOLD,
   },
 
-  // ── Notifications step ──
-  notifContent: {
-    flex: 1,
-    paddingHorizontal: 24,
+  // Skip
+  skip: {
+    paddingVertical: 7,
+    paddingHorizontal: 15,
+    borderRadius: 100,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.10)',
   },
-  notifTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  skipButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    backgroundColor: '#13151B',
-    borderWidth: 1,
-    borderColor: '#1E2028',
+  skipOnPhoto: {
+    paddingVertical: 7,
+    paddingHorizontal: 15,
+    borderRadius: 100,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.14)',
   },
   skipText: {
-    color: '#6B6F7B',
+    color: 'rgba(255,255,255,0.65)',
     fontSize: 13,
     fontWeight: '600',
     letterSpacing: 0.2,
   },
 
-  notifHero: {
-    alignItems: 'center',
-    flex: 1,
-    justifyContent: 'center',
+  // Headline
+  headline: {
+    marginBottom: 12,
   },
-  notifIconArea: {
-    width: 150,
-    height: 150,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 32,
+  h1: {
+    fontSize: 33,
+    fontWeight: '800',
+    color: '#FAFAFA',
+    letterSpacing: -1,
+    lineHeight: 40,
+    marginBottom: 12,
   },
-  notifRingOuter: {
-    position: 'absolute',
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+  h1Gold: {
+    color: GOLD,
+  },
+  lede: {
+    fontSize: 15.5,
+    color: '#8A8F9C',
+    lineHeight: 23,
+    letterSpacing: 0.1,
+    maxWidth: W * 0.82,
+  },
+
+  // Feature list
+  list: {
+    marginTop: 18,
+    marginBottom: 24,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 15,
+    gap: 16,
+  },
+  rowIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(212,160,23,0.10)',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(212, 160, 23, 0.12)',
+    borderColor: 'rgba(212,160,23,0.20)',
   },
-  notifIconCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 18,
+  rowText: {
+    flex: 1,
+  },
+  rowTitle: {
+    color: '#F4F4F5',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.1,
+    marginBottom: 3,
+  },
+  rowDesc: {
+    color: '#7C8290',
+    fontSize: 13.5,
+    lineHeight: 19,
+    letterSpacing: 0.1,
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    marginLeft: 62,
+  },
+
+  // CTA shared
+  ctaWrap: {
+    marginTop: 'auto',
+    paddingTop: 8,
+  },
+  cta: {
+    height: 56,
+    borderRadius: 16,
+    flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#D4A017',
-    shadowOpacity: 0.35,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 4 },
+    overflow: 'hidden',
+    shadowColor: GOLD,
+    shadowOpacity: 0.28,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
+  },
+  ctaText: {
+    color: INK,
+    fontWeight: '800',
+    fontSize: 16,
+    letterSpacing: 0.2,
+  },
+  ghostBtn: {
+    alignItems: 'center',
+    paddingVertical: 14,
+    marginTop: 2,
+  },
+  ghostText: {
+    color: '#5C616D',
+    fontSize: 14.5,
+    fontWeight: '600',
+  },
+  ghostTextDim: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 14.5,
+    fontWeight: '600',
+  },
+
+  // Notifications
+  notifBody: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notifIconWrap: {
+    width: 96,
+    height: 96,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 30,
+  },
+  notifIconGlow: {
+    position: 'absolute',
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: GOLD,
+    opacity: 0.16,
+  },
+  notifIcon: {
+    width: 68,
+    height: 68,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: GOLD,
+    shadowOpacity: 0.4,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 6 },
     elevation: 12,
   },
-  notifTitle: {
-    fontSize: 32,
+  notifH1: {
+    fontSize: 33,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: '#FAFAFA',
     letterSpacing: -1,
     lineHeight: 40,
     textAlign: 'center',
     marginBottom: 12,
   },
-  notifTitleGold: {
-    color: '#D4A017',
-  },
-  notifSubtitle: {
-    fontSize: 15,
-    color: '#6B6F7B',
+  notifLede: {
+    fontSize: 15.5,
+    color: '#8A8F9C',
     lineHeight: 23,
     textAlign: 'center',
     letterSpacing: 0.1,
     maxWidth: W * 0.8,
+    marginBottom: 34,
   },
 
-  notifFeatures: {
-    gap: 8,
-    marginBottom: 28,
-  },
-  notifFeatureCard: {
+  // Push preview card
+  preview: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#13151B',
-    borderRadius: 14,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#1E2028',
-    gap: 14,
+    gap: 12,
+    width: '100%',
+    padding: 14,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.045)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.09)',
   },
-  notifFeatureIconWrap: {
-    width: 38,
-    height: 38,
+  previewIcon: {
+    width: 40,
+    height: 40,
     borderRadius: 11,
-    backgroundColor: 'rgba(212, 160, 23, 0.07)',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(212, 160, 23, 0.12)',
   },
-  notifFeatureTextWrap: {
+  previewIconLetter: {
+    fontSize: 19,
+    fontWeight: '800',
+    color: INK,
+    letterSpacing: -0.5,
+  },
+  previewBody: {
     flex: 1,
   },
-  notifFeatureTitle: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-    fontSize: 14,
-    letterSpacing: 0.1,
+  previewTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 3,
   },
-  notifFeatureDesc: {
-    color: '#555B67',
-    fontSize: 13,
-    lineHeight: 18,
-    letterSpacing: 0.1,
-  },
-
-  notifCtaArea: {
-    gap: 0,
-  },
-  laterButton: {
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  laterText: {
-    color: '#444854',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-
-  // ── Subscription step ──
-  subContent: {
-    flex: 1,
-    paddingHorizontal: 24,
-  },
-  subHero: {
-    alignItems: 'center',
-    paddingTop: 8,
-    paddingBottom: 20,
-  },
-  subCrownWrap: {
-    marginBottom: 22,
-  },
-  subCrownCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#D4A017',
-    shadowOpacity: 0.45,
-    shadowRadius: 22,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 12,
-  },
-  subBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 100,
-    backgroundColor: 'rgba(212, 160, 23, 0.08)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(212, 160, 23, 0.2)',
-    marginBottom: 18,
-  },
-  subBadgeT: {
-    color: '#D4A017',
-    fontSize: 9.5,
-    fontWeight: '800',
-    letterSpacing: 2,
-  },
-  subTitle: {
-    fontSize: 30,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: -0.8,
-    lineHeight: 38,
-    textAlign: 'center',
-    marginBottom: 10,
-  },
-  subTitleGold: {
-    color: '#D4A017',
-  },
-  subSubtitle: {
-    fontSize: 14,
-    color: '#6B6F7B',
-    lineHeight: 21,
-    textAlign: 'center',
-    letterSpacing: 0.1,
-    maxWidth: W * 0.85,
-  },
-  subBenefits: {
-    gap: 8,
-    marginTop: 8,
-  },
-  subBenefitRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#13151B',
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#1E2028',
-    gap: 12,
-  },
-  subBenefitIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: 'rgba(212, 160, 23, 0.08)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(212, 160, 23, 0.15)',
-  },
-  subBenefitTitle: {
-    color: '#FFFFFF',
-    fontWeight: '600',
+  previewApp: {
+    color: '#F4F4F5',
     fontSize: 13.5,
-    letterSpacing: 0.1,
-    marginBottom: 2,
-  },
-  subBenefitDesc: {
-    color: '#555B67',
-    fontSize: 12,
-    lineHeight: 17,
-    letterSpacing: 0.1,
-  },
-  subCtaArea: {
-    paddingTop: 8,
-  },
-});
-
-// ── Liquid Glass styles ───────────────────────────────────────────────────────
-const gl = StyleSheet.create({
-  content: {
-    flex: 1,
-    paddingHorizontal: 22,
-  },
-
-  ambientGlow: {
-    position: 'absolute',
-    top: -60,
-    alignSelf: 'center',
-    width: 280,
-    height: 280,
-    borderRadius: 140,
-    backgroundColor: '#D4A843',
-    opacity: 0.07,
-  },
-
-  skipBtn: {
-    paddingVertical: 7,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.10)',
-  },
-  skipTxt: {
-    color: 'rgba(255,255,255,0.4)',
-    fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
     letterSpacing: 0.2,
   },
-
-  // Hero
-  hero: {
-    alignItems: 'center',
-    paddingTop: 8,
-    paddingBottom: 24,
+  previewTime: {
+    color: '#6B7080',
+    fontSize: 12,
+    fontWeight: '500',
   },
-  orbWrap: {
-    width: 130,
-    height: 130,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
+  previewTitle: {
+    color: GOLD,
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 2,
   },
-  orbRing: {
-    position: 'absolute',
-    borderWidth: 1,
-  },
-  glassOrb: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.20)',
-    ...Platform.select({
-      ios: { shadowColor: '#D4A843', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.6, shadowRadius: 22 },
-      android: { elevation: 14 },
-    }),
-  },
-  orbSpecular: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: '50%',
-    borderTopLeftRadius: 34,
-    borderTopRightRadius: 34,
+  previewMsg: {
+    color: '#A6ABB6',
+    fontSize: 13.5,
+    lineHeight: 19,
   },
 
-  proPill: {
+  // Subscription
+  proBottom: {
+    marginTop: 'auto',
+  },
+  proTag: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 100,
-    overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(212,168,67,0.30)',
-    marginBottom: 18,
+    gap: 7,
+    marginBottom: 14,
   },
-  proPillShine: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0,
-    height: '50%',
-    backgroundColor: 'rgba(255,255,255,0.06)',
+  proTagText: {
+    color: GOLD,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 2.4,
   },
-  proPillText: {
-    color: '#D4A843',
-    fontSize: 9.5,
-    fontWeight: '900',
-    letterSpacing: 2.2,
-  },
-
-  heroTitle: {
+  proH1: {
     fontSize: 34,
     fontWeight: '800',
     color: '#FFFFFF',
     letterSpacing: -1,
-    lineHeight: 42,
-    textAlign: 'center',
-    marginBottom: 10,
+    lineHeight: 40,
+    marginBottom: 12,
     ...Platform.select({
-      ios: { textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 8 },
+      ios: { textShadowColor: 'rgba(0,0,0,0.45)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 12 },
     }),
   },
-  heroTitleGold: {
-    color: '#D4A843',
+  proLede: {
+    fontSize: 15.5,
+    color: 'rgba(255,255,255,0.72)',
+    lineHeight: 23,
+    letterSpacing: 0.1,
+    marginBottom: 26,
+    maxWidth: W * 0.92,
   },
-  heroSub: {
-    fontSize: 15,
-    color: 'rgba(255,255,255,0.38)',
-    textAlign: 'center',
-    letterSpacing: 0.2,
-    lineHeight: 22,
-  },
-
-  // Benefit cards
-  benefitsList: {
-    gap: 10,
-    marginBottom: 8,
-  },
-  glassCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  proList: {
     gap: 14,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    borderRadius: 18,
-    overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.10)',
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 12 },
-      android: { elevation: 4 },
-    }),
+    marginBottom: 30,
   },
-  cardTopShine: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0,
-    height: 36,
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
-  },
-  cardAccentLine: {
-    position: 'absolute',
-    left: 0,
-    top: 14,
-    bottom: 14,
-    width: 2,
-    borderRadius: 1,
-    backgroundColor: '#D4A843',
-    opacity: 0.7,
-  },
-  cardIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(212,168,67,0.25)',
-  },
-  cardTitle: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 14,
-    letterSpacing: 0.1,
-    marginBottom: 3,
-  },
-  cardDesc: {
-    color: 'rgba(255,255,255,0.38)',
-    fontSize: 12,
-    lineHeight: 17,
-    letterSpacing: 0.1,
-  },
-
-  // CTA
-  ctaArea: {
-    paddingTop: 10,
-    gap: 0,
-  },
-  ctaGlow: {
-    position: 'absolute',
-    top: -10,
-    alignSelf: 'center',
-    width: 200,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#D4A843',
-    opacity: 0.18,
-  },
-  ctaBtn: {
-    height: 56,
-    borderRadius: 16,
+  proRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
+  },
+  proCheck: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: GOLD,
+    alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: { shadowColor: '#D4A843', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.45, shadowRadius: 18 },
-      android: { elevation: 10 },
-    }),
   },
-  btnShine: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0,
-    height: '50%',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+  proRowText: {
+    flex: 1,
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '500',
+    letterSpacing: 0.1,
   },
-  ctaBtnText: {
-    color: '#0A0510',
-    fontWeight: '900',
-    fontSize: 16,
-    letterSpacing: 0.3,
-  },
-  laterTxt: {
-    color: 'rgba(255,255,255,0.28)',
-    fontSize: 14,
+  reassure: {
+    color: 'rgba(255,255,255,0.45)',
+    fontSize: 12.5,
     fontWeight: '500',
     textAlign: 'center',
+    letterSpacing: 0.2,
+    marginTop: 12,
   },
 });

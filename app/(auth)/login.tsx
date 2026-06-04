@@ -153,6 +153,8 @@ export default function LoginScreen() {
       const { token, accessToken, ...userData } = res.data;
       const finalToken = token || accessToken;
       if (finalToken) {
+        // Email login is always an existing account → skip to PRO step only.
+        useAuthStore.getState().setIsNewAccount(false);
         setAuth(finalToken, userData);
         // Don't navigate — _layout.tsx will detect the token and show onboarding
       }

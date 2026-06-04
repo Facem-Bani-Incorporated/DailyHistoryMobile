@@ -34,6 +34,8 @@ export const authService = {
         provider: userFromBackend.provider ?? 'google',
       };
 
+      // Backend tells us whether it just created the account (didn't exist in DB).
+      useAuthStore.getState().setIsNewAccount(!!res.data.newUser);
       useAuthStore.getState().setAuth(token, userData);
 
       console.log('USER SALVAT IN ZUSTAND (CU FIX):', userData);
@@ -69,6 +71,8 @@ export const authService = {
         provider: 'apple',
       };
 
+      // Backend tells us whether it just created the account (didn't exist in DB).
+      useAuthStore.getState().setIsNewAccount(!!res.data.newUser);
       useAuthStore.getState().setAuth(token, userData);
       return res.data;
     } catch (error: any) {

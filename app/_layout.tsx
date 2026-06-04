@@ -22,6 +22,9 @@ function AppContent() {
   const { theme } = useTheme();
   const [isReady, setIsReady] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  // null = still resolving from AsyncStorage; 'full' = new account (features →
+  // notifications → PRO); 'proOnly' = returning account (just the PRO upsell).
+  const [onboardingMode, setOnboardingMode] = useState<'full' | 'proOnly' | null>(null);
 
   const prevTokenRef = useRef<string | null | undefined>(undefined);
   const onboardingActiveRef = useRef(false);
@@ -117,6 +120,9 @@ function AppContent() {
 
     if (wasLoggedOut && isNowLoggedIn && !onboardingActiveRef.current) {
       onboardingActiveRef.current = true;
+      // New account (didn't exist in DB) → full onboarding; existing → PRO only.
+      const isNew = useAuthStore.getState().isNewAccount;
+      setOnboardingMode(isNew ? 'full' : 'proOnly');
       setShowOnboarding(true);
     }
 
@@ -150,11 +156,18 @@ function AppContent() {
   }
 
   if (showOnboarding && token) {
+    // Mode still resolving from AsyncStorage — hold on a matching dark frame
+    // (imperceptible) instead of flashing the wrong first screen.
+    if (onboardingMode === null) {
+      return <View style={{ flex: 1, backgroundColor: '#0A0B0E' }} />;
+    }
     return (
       <OnboardingScreen
+        startStep={onboardingMode === 'proOnly' ? 'subscription' : 'features'}
         onComplete={() => {
           onboardingActiveRef.current = false;
           setShowOnboarding(false);
+          setOnboardingMode(null);
           router.replace('/(main)');
         }}
       />

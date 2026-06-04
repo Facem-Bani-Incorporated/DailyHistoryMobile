@@ -20,6 +20,10 @@ interface AuthState {
   token: string | null;
   user: User | null;
   isAuthenticated: boolean;
+  // Whether the most recent sign-in created a brand-new account (did not exist
+  // in the DB). Drives whether the full onboarding shows or just the PRO step.
+  isNewAccount: boolean;
+  setIsNewAccount: (v: boolean) => void;
   setAuth: (token: string, user: User) => void;
   updateUser: (patch: Partial<User>) => void;
   logout: () => void;
@@ -32,6 +36,8 @@ export const useAuthStore = create<AuthState>()(
       token: null,
       user: null,
       isAuthenticated: false,
+      isNewAccount: false,
+      setIsNewAccount: (v) => set({ isNewAccount: v }),
       setAuth: (token, user) =>
         set({
           token,

@@ -192,6 +192,8 @@ export default function RegisterScreen() {
         const { token, accessToken, ...userData } = res.data;
         const finalToken = token || accessToken;
         if (finalToken) {
+          // Just registered → brand-new account → show full onboarding.
+          useAuthStore.getState().setIsNewAccount(true);
           setAuth(finalToken, userData);
           // Don't navigate — _layout.tsx will detect the token and show onboarding
         } else {
