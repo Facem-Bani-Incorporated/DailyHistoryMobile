@@ -46,5 +46,12 @@
 	<array/>
 	<key>NSPrivacyTracking</key>
 	<true/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array>
+		<string>googlesyndication.com</string>
+		<string>googleadservices.com</string>
+		<string>doubleclick.net</string>
+		<string>google-analytics.com</string>
+	</array>
 </dict>
 </plist>
