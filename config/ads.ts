@@ -8,13 +8,13 @@ const USE_TEST_IDS = false;
 
 const PRODUCTION_IDS = {
   BANNER: Platform.OS === 'ios'
-    ? 'ca-app-pub-2338557822432313/3671068145'
+    ? 'ca-app-pub-2338557822432313/1803196514'
     : 'ca-app-pub-2338557822432313/1375182105',
   INTERSTITIAL: Platform.OS === 'ios'
-    ? 'ca-app-pub-2338557822432313/6825424108'
+    ? 'ca-app-pub-2338557822432313/4583639616'
     : 'ca-app-pub-2338557822432313/3442955557',
   REWARDED: Platform.OS === 'ios'
-    ? 'ca-app-pub-2338557822432313/8053685806'
+    ? 'ca-app-pub-2338557822432313/7053890286'
     : 'ca-app-pub-2338557822432313/4532675945',
 };
 

@@ -50,6 +50,8 @@
     <false/>
     <key>NSUserTrackingUsageDescription</key>
     <string>Allow tracking so we can show you ads that are more relevant to you. Your data is never sold.</string>
+    <key>GADApplicationIdentifier</key>
+    <string>ca-app-pub-2338557822432313~4855102353</string>
     <key>LSMinimumSystemVersion</key>
     <string>12.0</string>
     <key>LSRequiresIPhoneOS</key>
