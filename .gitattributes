@@ -1,0 +1,8 @@
+# Files sourced by /bin/sh during the iOS/Android build must use LF endings.
+# A CRLF in ios/.xcode.env breaks Xcode build-phase scripts on the EAS macOS
+# builder with ": command not found" (EAS iOS build failure). Force LF so a
+# Windows checkout (core.autocrlf=true) can never reintroduce CRLF here.
+ios/.xcode.env       text eol=lf
+ios/.xcode.env.local text eol=lf
+*.sh                 text eol=lf
+android/gradlew      text eol=lf
