@@ -46,6 +46,23 @@ const tx = (l: string, k: string) => (T[l] ?? T.en)[k] ?? T.en[k] ?? k;
 
 type Screen = 'form' | 'sending' | 'success' | 'error';
 
+// iOS cannot present a second native <Modal> on top of an already-presented one
+// (this component is opened from ProfileModal, which is itself a Modal) — the support
+// screen never appears and the button looks unresponsive on iPad. On iOS we render an
+// in-tree full-screen overlay instead. Android stacks Modals fine, so keep the native
+// Modal there. Defined at module scope so children are NOT remounted on every render.
+function Shell({ visible, children }: { visible: boolean; children: React.ReactNode }) {
+  if (Platform.OS !== 'ios') {
+    return (
+      <Modal visible={visible} animationType="slide" transparent={false} statusBarTranslucent>
+        {children}
+      </Modal>
+    );
+  }
+  if (!visible) return null;
+  return <View style={st.iosOverlay}>{children}</View>;
+}
+
 export default function SupportModal({ visible, onClose }: Props) {
   const { theme, isDark } = useTheme();
   const { language } = useLanguage();
@@ -119,7 +136,7 @@ export default function SupportModal({ visible, onClose }: Props) {
   // ── SENDING ──
   if (screen === 'sending') {
     return (
-      <Modal visible={visible} animationType="slide" transparent={false} statusBarTranslucent>
+      <Shell visible={visible}>
         <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} translucent backgroundColor="transparent" />
         <View style={[st.root, st.center, { backgroundColor: theme.background, paddingTop: insets.top }]}>
           <View style={[st.sendingRing, { borderColor: `${gold}30` }]}>
@@ -127,7 +144,7 @@ export default function SupportModal({ visible, onClose }: Props) {
           </View>
           <Text style={[st.sendingText, { color: theme.subtext }]}>{tx(language, 'sending')}</Text>
         </View>
-      </Modal>
+      </Shell>
     );
   }
 
@@ -136,7 +153,7 @@ export default function SupportModal({ visible, onClose }: Props) {
     const ok = screen === 'success';
     const accent = ok ? '#34C759' : '#FF3B30';
     return (
-      <Modal visible={visible} animationType="slide" transparent={false} statusBarTranslucent>
+      <Shell visible={visible}>
         <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} translucent backgroundColor="transparent" />
         <View style={[st.root, st.center, { backgroundColor: theme.background, paddingTop: insets.top }]}>
           <Animated.View style={{ alignItems: 'center', opacity: resultFade, transform: [{ scale: resultScale }] }}>
@@ -156,13 +173,13 @@ export default function SupportModal({ visible, onClose }: Props) {
             </TouchableOpacity>
           </Animated.View>
         </View>
-      </Modal>
+      </Shell>
     );
   }
 
   // ── FORM ──
   return (
-    <Modal visible={visible} animationType="slide" transparent={false} statusBarTranslucent>
+    <Shell visible={visible}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} translucent backgroundColor="transparent" />
       <View style={[st.root, { backgroundColor: theme.background, paddingTop: insets.top }]}>
 
@@ -285,11 +302,13 @@ export default function SupportModal({ visible, onClose }: Props) {
           </ScrollView>
         </KeyboardAvoidingView>
       </View>
-    </Modal>
+    </Shell>
   );
 }
 
 const st = StyleSheet.create({
+  // iOS-only: full-screen in-tree overlay used instead of a stacked native Modal.
+  iosOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 200 },
   root: { flex: 1 },
   flex: { flex: 1 },
   center: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 36 },

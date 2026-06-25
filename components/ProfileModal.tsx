@@ -676,21 +676,14 @@ export default function ProfileModal({ visible, onClose }: Props) {
 
             </Animated.View>
           </ScrollView>
-        </View>
-      </Modal>
 
-      <SupportModal visible={supportVisible} onClose={() => setSupportVisible(false)} />
-
-      {/* ══ DELETE ACCOUNT CONFIRMATION ══ */}
-      <Modal
-        visible={deleteVisible}
-        transparent
-        animationType="fade"
-        statusBarTranslucent
-        onRequestClose={closeDeleteModal}
-      >
-        <View style={s.delOverlay}>
-          <View style={[s.delDialog, { backgroundColor: isPremium ? '#0F0D14' : theme.card, borderColor: isPremium ? '#2A2230' : theme.border }]}>
+          {/* ══ DELETE ACCOUNT CONFIRMATION ══
+              Rendered as an in-tree overlay (NOT a nested <Modal>): iOS cannot
+              present a second Modal while ProfileModal is already presented, which
+              made the button appear unresponsive on iPad. Keep it inside root. */}
+          {deleteVisible && (
+            <View style={s.delOverlay}>
+              <View style={[s.delDialog, { backgroundColor: isPremium ? '#0F0D14' : theme.card, borderColor: isPremium ? '#2A2230' : theme.border }]}>
             <View style={s.delIconWrap}>
               <Ionicons name="warning-outline" size={26} color="#FF3B30" />
             </View>
@@ -736,8 +729,14 @@ export default function ProfileModal({ visible, onClose }: Props) {
                   <Text style={s.delConfirmText}>{t('delete_permanently')}</Text>
                 )}
               </TouchableOpacity>
+                </View>
+              </View>
             </View>
-          </View>
+          )}
+
+          {/* SupportModal renders an in-tree overlay on iOS, so it must live inside
+              this presented Modal's root to appear on top (Android uses a real Modal). */}
+          <SupportModal visible={supportVisible} onClose={() => setSupportVisible(false)} />
         </View>
       </Modal>
     </>
@@ -806,7 +805,7 @@ const makeStyles = (theme: any, isDark: boolean, gold: string, isPremium: boolea
   deleteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 11, gap: 6, marginBottom: 30 },
   deleteText: { color: '#FF3B30', fontSize: 12.5, fontWeight: '600', letterSpacing: 0.2, opacity: 0.85 },
   // Delete confirmation dialog
-  delOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
+  delOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 100, elevation: 100, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
   delDialog: { width: '100%', maxWidth: 360, borderRadius: 22, borderWidth: 1, padding: 22, alignItems: 'center' },
   delIconWrap: { width: 52, height: 52, borderRadius: 26, backgroundColor: '#FF3B3014', alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
   delTitle: { fontSize: 18, fontWeight: '800', letterSpacing: -0.2, marginBottom: 8, textAlign: 'center', fontFamily: SERIF },
