@@ -54,7 +54,7 @@ import { useRewardedUnlock } from '../../hooks/useRewardedUnlock';
 import { useAuthStore } from '../../store/useAuthStore';
 import { getLevelForXP, getXPProgress, useGamificationStore } from '../../store/useGamificationStore';
 import { useNotificationEventStore } from '../../store/useNotificationEventStore';
-import { usePreferencesStore } from '../../store/usePreferencesStore';
+import { useInterestQuizDone, usePreferencesStore, useUserInterests } from '../../store/usePreferencesStore';
 import { useUserSavedEvents } from '../../store/useSavedStore';
 import { haptic } from '../../utils/haptics';
 import { scheduleDailyForDays } from '../../utils/Notifications';
@@ -736,8 +736,8 @@ export default function HomeScreen() {
   const [calVis, setCalVis] = useState(false);
 
   // Interest quiz: shown once, ranks each day's events by the user's picks.
-  const interests = usePreferencesStore(s => s.interests);
-  const interestQuizDone = usePreferencesStore(s => s.interestQuizDone);
+  const interests = useUserInterests();
+  const interestQuizDone = useInterestQuizDone();
   const completeInterestQuiz = usePreferencesStore(s => s.completeInterestQuiz);
   const [quizVis, setQuizVis] = useState(false);
   useEffect(() => {
@@ -768,7 +768,7 @@ export default function HomeScreen() {
   const refreshChallengeDone = useCallback(() => {
     isDailyChallengeDone().then(setChallengeDone).catch(() => {});
   }, []);
-  useEffect(() => { refreshChallengeDone(); }, [refreshChallengeDone]);
+  useEffect(() => { refreshChallengeDone(); }, [refreshChallengeDone, user?.id]);
 
   useEffect(() => {
     if (!pendingEvent) return;
