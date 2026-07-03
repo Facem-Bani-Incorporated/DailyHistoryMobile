@@ -31,6 +31,7 @@ import CalendarModal from '../../components/CalendarModal';
 import CelestialDay from '../../components/CelestialDay';
 import { DiscoverSection } from '../../components/DiscoverSection';
 import { HistoryCard } from '../../components/HistoryCard';
+import InterestQuiz from '../../components/InterestQuiz';
 import LeaderboardModal from '../../components/LeaderboardModal';
 import LockedTomorrowCard from '../../components/LockedTomorrowCard';
 import MapScreen from '../../components/MapScreen';
@@ -53,6 +54,7 @@ import { useRewardedUnlock } from '../../hooks/useRewardedUnlock';
 import { useAuthStore } from '../../store/useAuthStore';
 import { getLevelForXP, getXPProgress, useGamificationStore } from '../../store/useGamificationStore';
 import { useNotificationEventStore } from '../../store/useNotificationEventStore';
+import { usePreferencesStore } from '../../store/usePreferencesStore';
 import { useUserSavedEvents } from '../../store/useSavedStore';
 import { haptic } from '../../utils/haptics';
 import { scheduleDailyForDays } from '../../utils/Notifications';
@@ -729,6 +731,17 @@ export default function HomeScreen() {
   const [leadVis, setLeadVis] = useState(false);
   const [recapVis, setRecapVis] = useState(false);
   const [calVis, setCalVis] = useState(false);
+
+  // Interest quiz: shown once, ranks each day's events by the user's picks.
+  const interests = usePreferencesStore(s => s.interests);
+  const interestQuizDone = usePreferencesStore(s => s.interestQuizDone);
+  const completeInterestQuiz = usePreferencesStore(s => s.completeInterestQuiz);
+  const [quizVis, setQuizVis] = useState(false);
+  useEffect(() => {
+    if (interestQuizDone) return;
+    const timer = setTimeout(() => setQuizVis(true), 1400);
+    return () => clearTimeout(timer);
+  }, [interestQuizDone]);
   const [off, setOff] = useState(0);
   const [allEvents, setAllEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -901,6 +914,20 @@ export default function HomeScreen() {
 
   // ── Item renderer ──
   const sortByImpact = (a: any, b: any) => (b.impactScore ?? 0) - (a.impactScore ?? 0);
+  // Rank events the user is interested in first, then fall back to impact.
+  const interestSet = useMemo(
+    () => new Set((interests ?? []).map(c => String(c).toLowerCase())),
+    [interests],
+  );
+  const catKey = (c: any) => String(c ?? '').toLowerCase().replace(/\s+/g, '_');
+  const sortByInterest = useCallback((a: any, b: any) => {
+    if (interestSet.size) {
+      const ai = interestSet.has(catKey(a?.category)) ? 0 : 1;
+      const bi = interestSet.has(catKey(b?.category)) ? 0 : 1;
+      if (ai !== bi) return ai - bi;
+    }
+    return (b?.impactScore ?? 0) - (a?.impactScore ?? 0);
+  }, [interestSet]);
 
   const renderItem = useCallback(({ item: dayOff }: { item: number }) => {
     let content: React.ReactNode = null;
@@ -933,8 +960,8 @@ export default function HomeScreen() {
       const iso = isoFor(dayOff);
       const freePg = mem.current[mk('free', iso)] ?? EMPTY;
       const proPg = mem.current[mk('pro', iso)] ?? EMPTY;
-      const freeSorted = [...freePg.data].sort(sortByImpact);
-      const proSorted = [...proPg.data].sort(sortByImpact);
+      const freeSorted = [...freePg.data].sort(sortByInterest);
+      const proSorted = [...proPg.data].sort(sortByInterest);
       const freeMain = freeSorted[0] ?? null;
       const proMain = proSorted[0] ?? null;
       const pi = labelFor(dayOff, language);
@@ -984,7 +1011,7 @@ export default function HomeScreen() {
         const combinedSorted = [
           ...freeSorted,
           ...proSorted.map((e: any) => ({ ...e, isPro: true })),
-        ].sort(sortByImpact);
+        ].sort(sortByInterest);
         content = (
           <DiscoverSection
             events={combinedSorted}
@@ -1013,7 +1040,7 @@ export default function HomeScreen() {
     day2MainUnlocked, day2DiscoverUnlocked, isUnlockReady,
     handleUnlockMain, handleUnlockDiscover,
     handleUnlockDay2Main, handleUnlockDay2Discover,
-    scrollX, presentPaywall, floatingBarPad,
+    scrollX, presentPaywall, floatingBarPad, sortByInterest,
   ]);
 
   const getItemLayout = useCallback((_: any, index: number) => ({
@@ -1257,6 +1284,11 @@ export default function HomeScreen() {
         <AchievementsModal visible={achVis} onClose={() => setAchVis(false)} />
         <LeaderboardModal visible={leadVis} onClose={() => setLeadVis(false)} />
         <MonthlyRecapModal visible={recapVis} onClose={() => setRecapVis(false)} />
+        <InterestQuiz
+          visible={quizVis}
+          initial={interests}
+          onSubmit={(picks) => { completeInterestQuiz(picks); setQuizVis(false); setTick(t => t + 1); }}
+        />
         <CalendarModal
           visible={calVis}
           onClose={() => setCalVis(false)}
