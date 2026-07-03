@@ -27,18 +27,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '../api';
 import { ENDPOINTS } from '../config/api';
 import { buildAvatarUrl, getStoreUrl, PRIVACY_POLICY_URL, TERMS_URL, WEBSITE_URL } from '../config/urls';
-import { AVATAR_OPTIONS } from '../config/avatars';
+import { HISTORICAL_FIGURES, fetchAllFigureThumbs } from '../config/avatars';
 import { useUserAvatar, usePreferencesStore } from '../store/usePreferencesStore';
 import { haptic } from '../utils/haptics';
 
 // Localized title for the avatar picker (ProfileModal uses the global t()
 // table, but these strings live here to avoid touching LanguageContext).
 const AVATAR_UI: Record<string, { title: string; subtitle: string }> = {
-  en: { title: 'Choose your avatar', subtitle: 'Pick a character' },
-  ro: { title: 'Alege-ți avatarul', subtitle: 'Alege un caracter' },
-  fr: { title: 'Choisissez votre avatar', subtitle: 'Choisissez un personnage' },
-  de: { title: 'Wähle deinen Avatar', subtitle: 'Wähle einen Charakter' },
-  es: { title: 'Elige tu avatar', subtitle: 'Elige un personaje' },
+  en: { title: 'Choose your avatar', subtitle: 'Pick a historical figure' },
+  ro: { title: 'Alege-ți avatarul', subtitle: 'Alege o figură istorică' },
+  fr: { title: 'Choisissez votre avatar', subtitle: 'Choisissez une figure historique' },
+  de: { title: 'Wähle deinen Avatar', subtitle: 'Wähle eine historische Persönlichkeit' },
+  es: { title: 'Elige tu avatar', subtitle: 'Elige una figura histórica' },
 };
 import { Language, useLanguage } from '../context/LanguageContext';
 import { GameIcon } from '../utils/GameIcon';
@@ -242,6 +242,15 @@ export default function ProfileModal({ visible, onClose }: Props) {
   const chosenAvatar = useUserAvatar();
   const setAvatar = usePreferencesStore(s => s.setAvatar);
   const [avatarPickerVisible, setAvatarPickerVisible] = useState(false);
+  const [figureThumbs, setFigureThumbs] = useState<Record<string, string>>({});
+  const [figuresLoading, setFiguresLoading] = useState(false);
+
+  // Resolve the historical-figure portraits the first time the picker opens.
+  useEffect(() => {
+    if (!avatarPickerVisible || Object.keys(figureThumbs).length > 0) return;
+    setFiguresLoading(true);
+    fetchAllFigureThumbs().then(setFigureThumbs).finally(() => setFiguresLoading(false));
+  }, [avatarPickerVisible]);
 
   const handleUnlockPro = async () => {
     haptic('medium');
@@ -705,20 +714,29 @@ export default function ProfileModal({ visible, onClose }: Props) {
               <View style={[s.avatarDialog, { backgroundColor: isPremium ? '#0F0D14' : theme.card, borderColor: isPremium ? '#2A2230' : theme.border }]}>
                 <Text style={[s.avatarPickTitle, { color: theme.text }]}>{(AVATAR_UI[language] ?? AVATAR_UI.en).title}</Text>
                 <Text style={[s.avatarPickSub, { color: theme.subtext }]}>{(AVATAR_UI[language] ?? AVATAR_UI.en).subtitle}</Text>
-                <ScrollView style={{ maxHeight: 320 }} contentContainerStyle={s.avatarGrid} showsVerticalScrollIndicator={false}>
-                  {AVATAR_OPTIONS.map((opt) => {
-                    const active = chosenAvatar === opt.url;
-                    return (
-                      <TouchableOpacity
-                        key={opt.id}
-                        activeOpacity={0.8}
-                        onPress={() => { haptic('medium'); setAvatar(opt.url); setAvatarPickerVisible(false); }}
-                        style={[s.avatarOption, { borderColor: active ? gold : theme.border, backgroundColor: active ? `${gold}18` : 'transparent' }]}
-                      >
-                        <Image source={{ uri: opt.url }} style={s.avatarOptionImg} />
-                      </TouchableOpacity>
-                    );
-                  })}
+                <ScrollView style={{ maxHeight: 360 }} contentContainerStyle={s.avatarGrid} showsVerticalScrollIndicator={false}>
+                  {figuresLoading && Object.keys(figureThumbs).length === 0 ? (
+                    <ActivityIndicator size="small" color={gold} style={{ marginVertical: 34 }} />
+                  ) : (
+                    HISTORICAL_FIGURES.map((f) => {
+                      const url = figureThumbs[f.id];
+                      if (!url) return null;
+                      const active = chosenAvatar === url;
+                      return (
+                        <TouchableOpacity
+                          key={f.id}
+                          activeOpacity={0.8}
+                          onPress={() => { haptic('medium'); setAvatar(url); setAvatarPickerVisible(false); }}
+                          style={s.avatarFigure}
+                        >
+                          <View style={[s.avatarOption, { borderColor: active ? gold : theme.border, backgroundColor: active ? `${gold}18` : 'transparent' }]}>
+                            <Image source={{ uri: url }} style={s.avatarOptionImg} />
+                          </View>
+                          <Text style={[s.avatarFigureName, { color: active ? gold : theme.subtext }]} numberOfLines={1}>{f.name}</Text>
+                        </TouchableOpacity>
+                      );
+                    })
+                  )}
                 </ScrollView>
                 <TouchableOpacity style={[s.avatarCloseBtn, { borderColor: theme.border }]} onPress={() => setAvatarPickerVisible(false)} activeOpacity={0.6}>
                   <Text style={[s.avatarCloseText, { color: theme.text }]}>{t('cancel')}</Text>
@@ -812,7 +830,9 @@ const makeStyles = (theme: any, isDark: boolean, gold: string, isPremium: boolea
   avatarPickSub: { fontSize: 13, fontWeight: '400', lineHeight: 18, textAlign: 'center', opacity: 0.7, marginBottom: 16 },
   avatarGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 12, paddingBottom: 4 },
   avatarOption: { width: 68, height: 68, borderRadius: 34, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
-  avatarOptionImg: { width: 56, height: 56, borderRadius: 28 },
+  avatarOptionImg: { width: 56, height: 56, borderRadius: 28, backgroundColor: theme.border },
+  avatarFigure: { width: 78, alignItems: 'center', gap: 6 },
+  avatarFigureName: { fontSize: 11, fontWeight: '700', letterSpacing: 0.1, textAlign: 'center' },
   avatarCloseBtn: { marginTop: 16, width: '100%', height: 46, borderRadius: 12, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   avatarCloseText: { fontSize: 14, fontWeight: '700', letterSpacing: 0.2 },
   heroText: { flex: 1, gap: 2 },
