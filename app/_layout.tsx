@@ -163,7 +163,7 @@ function AppContent() {
     }
     return (
       <OnboardingScreen
-        startStep={onboardingMode === 'proOnly' ? 'subscription' : 'features'}
+        startStep={onboardingMode === 'proOnly' ? 'subscription' : 'language'}
         onComplete={() => {
           onboardingActiveRef.current = false;
           setShowOnboarding(false);
