@@ -14,6 +14,8 @@ import { useAuthStore } from './useAuthStore';
 interface UserPrefs {
   interests: string[];
   interestQuizDone: boolean;
+  /** Chosen avatar image URL (overrides the default initials avatar). */
+  avatar?: string;
 }
 
 const EMPTY_PREFS: UserPrefs = { interests: [], interestQuizDone: false };
@@ -33,6 +35,8 @@ interface PreferencesState {
   completeInterestQuiz: (interests: string[]) => void;
   /** Let the current user re-take the quiz. */
   resetInterestQuiz: () => void;
+  /** Set the current user's chosen avatar URL. */
+  setAvatar: (avatar: string) => void;
 }
 
 export const usePreferencesStore = create<PreferencesState>()(
@@ -50,7 +54,13 @@ export const usePreferencesStore = create<PreferencesState>()(
       },
       resetInterestQuiz: () => {
         const uid = getUserId();
-        set({ _perUser: { ...get()._perUser, [uid]: { ...EMPTY_PREFS } } });
+        const prev = get()._perUser[uid] ?? EMPTY_PREFS;
+        set({ _perUser: { ...get()._perUser, [uid]: { ...EMPTY_PREFS, avatar: prev.avatar } } });
+      },
+      setAvatar: (avatar) => {
+        const uid = getUserId();
+        const prev = get()._perUser[uid] ?? EMPTY_PREFS;
+        set({ _perUser: { ...get()._perUser, [uid]: { ...prev, avatar } } });
       },
     }),
     {
@@ -71,4 +81,10 @@ export const useInterestQuizDone = (): boolean => {
   const user = useAuthStore(s => s.user);
   const perUser = usePreferencesStore(s => s._perUser);
   return perUser[user?.id ?? 'guest']?.interestQuizDone ?? false;
+};
+
+export const useUserAvatar = (): string | undefined => {
+  const user = useAuthStore(s => s.user);
+  const perUser = usePreferencesStore(s => s._perUser);
+  return perUser[user?.id ?? 'guest']?.avatar;
 };

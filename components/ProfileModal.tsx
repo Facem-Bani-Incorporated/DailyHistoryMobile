@@ -27,7 +27,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '../api';
 import { ENDPOINTS } from '../config/api';
 import { buildAvatarUrl, getStoreUrl, PRIVACY_POLICY_URL, TERMS_URL, WEBSITE_URL } from '../config/urls';
+import { AVATAR_OPTIONS } from '../config/avatars';
+import { useUserAvatar, usePreferencesStore } from '../store/usePreferencesStore';
 import { haptic } from '../utils/haptics';
+
+// Localized title for the avatar picker (ProfileModal uses the global t()
+// table, but these strings live here to avoid touching LanguageContext).
+const AVATAR_UI: Record<string, { title: string; subtitle: string }> = {
+  en: { title: 'Choose your avatar', subtitle: 'Pick a character' },
+  ro: { title: 'Alege-ți avatarul', subtitle: 'Alege un caracter' },
+  fr: { title: 'Choisissez votre avatar', subtitle: 'Choisissez un personnage' },
+  de: { title: 'Wähle deinen Avatar', subtitle: 'Wähle einen Charakter' },
+  es: { title: 'Elige tu avatar', subtitle: 'Elige un personaje' },
+};
 import { Language, useLanguage } from '../context/LanguageContext';
 import { GameIcon } from '../utils/GameIcon';
 import { useRevenueCat } from '../context/RevenueCatContext';
@@ -227,6 +239,9 @@ export default function ProfileModal({ visible, onClose }: Props) {
   // ── RevenueCat subscription ──
   const { isPro, presentPaywall, presentCustomerCenter, restorePurchases } = useRevenueCat();
   const [restoreLoading, setRestoreLoading] = useState(false);
+  const chosenAvatar = useUserAvatar();
+  const setAvatar = usePreferencesStore(s => s.setAvatar);
+  const [avatarPickerVisible, setAvatarPickerVisible] = useState(false);
 
   const handleUnlockPro = async () => {
     haptic('medium');
@@ -283,6 +298,7 @@ export default function ProfileModal({ visible, onClose }: Props) {
   const gold = isPremium ? '#D4A843' : isDark ? '#E8B84D' : '#C77E08';
 
   const getProfileImage = () => {
+    if (chosenAvatar) return chosenAvatar;
     const uri = user.avatar_url || user.avatarUrl || user.picture;
     if (uri) return uri;
     return buildAvatarUrl(displayName, { size: 256 });
@@ -399,8 +415,13 @@ export default function ProfileModal({ visible, onClose }: Props) {
               }]}>
                 <View style={s.heroIdentity}>
                   <View style={s.avatarWrap}>
-                    <Image source={{ uri: getProfileImage() }} style={s.avatar} />
-                    <View style={[s.avatarGlow, { borderColor: isPremium ? '#D4A84340' : `${gold}35` }]} />
+                    <TouchableOpacity activeOpacity={0.8} onPress={() => { haptic('selection'); setAvatarPickerVisible(true); }}>
+                      <Image source={{ uri: getProfileImage() }} style={s.avatar} />
+                      <View style={[s.avatarEditBadge, { backgroundColor: gold, borderColor: isPremium ? '#0F0D14' : theme.card }]}>
+                        <Ionicons name="pencil" size={9} color="#1a1200" />
+                      </View>
+                    </TouchableOpacity>
+                    <View style={[s.avatarGlow, { borderColor: isPremium ? '#D4A84340' : `${gold}35` }]} pointerEvents="none" />
                     {isGoogleUser && (
                       <View style={[s.providerBadge, { borderColor: isPremium ? '#0F0D14' : theme.card }]}>
                         <Ionicons name="logo-google" size={10} color="#fff" />
@@ -677,6 +698,35 @@ export default function ProfileModal({ visible, onClose }: Props) {
             </Animated.View>
           </ScrollView>
 
+          {/* ══ AVATAR PICKER ══ In-tree overlay (same reason as delete: iOS
+              can't stack Modals). Choices are stored per-user in prefs. */}
+          {avatarPickerVisible && (
+            <View style={s.avatarOverlay}>
+              <View style={[s.avatarDialog, { backgroundColor: isPremium ? '#0F0D14' : theme.card, borderColor: isPremium ? '#2A2230' : theme.border }]}>
+                <Text style={[s.avatarPickTitle, { color: theme.text }]}>{(AVATAR_UI[language] ?? AVATAR_UI.en).title}</Text>
+                <Text style={[s.avatarPickSub, { color: theme.subtext }]}>{(AVATAR_UI[language] ?? AVATAR_UI.en).subtitle}</Text>
+                <ScrollView style={{ maxHeight: 320 }} contentContainerStyle={s.avatarGrid} showsVerticalScrollIndicator={false}>
+                  {AVATAR_OPTIONS.map((opt) => {
+                    const active = chosenAvatar === opt.url;
+                    return (
+                      <TouchableOpacity
+                        key={opt.id}
+                        activeOpacity={0.8}
+                        onPress={() => { haptic('medium'); setAvatar(opt.url); setAvatarPickerVisible(false); }}
+                        style={[s.avatarOption, { borderColor: active ? gold : theme.border, backgroundColor: active ? `${gold}18` : 'transparent' }]}
+                      >
+                        <Image source={{ uri: opt.url }} style={s.avatarOptionImg} />
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+                <TouchableOpacity style={[s.avatarCloseBtn, { borderColor: theme.border }]} onPress={() => setAvatarPickerVisible(false)} activeOpacity={0.6}>
+                  <Text style={[s.avatarCloseText, { color: theme.text }]}>{t('cancel')}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
           {/* ══ DELETE ACCOUNT CONFIRMATION ══
               Rendered as an in-tree overlay (NOT a nested <Modal>): iOS cannot
               present a second Modal while ProfileModal is already presented, which
@@ -755,6 +805,16 @@ const makeStyles = (theme: any, isDark: boolean, gold: string, isPremium: boolea
   avatar: { width: 58, height: 58, borderRadius: 29, backgroundColor: theme.border },
   avatarGlow: { position: 'absolute', top: -3, left: -3, width: 64, height: 64, borderRadius: 32, borderWidth: 2 },
   providerBadge: { position: 'absolute', bottom: -2, right: -2, width: 21, height: 21, borderRadius: 10.5, backgroundColor: '#4285F4', alignItems: 'center', justifyContent: 'center', borderWidth: 2.5 },
+  avatarEditBadge: { position: 'absolute', top: -2, right: -2, width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 2 },
+  avatarOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 100, elevation: 100, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
+  avatarDialog: { width: '100%', maxWidth: 380, borderRadius: 22, borderWidth: 1, padding: 20, alignItems: 'center' },
+  avatarPickTitle: { fontSize: 19, fontWeight: '800', letterSpacing: -0.2, marginBottom: 4, textAlign: 'center', fontFamily: SERIF },
+  avatarPickSub: { fontSize: 13, fontWeight: '400', lineHeight: 18, textAlign: 'center', opacity: 0.7, marginBottom: 16 },
+  avatarGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 12, paddingBottom: 4 },
+  avatarOption: { width: 68, height: 68, borderRadius: 34, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  avatarOptionImg: { width: 56, height: 56, borderRadius: 28 },
+  avatarCloseBtn: { marginTop: 16, width: '100%', height: 46, borderRadius: 12, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  avatarCloseText: { fontSize: 14, fontWeight: '700', letterSpacing: 0.2 },
   heroText: { flex: 1, gap: 2 },
   heroName: { fontSize: 19, fontWeight: '800', letterSpacing: -0.2, fontFamily: SERIF },
   heroEmail: { fontSize: 12, fontWeight: '400', opacity: 0.45, letterSpacing: 0.1 },
