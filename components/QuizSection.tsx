@@ -17,6 +17,7 @@ import {
 import { useTheme } from '../context/ThemeContext';
 import { useQuiz } from '../hooks/useQuiz';
 import { useGamificationStore } from '../store/useGamificationStore';
+import { maybeRequestReview } from '../utils/review';
 
 const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
 
@@ -115,6 +116,8 @@ export function QuizSection({ eventId, language = 'en' }: Props) {
       awarded.current = true;
       addQuizXP(res.xpEarned);
       recordQuizDone();
+      // Completing a quiz is a natural high-intent moment — ask for a review (once ever).
+      maybeRequestReview();
     }
   };
 

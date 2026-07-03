@@ -78,17 +78,51 @@ export async function scheduleDailyForDays(
       const [y, m, d] = iso.split('-').map(Number);
       // Local-time Date constructor — respects device timezone automatically.
       const fireAt = new Date(y, m - 1, d, hour, minute, 0, 0);
-      if (fireAt.getTime() <= now) continue;
+      if (fireAt.getTime() > now) {
+        const { title, body, event } = buildPersonalizedNotification(
+          eventsByDate[iso] ?? [],
+          language,
+        );
+        await scheduleAt(fireAt, title, body, event);
+      }
 
-      const { title, body, event } = buildPersonalizedNotification(
-        eventsByDate[iso] ?? [],
-        language,
-      );
-      await scheduleAt(fireAt, title, body, event);
+      // ── Daily Challenge reminder at noon — separate hook from the 9 AM event ──
+      const challengeAt = new Date(y, m - 1, d, DAILY_CHALLENGE_HOUR, 0, 0, 0);
+      if (challengeAt.getTime() > now) {
+        const c = buildDailyChallengeNotification(language);
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: c.title,
+            body: c.body,
+            sound: 'default',
+            data: { dailyChallenge: true },
+          },
+          trigger: {
+            type: SchedulableTriggerInputTypes.DATE,
+            date: challengeAt,
+            ...(Platform.OS === 'android' ? { channelId: 'daily-history' } : {}),
+          },
+        });
+      }
     }
   } catch (e) {
     if (__DEV__) console.warn('[Notifications] Failed to schedule week:', e);
   }
+}
+
+// ── Daily Challenge (bonus quiz) — fires at noon, links to the challenge quiz ──
+export const DAILY_CHALLENGE_HOUR = 12;
+
+const DAILY_CHALLENGE_TEXT: Record<string, { title: string; body: string }> = {
+  en: { title: '🏆 Daily Challenge is ready!', body: 'Ace today\'s quiz on all free events for 1000 XP. Can you get a perfect score?' },
+  ro: { title: '🏆 Provocarea zilei e gata!', body: 'Răspunde corect la tot quiz-ul din evenimentele de azi pentru 1000 XP. Poți lua scor perfect?' },
+  es: { title: '🏆 ¡El reto diario está listo!', body: 'Acierta todo el quiz de los eventos de hoy y gana 1000 XP. ¿Puedes lograr un puntaje perfecto?' },
+  fr: { title: '🏆 Le défi du jour est prêt !', body: 'Réussis tout le quiz des événements du jour pour 1000 XP. Peux-tu faire un sans-faute ?' },
+  de: { title: '🏆 Die Tagesherausforderung ist da!', body: 'Beantworte das Quiz zu den heutigen Ereignissen perfekt für 1000 XP. Schaffst du es?' },
+};
+
+export function buildDailyChallengeNotification(language: string): { title: string; body: string } {
+  return DAILY_CHALLENGE_TEXT[language] ?? DAILY_CHALLENGE_TEXT.en;
 }
 
 // ══════════════════════════════════════════════════════════════

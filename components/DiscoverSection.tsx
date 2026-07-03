@@ -178,8 +178,8 @@ const Masthead = ({ issue, count, theme, t }: {
    lede line, hairline CTA
    ═══════════════════════════════════════════ */
 const HeroCard = ({
-  event, lang, number, onPress, height, isRead,
-}: { event: any; lang: string; number: number; onPress: () => void; height: number; isRead?: boolean }) => {
+  event, lang, number, onPress, height, isRead, subscribed = true,
+}: { event: any; lang: string; number: number; onPress: () => void; height: number; isRead?: boolean; subscribed?: boolean }) => {
   const title = event.titleTranslations?.[lang] ?? event.titleTranslations?.en ?? '';
   const narrative = event.narrativeTranslations?.[lang] ?? event.narrativeTranslations?.en ?? '';
   const category = (event.category ?? 'HISTORY').replace(/_/g, ' ');
@@ -187,6 +187,7 @@ const HeroCard = ({
   const yearNum = parseInt(year) || 0;
   const accent = getCatColor(event.category);
   const pro = isProEvent(event);
+  const locked = pro && !subscribed;
 
   return (
     <TouchableOpacity activeOpacity={0.94} onPress={onPress} style={[st.heroCard, { height }, pro && st.cardProBorder]}>
@@ -238,9 +239,19 @@ const HeroCard = ({
         )}
 
         <View style={st.heroCtaRow}>
-          <View style={[st.heroCtaLine, { backgroundColor: accent + '70' }]} />
-          <Text style={st.heroCtaTxt}>READ STORY</Text>
-          <Ionicons name="arrow-forward" size={11} color="rgba(255,255,255,0.8)" style={{ marginLeft: 6 }} />
+          {locked ? (
+            <>
+              <View style={[st.heroCtaLine, { backgroundColor: '#E8B84D' }]} />
+              <Ionicons name="lock-closed" size={11} color="#E8B84D" style={{ marginRight: 5 }} />
+              <Text style={[st.heroCtaTxt, { color: '#E8B84D' }]}>UNLOCK WITH PRO</Text>
+            </>
+          ) : (
+            <>
+              <View style={[st.heroCtaLine, { backgroundColor: accent + '70' }]} />
+              <Text style={st.heroCtaTxt}>READ STORY</Text>
+              <Ionicons name="arrow-forward" size={11} color="rgba(255,255,255,0.8)" style={{ marginLeft: 6 }} />
+            </>
+          )}
         </View>
       </View>
     </TouchableOpacity>
@@ -679,6 +690,7 @@ export const DiscoverSection = ({ events, theme, t, isPro = true, onPaywall }: D
                 onPress={() => handleSelect(hero)}
                 height={heroH}
                 isRead={isRead(hero)}
+                subscribed={isPro}
               />
             </AnimatedCard>
 

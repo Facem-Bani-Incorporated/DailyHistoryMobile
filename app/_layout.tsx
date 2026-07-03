@@ -61,17 +61,22 @@ function AppContent() {
 
   // ── Handle notification taps (deep-link to event) ──
   useEffect(() => {
+    const handleResponse = (response: Notifications.NotificationResponse | null) => {
+      const data = response?.notification?.request?.content?.data;
+      if (!data) return;
+      // Daily challenge reminder → open the challenge quiz on the home screen.
+      if (data.dailyChallenge) {
+        useNotificationEventStore.getState().setPendingEvent({ __dailyChallenge: true });
+        return;
+      }
+      if (data.event) useNotificationEventStore.getState().setPendingEvent(data.event);
+    };
+
     // User tapped notification while app was killed/background
-    Notifications.getLastNotificationResponseAsync().then((response) => {
-      const event = response?.notification?.request?.content?.data?.event;
-      if (event) useNotificationEventStore.getState().setPendingEvent(event);
-    });
+    Notifications.getLastNotificationResponseAsync().then(handleResponse);
 
     // User taps notification while app is in foreground
-    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
-      const event = response?.notification?.request?.content?.data?.event;
-      if (event) useNotificationEventStore.getState().setPendingEvent(event);
-    });
+    const sub = Notifications.addNotificationResponseReceivedListener(handleResponse);
 
     return () => sub.remove();
   }, []);

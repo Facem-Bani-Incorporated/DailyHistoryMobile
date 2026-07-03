@@ -18,6 +18,7 @@ import { useTheme } from '../context/ThemeContext';
 import { haptic } from '../utils/haptics';
 import { useRevenueCat } from '../context/RevenueCatContext';
 import { useGamificationStore } from '../store/useGamificationStore';
+import { maybeRequestReview } from '../utils/review';
 
 const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
 const QUESTIONS_PER_QUIZ = 5;
@@ -120,7 +121,7 @@ const ALL_CATS = Object.keys(CAT_KEY);
 // ── Types ────────────────────────────────────────────────────────────────────
 type QType = 'year' | 'where' | 'category' | 'which_title';
 
-interface Question {
+export interface Question {
   type: QType;
   event: any;
   questionText: string;
@@ -151,16 +152,26 @@ const getLocation = (e: any): string => {
   return loc.split(',').slice(-1)[0].trim() || loc;
 };
 
-const generateQuestions = (events: any[], lang: string): Question[] => {
-  const usable = events.filter(e => {
+// `events` are the subject events (questions are ABOUT these).
+// opts.distractorPool provides wrong-answer material (defaults to the subject set).
+// opts.count caps how many questions to generate (defaults to QUESTIONS_PER_QUIZ).
+export const generateQuestions = (
+  events: any[],
+  lang: string,
+  opts?: { count?: number; distractorPool?: any[] },
+): Question[] => {
+  const isUsable = (e: any) => {
     const y = extractYear(e);
     const title = e?.titleTranslations?.en ?? '';
     return y !== 0 && y > 0 && title.length > 0;
-  });
-  if (usable.length < 4) return [];
+  };
+  const usable = events.filter(isUsable);
+  if (usable.length === 0) return [];
 
-  const pool = shuffle(usable).slice(0, Math.min(50, usable.length));
-  const selected = pool.slice(0, QUESTIONS_PER_QUIZ);
+  const count = opts?.count ?? QUESTIONS_PER_QUIZ;
+  const distractorSource = (opts?.distractorPool ?? usable).filter(isUsable);
+  const pool = shuffle(distractorSource).slice(0, Math.min(80, distractorSource.length));
+  const selected = shuffle(usable).slice(0, Math.min(count, usable.length));
   const questions: Question[] = [];
 
   const types: QType[] = shuffle(['year', 'where', 'category', 'which_title', 'year'] as QType[]);
@@ -458,6 +469,8 @@ export default function TimelineQuizModal({
       } else {
         recordQuizDone();
         setShowResults(true);
+        // Finishing the quiz is a high-intent moment — ask for a review (once ever).
+        maybeRequestReview();
       }
     }, FEEDBACK_MS);
     setFeedbackTimer(t);

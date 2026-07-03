@@ -56,6 +56,9 @@ import { useNotificationEventStore } from '../../store/useNotificationEventStore
 import { useUserSavedEvents } from '../../store/useSavedStore';
 import { haptic } from '../../utils/haptics';
 import { scheduleDailyForDays } from '../../utils/Notifications';
+import { maybeRequestReview } from '../../utils/review';
+import { isDailyChallengeDone } from '../../utils/dailyChallenge';
+import DailyChallengeModal from '../../components/DailyChallengeModal';
 import SavedScreen from './saved';
 
 const { width: W, height: H } = Dimensions.get('window');
@@ -744,8 +747,24 @@ export default function HomeScreen() {
   const pendingEvent = useNotificationEventStore(s => s.pendingEvent);
   const clearPendingEvent = useNotificationEventStore(s => s.clearPendingEvent);
   const [notifEvent, setNotifEvent] = useState<any>(null);
+
+  // ── Daily Challenge (noon bonus quiz) ──
+  const [challengeVisible, setChallengeVisible] = useState(false);
+  const [challengeDone, setChallengeDone] = useState(true); // hidden until checked
+
+  const refreshChallengeDone = useCallback(() => {
+    isDailyChallengeDone().then(setChallengeDone).catch(() => {});
+  }, []);
+  useEffect(() => { refreshChallengeDone(); }, [refreshChallengeDone]);
+
   useEffect(() => {
-    if (pendingEvent) { setNotifEvent(pendingEvent); clearPendingEvent(); }
+    if (!pendingEvent) return;
+    if (pendingEvent.__dailyChallenge) {
+      setChallengeVisible(true);
+    } else {
+      setNotifEvent(pendingEvent);
+    }
+    clearPendingEvent();
   }, [pendingEvent]);
 
   // Interstitials fire at natural moments (quiz done, map exit), not on story count.
@@ -979,12 +998,20 @@ export default function HomeScreen() {
           content = <HistoryCard event={freeMain} allEvents={allEvents} />;
         }
       } else {
-        // Discover tab — merge pro + free into one editorial grid.
-        // PRO events keep the gold star badge and route to paywall on tap when not subscribed.
+        // Discover tab — FREE stories lead; PRO is de-emphasised.
+        // Ordering fed to DiscoverSection (which drops index 0 — that's the
+        // free "main" already shown on Today):
+        //   [0] free main (dropped)  → [1] single PRO teaser (hero, "Unlock with PRO")
+        //   → rest of FREE stories   → remaining PRO pushed to the very bottom.
+        const proMarked = proSorted.map((e: any) => ({ ...e, isPro: true }));
+        const onePro = proMarked.length > 0 ? [proMarked[0]] : [];
+        const restPro = proMarked.slice(1);
         const combinedSorted = [
-          ...freeSorted,
-          ...proSorted.map((e: any) => ({ ...e, isPro: true })),
-        ].sort(sortByImpact);
+          freeSorted[0],          // index 0 — dropped by DiscoverSection
+          ...onePro,              // index 1 — hero: the single PRO teaser
+          ...freeSorted.slice(1), // FREE stories fill the rest of the top grid
+          ...restPro,             // remaining PRO at the bottom of "More Stories"
+        ].filter(Boolean);
         content = (
           <DiscoverSection
             events={combinedSorted}
@@ -1031,6 +1058,14 @@ export default function HomeScreen() {
     if (t === 'saved') setSeenSaved(userSaved.length);
   }, [userSaved.length]);
   const swipeOn = tab === 'today' || tab === 'discover';
+
+  // One-shot store-review prompt: fire if the user lingers on the map for 60s.
+  useEffect(() => {
+    if (tab !== 'map') return;
+    const timer = setTimeout(() => { maybeRequestReview(); }, 60_000);
+    return () => clearTimeout(timer);
+  }, [tab]);
+
   const isNextDayLocked = canFwd && !isPro && (
     (off === 0 && (
       (tab === 'today' && !tomorrowMainUnlocked) ||
@@ -1241,6 +1276,30 @@ export default function HomeScreen() {
             ) : null}
         </View>
 
+        {/* ═════════════════ DAILY CHALLENGE — floating pill above the tab bar ═════════════════ */}
+        {tab === 'today' && !loading && !challengeDone && (
+          <View
+            pointerEvents="box-none"
+            style={{ position: 'absolute', left: 0, right: 0, bottom: floatingBarPad + 10, alignItems: 'center', zIndex: 20 }}
+          >
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={() => { haptic('medium'); setChallengeVisible(true); }}
+              style={{
+                flexDirection: 'row', alignItems: 'center', gap: 8,
+                paddingVertical: 11, paddingHorizontal: 18, borderRadius: 26,
+                backgroundColor: goldColor,
+                shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 6,
+              }}
+            >
+              <Trophy size={16} color="#1a1208" />
+              <Text style={{ color: '#1a1208', fontWeight: '900', fontSize: 13, letterSpacing: 0.3 }}>
+                {t('daily_challenge')} · 1000 XP
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* ═════════════════ FLOATING GLASS TAB BAR — sits right at the bottom edge ═════════════════ */}
         <View
           pointerEvents="box-none"
@@ -1270,6 +1329,12 @@ export default function HomeScreen() {
           event={notifEvent}
           onClose={() => setNotifEvent(null)}
           theme={theme}
+          allEvents={allEvents}
+        />
+        <DailyChallengeModal
+          visible={challengeVisible}
+          onClose={() => { setChallengeVisible(false); refreshChallengeDone(); }}
+          freeEvents={mem.current[mk('free', isoFor(0))]?.data ?? []}
           allEvents={allEvents}
         />
       </View>
