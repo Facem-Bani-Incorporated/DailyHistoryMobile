@@ -6,12 +6,15 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
+import CoinRewardModal from '../components/CoinRewardModal';
 import OnboardingScreen from '../components/OnBoardingScreen';
 import { LanguageProvider } from '../context/LanguageContext';
 import { RevenueCatProvider } from '../context/RevenueCatContext';
 import { ThemeProvider, useTheme } from '../context/ThemeContext';
 import { useAdsInit } from '../hooks/useAdsInit';
+import { useCoinsFromXp } from '../hooks/useCoins';
 import { useGamificationSync } from '../hooks/useGamificationSync';
+import { useReferralRewards } from '../hooks/useReferralRewards';
 import { useAuthStore } from '../store/useAuthStore';
 import { useNotificationEventStore } from '../store/useNotificationEventStore';
 
@@ -58,6 +61,10 @@ function AppContent() {
 
   // ── Initialize Google Mobile Ads SDK ──
   useAdsInit();
+
+  // ── Coin economy: grant coins per 1000 XP + referral "free day of PRO" ──
+  useCoinsFromXp();
+  useReferralRewards();
 
   // ── Handle notification taps (deep-link to event) ──
   useEffect(() => {
@@ -180,15 +187,19 @@ function AppContent() {
   }
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="preview" />
-      <Stack.Screen name="(auth)" />
-      <Stack.Screen name="(main)" />
-      <Stack.Screen
-        name="notification-prompt"
-        options={{ presentation: 'transparentModal', animation: 'fade' }}
-      />
-    </Stack>
+    <>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="preview" />
+        <Stack.Screen name="(auth)" />
+        <Stack.Screen name="(main)" />
+        <Stack.Screen
+          name="notification-prompt"
+          options={{ presentation: 'transparentModal', animation: 'fade' }}
+        />
+      </Stack>
+      {/* Global "watch a clip for a coin" pop-up — controlled via useCoinPopupStore */}
+      <CoinRewardModal />
+    </>
   );
 }
 

@@ -4,6 +4,7 @@ import { AppState, AppStateStatus } from 'react-native';
 import type { GamificationSyncDTO } from '../services/gamificationService';
 import { fetchGamification, syncGamification } from '../services/gamificationService';
 import { useAuthStore } from '../store/useAuthStore';
+import { useCoinStore } from '../store/useCoinStore';
 import { useGamificationStore } from '../store/useGamificationStore';
 import { getEventId, useSavedStore } from '../store/useSavedStore';
 
@@ -72,6 +73,8 @@ export function buildSyncPayload(): GamificationSyncDTO {
     streakShieldUsedWeek: s.streakShieldUsedWeek ?? null,
     monthlyRecaps: s.monthlyRecaps ?? {},
     monthlyXPResetDate: s.monthlyXPResetDate ?? null,
+    // Coin economy (coins, unlocks, referral pass) — see useCoinStore.
+    coins: useCoinStore.getState().serializeForBlob(),
   };
 
   return {
@@ -138,6 +141,12 @@ function hydrateFromServer(dto: GamificationSyncDTO, userId: string) {
     });
   } catch (e) {
     console.warn('[GamSync] hydrateFromServer error:', e);
+  }
+
+  try {
+    if (blob.coins) useCoinStore.getState().hydrateFromBlob(blob.coins);
+  } catch (e) {
+    console.warn('[GamSync] coins hydrate error:', e);
   }
 
   try {

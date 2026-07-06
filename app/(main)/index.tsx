@@ -45,13 +45,15 @@ import TimelineScreen from '../../components/TimelineScreen';
 import MonthlyRecapModal from '../../components/MonthlyRecapModal';
 import { AD_UNIT_IDS, ADS_CONFIG } from '../../config/ads';
 import { ENDPOINTS } from '../../config/api';
+import { COIN_COST_DAY, COIN_COST_EVENT } from '../../config/coins';
 import { AllEventsProvider } from '../../context/AllEventsContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useRevenueCat } from '../../context/RevenueCatContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useInterstitialAd } from '../../hooks/useInterstitialAd';
-import { useRewardedUnlock } from '../../hooks/useRewardedUnlock';
 import { useAuthStore } from '../../store/useAuthStore';
+import { useCoinPopupStore } from '../../store/useCoinPopupStore';
+import { useCoins, useCoinStore, useIsEventUnlocked } from '../../store/useCoinStore';
 import { getLevelForXP, getXPProgress, useGamificationStore } from '../../store/useGamificationStore';
 import { useNotificationEventStore } from '../../store/useNotificationEventStore';
 import { useInterestQuizDone, usePreferencesStore, useUserInterests } from '../../store/usePreferencesStore';
@@ -281,6 +283,14 @@ const _peek = StyleSheet.create({
 const PRO_CARD_H = Math.max(280, H * 0.5);
 const SERIF_FONT = Platform.OS === 'ios' ? 'Georgia' : 'serif';
 
+const PRO_COIN_T: Record<string, { unlock: string; goPro: string; hint: string }> = {
+  en: { unlock: 'Unlock', goPro: 'Get PRO — unlimited', hint: 'Spend a coin to unlock, or go PRO' },
+  ro: { unlock: 'Deblochează', goPro: 'Ia PRO — nelimitat', hint: 'Folosește o monedă sau ia PRO' },
+  fr: { unlock: 'Débloquer', goPro: 'Passer PRO — illimité', hint: 'Dépense une pièce ou passe PRO' },
+  de: { unlock: 'Freischalten', goPro: 'PRO holen — unbegrenzt', hint: 'Mit einer Münze freischalten oder PRO' },
+  es: { unlock: 'Desbloquear', goPro: 'Obtener PRO — ilimitado', hint: 'Usa una moneda u obtén PRO' },
+};
+
 const ProCardSection = ({ event, allEvents, gold, isPro, onPaywall, t, language }: {
   event: any; allEvents: any[]; gold: string; isPro: boolean; onPaywall: () => void;
   t: (k: string) => string; language: string;
@@ -307,6 +317,24 @@ const ProCardSection = ({ event, allEvents, gold, isPro, onPaywall, t, language 
   const glowOp = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.18, 0.55] });
   const ruleOp = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.9] });
 
+  // Coin unlock: 1 coin unlocks this PRO story for good (isPro already folds in
+  // the referral pass). If the user has no coins, offer the "watch a clip" pop-up.
+  const eventId = String(event?.id ?? '');
+  const coinUnlocked = useIsEventUnlocked(eventId);
+  const coins = useCoins();
+  const unlocked = isPro || coinUnlocked;
+
+  const handleUnlockAttempt = () => {
+    if (unlocked) return;
+    haptic('medium');
+    if (useCoinStore.getState().spendCoins(COIN_COST_EVENT)) {
+      useCoinStore.getState().unlockEvent(eventId);
+      haptic('success');
+    } else {
+      useCoinPopupStore.getState().show('no_coins');
+    }
+  };
+
   const title =
     event?.titleTranslations?.[language] ??
     event?.titleTranslations?.en ??
@@ -318,14 +346,14 @@ const ProCardSection = ({ event, allEvents, gold, isPro, onPaywall, t, language 
   return (
     <View style={[_proSec.cardWrap, { height: PRO_CARD_H }]}>
       {/* Full event card — fully visible, no dim */}
-      <View style={StyleSheet.absoluteFill} pointerEvents={isPro ? 'box-none' : 'none'}>
+      <View style={StyleSheet.absoluteFill} pointerEvents={unlocked ? 'box-none' : 'none'}>
         <HistoryCard event={event} allEvents={allEvents} />
       </View>
 
-      {isPro ? null : (
+      {unlocked ? null : (
         <TouchableOpacity
           activeOpacity={0.93}
-          onPress={onPaywall}
+          onPress={handleUnlockAttempt}
           style={StyleSheet.absoluteFill}
         >
           {/* Gradient: transparent top → opaque bottom — event peeks through */}
@@ -364,17 +392,25 @@ const ProCardSection = ({ event, allEvents, gold, isPro, onPaywall, t, language 
 
             {/* Lock hint */}
             <Text style={_proSec.lockHint}>
-              {t('story_locked')}
+              {(PRO_COIN_T[language] ?? PRO_COIN_T.en).hint}
             </Text>
 
-            {/* CTA button */}
+            {/* Primary CTA — unlock with a coin (tapping the card does the same) */}
             <Animated.View style={{ transform: [{ scale: ctaScale }] }}>
               <View style={[_proSec.ctaBtn, { backgroundColor: gold }]}>
                 <Ionicons name="lock-open-outline" size={15} color="#0A0815" />
-                <Text style={_proSec.ctaBtnText}>{t('unlock_pro_cta')}</Text>
-                <Ionicons name="arrow-forward" size={15} color="#0A0815" />
+                <Text style={_proSec.ctaBtnText}>
+                  {(PRO_COIN_T[language] ?? PRO_COIN_T.en).unlock} · {COIN_COST_EVENT} 🪙
+                </Text>
+                <Text style={[_proSec.ctaBtnText, { opacity: 0.7 }]}>({coins})</Text>
               </View>
             </Animated.View>
+
+            {/* Secondary — go PRO for unlimited (stops the coin-spend tap) */}
+            <TouchableOpacity onPress={(e) => { e.stopPropagation?.(); onPaywall(); }} activeOpacity={0.7} style={_proSec.goProLink}>
+              <Ionicons name="star" size={11} color={gold} />
+              <Text style={[_proSec.goProText, { color: gold }]}>{(PRO_COIN_T[language] ?? PRO_COIN_T.en).goPro}</Text>
+            </TouchableOpacity>
 
             {/* Glow behind CTA */}
             <Animated.View style={[_proSec.ctaGlow, { backgroundColor: gold, opacity: glowOp }]} pointerEvents="none" />
@@ -478,6 +514,19 @@ const _proSec = StyleSheet.create({
     fontWeight: '900',
     color: '#0A0815',
     letterSpacing: 0.3,
+  },
+  goProLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    marginTop: 10,
+    paddingVertical: 6,
+  },
+  goProText: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.2,
   },
   ctaGlow: {
     position: 'absolute',
@@ -696,7 +745,7 @@ export default function HomeScreen() {
   const totalEventsRead = useGamificationStore(s => s.totalEventsRead);
 
   const { showInterstitial } = useInterstitialAd();
-  const { showForUnlock, isUnlockReady } = useRewardedUnlock();
+  const coins = useCoins();
 
   const [tomorrowMainUnlocked, setTomorrowMainUnlocked] = useState(false);
   const [tomorrowDiscoverUnlocked, setTomorrowDiscoverUnlocked] = useState(false);
@@ -717,18 +766,20 @@ export default function HomeScreen() {
     }
   });
 
-  const handleUnlockMain = useCallback(() => {
-    showForUnlock(() => { haptic('success'); setTomorrowMainUnlocked(true); });
-  }, [showForUnlock]);
-  const handleUnlockDiscover = useCallback(() => {
-    showForUnlock(() => { haptic('success'); setTomorrowDiscoverUnlocked(true); });
-  }, [showForUnlock]);
-  const handleUnlockDay2Main = useCallback(() => {
-    showForUnlock(() => { haptic('success'); setDay2MainUnlocked(true); });
-  }, [showForUnlock]);
-  const handleUnlockDay2Discover = useCallback(() => {
-    showForUnlock(() => { haptic('success'); setDay2DiscoverUnlocked(true); });
-  }, [showForUnlock]);
+  // Spend a coin to unlock a locked future-day card; no coins → offer the pop-up.
+  const spendForDay = useCallback((onDone: () => void) => {
+    haptic('medium');
+    if (useCoinStore.getState().spendCoins(COIN_COST_DAY)) {
+      haptic('success');
+      onDone();
+    } else {
+      useCoinPopupStore.getState().show('no_coins');
+    }
+  }, []);
+  const handleUnlockMain = useCallback(() => spendForDay(() => setTomorrowMainUnlocked(true)), [spendForDay]);
+  const handleUnlockDiscover = useCallback(() => spendForDay(() => setTomorrowDiscoverUnlocked(true)), [spendForDay]);
+  const handleUnlockDay2Main = useCallback(() => spendForDay(() => setDay2MainUnlocked(true)), [spendForDay]);
+  const handleUnlockDay2Discover = useCallback(() => spendForDay(() => setDay2DiscoverUnlocked(true)), [spendForDay]);
 
   const [achVis, setAchVis] = useState(false);
   const [leadVis, setLeadVis] = useState(false);
@@ -955,9 +1006,9 @@ export default function HomeScreen() {
       const hintPg = mem.current[mk('free', isoFor(1))] ?? EMPTY;
       const hintEvent = [...hintPg.data].sort(sortByImpact)[0] ?? undefined;
       if (tab === 'today' && !tomorrowMainUnlocked) {
-        content = <LockedTomorrowCard variant="main" onUnlock={handleUnlockMain} isReady={isUnlockReady} dayOffset={1} hintEvent={hintEvent} bottomPad={floatingBarPad} onPaywall={() => presentPaywall()} />;
+        content = <LockedTomorrowCard variant="main" onUnlock={handleUnlockMain} isReady={true} coinCost={COIN_COST_DAY} coins={coins} dayOffset={1} hintEvent={hintEvent} bottomPad={floatingBarPad} onPaywall={() => presentPaywall()} />;
       } else if (tab === 'discover' && !tomorrowDiscoverUnlocked) {
-        content = <LockedTomorrowCard variant="discover" onUnlock={handleUnlockDiscover} isReady={isUnlockReady} dayOffset={1} hintEvent={hintEvent} bottomPad={floatingBarPad} onPaywall={() => presentPaywall()} />;
+        content = <LockedTomorrowCard variant="discover" onUnlock={handleUnlockDiscover} isReady={true} coinCost={COIN_COST_DAY} coins={coins} dayOffset={1} hintEvent={hintEvent} bottomPad={floatingBarPad} onPaywall={() => presentPaywall()} />;
       }
     }
 
@@ -965,9 +1016,9 @@ export default function HomeScreen() {
       const hintPg = mem.current[mk('free', isoFor(2))] ?? EMPTY;
       const hintEvent = [...hintPg.data].sort(sortByImpact)[0] ?? undefined;
       if (tab === 'today' && !day2MainUnlocked) {
-        content = <LockedTomorrowCard variant="main" onUnlock={handleUnlockDay2Main} isReady={isUnlockReady} dayOffset={2} hintEvent={hintEvent} bottomPad={floatingBarPad} onPaywall={() => presentPaywall()} />;
+        content = <LockedTomorrowCard variant="main" onUnlock={handleUnlockDay2Main} isReady={true} coinCost={COIN_COST_DAY} coins={coins} dayOffset={2} hintEvent={hintEvent} bottomPad={floatingBarPad} onPaywall={() => presentPaywall()} />;
       } else if (tab === 'discover' && !day2DiscoverUnlocked) {
-        content = <LockedTomorrowCard variant="discover" onUnlock={handleUnlockDay2Discover} isReady={isUnlockReady} dayOffset={2} hintEvent={hintEvent} bottomPad={floatingBarPad} onPaywall={() => presentPaywall()} />;
+        content = <LockedTomorrowCard variant="discover" onUnlock={handleUnlockDay2Discover} isReady={true} coinCost={COIN_COST_DAY} coins={coins} dayOffset={2} hintEvent={hintEvent} bottomPad={floatingBarPad} onPaywall={() => presentPaywall()} />;
       }
     }
 
@@ -1064,7 +1115,7 @@ export default function HomeScreen() {
   }, [
     tab, theme, t, language, allEvents, tick, goldColor, isPro,
     tomorrowMainUnlocked, tomorrowDiscoverUnlocked,
-    day2MainUnlocked, day2DiscoverUnlocked, isUnlockReady,
+    day2MainUnlocked, day2DiscoverUnlocked, coins,
     handleUnlockMain, handleUnlockDiscover,
     handleUnlockDay2Main, handleUnlockDay2Discover,
     scrollX, presentPaywall, floatingBarPad, sortByInterest,
@@ -1081,9 +1132,11 @@ export default function HomeScreen() {
   const showChrome = tab === 'today' || tab === 'discover' || tab === 'search';
   const badgeCnt = newAch.length;
   const switchTab = useCallback(async (t: Tab) => {
+    // Leaving the map → opportunistic "watch a clip for a coin" pop-up.
+    if (tab === 'map' && t !== 'map') useCoinPopupStore.getState().maybeShow('map');
     setTab(t);
     if (t === 'saved') setSeenSaved(userSaved.length);
-  }, [userSaved.length]);
+  }, [tab, userSaved.length]);
   const swipeOn = tab === 'today' || tab === 'discover';
 
   // One-shot store-review prompt: fire if the user lingers on the map for 60s.

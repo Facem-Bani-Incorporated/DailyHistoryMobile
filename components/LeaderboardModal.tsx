@@ -6,8 +6,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Crown, Trophy, X } from 'lucide-react-native';
+import { Crown, Trophy, Users, X } from 'lucide-react-native';
 import { GameIcon } from '../utils/GameIcon';
+import FriendsModal from './FriendsModal';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -698,6 +699,7 @@ export default function LeaderboardModal({
   const [period, setPeriod] = useState<LeaderboardPeriod>('alltime');
   const [data, setData] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [friendsVis, setFriendsVis] = useState(false);
 
   // Monthly period only supports XP ranking; reset tab when switching
   const handlePeriodChange = useCallback((p: LeaderboardPeriod) => {
@@ -762,12 +764,20 @@ export default function LeaderboardModal({
             </Text>
           </View>
 
-          <TouchableOpacity onPress={() => { haptic('medium'); loadData(); }} style={[lbs.iconBtn, {
-            backgroundColor: isDark ? '#181220' : '#FFFFFF',
-            borderColor: isDark ? '#2A2332' : '#EFE9E0',
-          }]} activeOpacity={0.75}>
-            <Ionicons name="refresh" size={18} color={theme.text} />
-          </TouchableOpacity>
+          <View style={lbs.hdrRight}>
+            <TouchableOpacity onPress={() => { haptic('light'); setFriendsVis(true); }} style={[lbs.iconBtn, {
+              backgroundColor: isDark ? '#181220' : '#FFFFFF',
+              borderColor: isDark ? '#2A2332' : '#EFE9E0',
+            }]} activeOpacity={0.75}>
+              <Users size={18} color={theme.text} strokeWidth={2.2} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => { haptic('medium'); loadData(); }} style={[lbs.iconBtn, {
+              backgroundColor: isDark ? '#181220' : '#FFFFFF',
+              borderColor: isDark ? '#2A2332' : '#EFE9E0',
+            }]} activeOpacity={0.75}>
+              <Ionicons name="refresh" size={18} color={theme.text} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <ScrollView
@@ -870,6 +880,8 @@ export default function LeaderboardModal({
             </>
           )}
         </ScrollView>
+
+        <FriendsModal visible={friendsVis} onClose={() => setFriendsVis(false)} />
       </View>
     </Modal>
   );
@@ -881,6 +893,7 @@ const lbs = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingVertical: 12,
   },
+  hdrRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   hdrCenter: { flex: 1, alignItems: 'center' },
   hdrKicker: { fontSize: 9.5, fontWeight: '900', letterSpacing: 2.2 },
   hdrTitle: { fontSize: 19, fontWeight: '800', letterSpacing: -0.3, fontFamily: SERIF, marginTop: 2 },

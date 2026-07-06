@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLanguage } from '../context/LanguageContext';
 import { useRevenueCat } from '../context/RevenueCatContext';
 import { useTheme } from '../context/ThemeContext';
+import { useCoinPopupStore } from '../store/useCoinPopupStore';
 import { useGamificationStore } from '../store/useGamificationStore';
 import {
   isDailyChallengeDone,
@@ -194,6 +195,8 @@ export default function DailyChallengeModal({
     markDailyChallengeDone(todayIso());
     setShowResults(true);
     haptic('success');
+    // Opportunistic "watch a clip for a coin" pop-up after the daily quiz.
+    try { useCoinPopupStore.getState().maybeShow('daily_quiz'); } catch {}
     // High-intent moment — ask for a review once ever.
     maybeRequestReview();
   }, [addQuizXP, recordQuizDone, isPro]);

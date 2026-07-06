@@ -14,6 +14,8 @@ import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { useEventImages } from '../hooks/useEventImages';
 import { useTTS } from '../hooks/useTTS';
+import { useCoinPopupStore } from '../store/useCoinPopupStore';
+import { useCoinStore } from '../store/useCoinStore';
 import { useGamificationStore } from '../store/useGamificationStore';
 import { getEventId, useSavedStore } from '../store/useSavedStore';
 import { QuizSection } from './QuizSection';
@@ -314,6 +316,18 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
   const scrollViewRef = useRef<any>(null);
   const { saveEvent, removeEvent, isSaved } = useSavedStore();
   const markEventRead = useGamificationStore(s => s.markEventRead);
+
+  // Count opened events; after opening >6 in a day, offer the coin pop-up on close
+  // (fires on close so it never stacks on top of this modal).
+  const pendingCoinPopup = useRef(false);
+  useEffect(() => {
+    if (visible) {
+      if (useCoinStore.getState().registerEventOpen()) pendingCoinPopup.current = true;
+    } else if (pendingCoinPopup.current) {
+      pendingCoinPopup.current = false;
+      useCoinPopupStore.getState().maybeShow('events');
+    }
+  }, [visible]);
   const eventId = currentEvent ? getEventId(currentEvent) : null;
   const { images: gallery } = useEventImages(currentEvent ?? {});
 

@@ -30,6 +30,15 @@ export const ENDPOINTS = {
   // Quiz — all paths relative to /quizzes/event/{eventId}
   QUIZ_EVENT: '/quizzes/event',  // base: /{id}?lang=, /{id}/status, /{id}/submit
 
+  // Friends — see friendsService.ts. Dynamic paths:
+  //   accept/decline: /friends/requests/{friendshipId}/accept|decline
+  //   remove:         /friends/{userId}
+  FRIENDS:             '/friends',
+  FRIENDS_REQUESTS:    '/friends/requests',
+  FRIENDS_INCOMING:    '/friends/requests/incoming',
+  FRIENDS_OUTGOING:    '/friends/requests/outgoing',
+  FRIENDS_LEADERBOARD: '/friends/leaderboard',
+
   // Support
   SUPPORT:       '/support',
 } as const;

@@ -29,6 +29,11 @@ import { ENDPOINTS } from '../config/api';
 import { buildAvatarUrl, getStoreUrl, PRIVACY_POLICY_URL, TERMS_URL, WEBSITE_URL } from '../config/urls';
 import { HISTORICAL_FIGURES, fetchAllFigureThumbs } from '../config/avatars';
 import { useUserAvatar, usePreferencesStore } from '../store/usePreferencesStore';
+import { Share } from 'react-native';
+import { COINS_PER_REWARDED_AD } from '../config/coins';
+import { useReferralActive } from '../hooks/useCoins';
+import { useRewardedUnlock } from '../hooks/useRewardedUnlock';
+import { useCoinData, useCoins, useCoinStore } from '../store/useCoinStore';
 import { haptic } from '../utils/haptics';
 
 // Localized title for the avatar picker (ProfileModal uses the global t()
@@ -81,6 +86,50 @@ const LANGUAGES: { code: Language; label: string; native: string; flag: string }
 const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
 
 /* ═══════════════ SUB-COMPONENTS ═══════════════ */
+
+const PROFILE_COIN_T: Record<string, Record<string, string>> = {
+  en: {
+    section: 'Coins & Rewards', coins: 'coins',
+    getCoin: 'Get a coin', getCoinSub: 'Watch a short clip',
+    hint: 'Earn coins by watching clips or every 1,000 XP. Spend 1 to unlock any PRO story or map layer.',
+    invite: 'Invite a friend', inviteSub: 'Free day of PRO when they add you back',
+    inviteMsg: 'Join me on Daily History — a new piece of history every day! Add me as a friend:',
+    passActive: 'PRO', left: 'left',
+  },
+  ro: {
+    section: 'Monede & Recompense', coins: 'monede',
+    getCoin: 'Ia o monedă', getCoinSub: 'Vizionează un clip scurt',
+    hint: 'Câștigi monede din clipuri sau la fiecare 1.000 XP. Cu 1 monedă deblochezi orice poveste sau strat de hartă PRO.',
+    invite: 'Invită un prieten', inviteSub: 'O zi de PRO gratis când te adaugă înapoi',
+    inviteMsg: 'Hai pe Daily History — o bucată de istorie în fiecare zi! Adaugă-mă ca prieten:',
+    passActive: 'PRO', left: 'rămase',
+  },
+  fr: {
+    section: 'Pièces & Récompenses', coins: 'pièces',
+    getCoin: 'Obtenir une pièce', getCoinSub: 'Regarde une courte pub',
+    hint: 'Gagne des pièces avec des pubs ou tous les 1 000 XP. 1 pièce débloque une histoire ou carte PRO.',
+    invite: 'Inviter un ami', inviteSub: 'Un jour de PRO gratuit quand il t’ajoute',
+    inviteMsg: 'Rejoins-moi sur Daily History — une histoire chaque jour ! Ajoute-moi :',
+    passActive: 'PRO', left: 'restant',
+  },
+  de: {
+    section: 'Münzen & Belohnungen', coins: 'Münzen',
+    getCoin: 'Münze holen', getCoinSub: 'Kurzen Clip ansehen',
+    hint: 'Verdiene Münzen durch Clips oder alle 1.000 XP. 1 Münze schaltet eine PRO-Geschichte oder Kartenebene frei.',
+    invite: 'Freund einladen', inviteSub: 'Ein Gratis-PRO-Tag, wenn er dich zurück hinzufügt',
+    inviteMsg: 'Komm zu Daily History — jeden Tag ein Stück Geschichte! Füge mich hinzu:',
+    passActive: 'PRO', left: 'übrig',
+  },
+  es: {
+    section: 'Monedas y Recompensas', coins: 'monedas',
+    getCoin: 'Consigue una moneda', getCoinSub: 'Mira un clip corto',
+    hint: 'Gana monedas con clips o cada 1.000 XP. 1 moneda desbloquea cualquier historia o capa de mapa PRO.',
+    invite: 'Invita a un amigo', inviteSub: 'Un día de PRO gratis cuando te añade',
+    inviteMsg: '¡Únete a Daily History — una historia cada día! Añádeme:',
+    passActive: 'PRO', left: 'restante',
+  },
+};
+const coinT = (lang: string, k: string) => (PROFILE_COIN_T[lang] ?? PROFILE_COIN_T.en)[k] ?? PROFILE_COIN_T.en[k] ?? k;
 
 const SectionTitle = ({ label, theme }: { label: string; theme: any }) => (
   <View style={_sec.row}>
@@ -241,6 +290,29 @@ export default function ProfileModal({ visible, onClose }: Props) {
   const [restoreLoading, setRestoreLoading] = useState(false);
   const chosenAvatar = useUserAvatar();
   const setAvatar = usePreferencesStore(s => s.setAvatar);
+
+  // ── Coins & referral ──
+  const coins = useCoins();
+  const coinData = useCoinData();
+  const referralActive = useReferralActive();
+  const { showForUnlock } = useRewardedUnlock();
+  const onGetCoin = () => {
+    haptic('medium');
+    showForUnlock(() => { useCoinStore.getState().addCoins(COINS_PER_REWARDED_AD); haptic('success'); });
+  };
+  const referralLeftLabel = (() => {
+    if (!referralActive || !coinData.referralPassUntil) return '';
+    const h = Math.max(1, Math.ceil((coinData.referralPassUntil - Date.now()) / 3600000));
+    return h >= 24 ? `${Math.ceil(h / 24)}d` : `${h}h`;
+  })();
+  const onInvite = async () => {
+    haptic('medium');
+    try {
+      await Share.share({
+        message: `${coinT(language, 'inviteMsg')}\n\n@${user?.username ?? user?.email?.split('@')[0] ?? ''}\n${getStoreUrl()}`,
+      });
+    } catch {}
+  };
   const [avatarPickerVisible, setAvatarPickerVisible] = useState(false);
   const [figureThumbs, setFigureThumbs] = useState<Record<string, string>>({});
   const [figuresLoading, setFiguresLoading] = useState(false);
@@ -500,6 +572,55 @@ export default function ProfileModal({ visible, onClose }: Props) {
               </View>
 
               <ReadingHeatmap />
+
+              {/* ══ COINS & REWARDS ══ */}
+              <SectionTitle label={coinT(language, 'section')} theme={theme} />
+              <View style={[s.card, { backgroundColor: isPremium ? '#0F0D14' : theme.card, borderColor: isPremium ? '#2A2230' : theme.border }]}>
+                {/* Balance + get-a-coin */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 14 }}>
+                  <View style={{ width: 38, height: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: `${gold}18` }}>
+                    <Text style={{ fontSize: 18 }}>🪙</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: theme.text, fontSize: 20, fontWeight: '900', letterSpacing: -0.3 }}>
+                      {coins} <Text style={{ color: theme.subtext, fontSize: 13, fontWeight: '700' }}>{coinT(language, 'coins')}</Text>
+                    </Text>
+                  </View>
+                  {!isPro && (
+                    <TouchableOpacity
+                      onPress={onGetCoin}
+                      activeOpacity={0.85}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: gold, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 11 }}
+                    >
+                      <Ionicons name="play-circle" size={15} color="#1a1208" />
+                      <Text style={{ color: '#1a1208', fontWeight: '900', fontSize: 12.5 }}>{coinT(language, 'getCoin')}</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+                <Hairline theme={theme} inset />
+                <Text style={{ color: theme.subtext, fontSize: 12, lineHeight: 17, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12 }}>
+                  {coinT(language, 'hint')}
+                </Text>
+                <Hairline theme={theme} inset />
+                {/* Referral — free day of PRO when an invited friend adds you back */}
+                <SettingRow
+                  icon="gift-outline"
+                  iconColor="#EF476F"
+                  iconBg={'#EF476F12'}
+                  title={coinT(language, 'invite')}
+                  subtitle={coinT(language, 'inviteSub')}
+                  theme={theme}
+                  onPress={onInvite}
+                  right={referralActive ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: `${gold}18`, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 8 }}>
+                      <Ionicons name="sparkles" size={10} color={gold} />
+                      <Text style={{ color: gold, fontSize: 10.5, fontWeight: '900' }}>{coinT(language, 'passActive')} · {referralLeftLabel} {coinT(language, 'left')}</Text>
+                    </View>
+                  ) : (
+                    <Ionicons name="share-outline" size={16} color={theme.subtext} />
+                  )}
+                />
+              </View>
 
               {/* ══ PREFERENCES ══ */}
               <SectionTitle label={t('preferences')} theme={theme} />

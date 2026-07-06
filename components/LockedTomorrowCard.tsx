@@ -31,6 +31,8 @@ const T: Record<string, Record<string, string>> = {
     or: 'OR',
     getPro: 'Get PRO — Unlimited Access',
     duration: '~15-30s',
+    coinSub: 'Spend a coin to unlock — or go PRO',
+    coinCta: 'Unlock',
   },
   ro: {
     locked: 'Povestea de Mâine',
@@ -46,6 +48,8 @@ const T: Record<string, Record<string, string>> = {
     or: 'SAU',
     getPro: 'Obține PRO — Acces Nelimitat',
     duration: '~15-30s',
+    coinSub: 'Folosește o monedă ca să deblochezi — sau ia PRO',
+    coinCta: 'Deblochează',
   },
   fr: {
     locked: "L'Histoire de Demain",
@@ -61,6 +65,8 @@ const T: Record<string, Record<string, string>> = {
     or: 'OU',
     getPro: 'Obtenir PRO — Accès illimité',
     duration: '~15-30s',
+    coinSub: 'Dépense une pièce pour débloquer — ou passe PRO',
+    coinCta: 'Débloquer',
   },
   de: {
     locked: 'Die Geschichte von Morgen',
@@ -76,6 +82,8 @@ const T: Record<string, Record<string, string>> = {
     or: 'ODER',
     getPro: 'PRO holen — Unbegrenzter Zugang',
     duration: '~15-30s',
+    coinSub: 'Mit einer Münze freischalten — oder PRO holen',
+    coinCta: 'Freischalten',
   },
   es: {
     locked: 'La Historia de Mañana',
@@ -91,6 +99,8 @@ const T: Record<string, Record<string, string>> = {
     or: 'O',
     getPro: 'Obtener PRO — Acceso ilimitado',
     duration: '~15-30s',
+    coinSub: 'Usa una moneda para desbloquear — u obtén PRO',
+    coinCta: 'Desbloquear',
   },
 };
 const tx = (lang: string, k: string) => (T[lang] ?? T.en)[k] ?? T.en[k] ?? k;
@@ -114,6 +124,9 @@ interface LockedTomorrowCardProps {
   hintEvent?: any;
   bottomPad?: number;
   onPaywall?: () => void;
+  /** When set, the card unlocks by spending this many coins instead of a clip. */
+  coinCost?: number;
+  coins?: number;
 }
 
 export default function LockedTomorrowCard({
@@ -124,6 +137,8 @@ export default function LockedTomorrowCard({
   hintEvent,
   bottomPad = 0,
   onPaywall,
+  coinCost,
+  coins = 0,
 }: LockedTomorrowCardProps) {
   const { theme, isDark } = useTheme();
   const { language } = useLanguage();
@@ -152,9 +167,14 @@ export default function LockedTomorrowCard({
   const gold = isDark ? '#E8B84D' : '#C77E08';
   const isMain = variant === 'main';
 
+  const coinMode = typeof coinCost === 'number';
   const dayLabel = dayOffset === 1 ? tx(language, 'tomorrow') : tx(language, 'inTwoDays');
-  const subtitle = tx(language, isMain ? 'lockedSub' : 'discoverSub');
-  const ctaText = isReady ? tx(language, 'cta') : tx(language, 'ctaDisabled');
+  const subtitle = coinMode
+    ? tx(language, 'coinSub')
+    : tx(language, isMain ? 'lockedSub' : 'discoverSub');
+  const ctaText = coinMode
+    ? `${tx(language, 'coinCta')} · ${coinCost} 🪙`
+    : (isReady ? tx(language, 'cta') : tx(language, 'ctaDisabled'));
 
   // Event teaser data
   const eventTitle: string =
@@ -268,18 +288,22 @@ export default function LockedTomorrowCard({
               },
             ]}>
               <Ionicons
-                name={isReady ? 'play-circle' : 'hourglass-outline'}
+                name={coinMode ? 'lock-open' : (isReady ? 'play-circle' : 'hourglass-outline')}
                 size={18}
                 color={isReady ? '#000' : theme.subtext}
               />
               <Text style={[styles.ctaText, { color: isReady ? '#000' : theme.subtext }]}>
                 {ctaText}
               </Text>
-              {isReady && (
+              {coinMode ? (
+                <View style={styles.durationBadge}>
+                  <Text style={styles.durationText}>{coins} 🪙</Text>
+                </View>
+              ) : isReady ? (
                 <View style={styles.durationBadge}>
                   <Text style={styles.durationText}>{tx(language, 'duration')}</Text>
                 </View>
-              )}
+              ) : null}
             </Animated.View>
           </TouchableOpacity>
 

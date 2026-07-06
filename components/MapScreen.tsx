@@ -64,7 +64,9 @@ import { haptic } from '../utils/haptics';
 import { extractLocation } from '../utils/locationExtractor';
 import { GameIcon } from '../utils/GameIcon';
 import { StoryModal } from './StoryModal';
-import { useRewardedUnlock } from '../hooks/useRewardedUnlock';
+import { COIN_COST_MAP_LAYER } from '../config/coins';
+import { useCoinPopupStore } from '../store/useCoinPopupStore';
+import { useCoinData, useCoinStore } from '../store/useCoinStore';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental)
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -1090,11 +1092,13 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
   const { language } = useLanguage();
   const tLang = language !== 'en' ? (language as 'ro' | 'fr' | 'de' | 'es') : undefined;
   const insets = useSafeAreaInsets();
-  const { isPro, presentPaywall } = useRevenueCat();
-  const { showForUnlock } = useRewardedUnlock();
-  const [routesUnlocked, setRoutesUnlocked] = useState(false);
-  const [tradeUnlocked, setTradeUnlocked] = useState(false);
-  const [citiesUnlocked, setCitiesUnlocked] = useState(false);
+  const { isPro } = useRevenueCat();
+  // Coin-based unlocks (persisted + synced). A PRO/video map layer costs a coin.
+  const coinData = useCoinData();
+  const isLayerUnlocked = (l: string) => coinData.unlockedMapLayers.includes(l);
+  const routesUnlocked = isLayerUnlocked('routes');
+  const tradeUnlocked = isLayerUnlocked('trade');
+  const citiesUnlocked = isLayerUnlocked('cities');
   const mapRef = useRef<MapView>(null);
 
   const tm = useCallback(
@@ -1139,7 +1143,6 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
   const religionSliderRatioAtGrant = useRef(0.5);
 
   // WW1/WW2 layer state
-  const [ww1Unlocked, setWw1Unlocked] = useState(false);
   const [ww1Year, setWw1Year] = useState(WW1_YEAR_MIN);
   const [ww2Year, setWw2Year] = useState(WW2_YEAR_MIN);
   const [selectedWarEvent, setSelectedWarEvent] = useState<any>(null);
@@ -1411,38 +1414,28 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
     haptic('medium');
 
     const freeLayers: MapLayer[] = ['heatmap', 'battles', 'ww1', 'ww2', 'religion'];
-    if (!isPro && !freeLayers.includes(layer)) {
-      const rewardedLayers: MapLayer[] = ['routes', 'trade', 'cities'];
-      if (rewardedLayers.includes(layer)) {
-        const unlocked =
-          layer === 'routes' ? routesUnlocked :
-          layer === 'trade'  ? tradeUnlocked  :
-          citiesUnlocked;
-        if (!unlocked) {
-          setLayersOpen(false);
-          showForUnlock(() => {
-            if (layer === 'routes')      setRoutesUnlocked(true);
-            else if (layer === 'trade')  setTradeUnlocked(true);
-            else if (layer === 'cities') setCitiesUnlocked(true);
-            setMapLayer(layer);
-            setSelectedKeyStop(null);
-            setSelectedWarEvent(null);
-          });
-          return;
-        }
-        // already unlocked via rewarded — fall through
+    // Any PRO/video map layer is coin-gated: spend 1 coin to unlock it for good
+    // (isPro / referral pass already bypass this). No coins → offer the pop-up.
+    if (!isPro && !freeLayers.includes(layer) && !isLayerUnlocked(layer)) {
+      setLayersOpen(false);
+      const coin = useCoinStore.getState();
+      if (coin.spendCoins(COIN_COST_MAP_LAYER)) {
+        coin.unlockMapLayer(layer);
+        haptic('success');
+        setMapLayer(layer);
+        setSelectedKeyStop(null);
+        setSelectedWarEvent(null);
       } else {
-        setLayersOpen(false);
-        presentPaywall();
-        return;
+        useCoinPopupStore.getState().show('no_coins');
       }
+      return;
     }
 
     setMapLayer(prev => prev === layer ? 'off' : layer);
     setSelectedKeyStop(null);
     setSelectedWarEvent(null);
     setLayersOpen(false);
-  }, [isPro, routesUnlocked, tradeUnlocked, citiesUnlocked, ww1Unlocked, showForUnlock, presentPaywall]);
+  }, [isPro, coinData.unlockedMapLayers]);
 
   const toggleEmpire = useCallback((id: string) => {
     haptic('selection');
@@ -2350,12 +2343,9 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
               { id: 'dinosaurs' as const, Icon: Globe2,      label: tm('layer_dinosaurs'), desc: `${DINOSAUR_SITES.length} ${tm('layer_dinosaurs_desc')}`,                                badge: 'pro'   as const },
             ]).map(({ id, Icon, label, desc, badge }) => {
               const active = mapLayer === id;
-              const lockedPro = !isPro && badge === 'pro';
-              const lockedVideo = !isPro && badge === 'video' && (
-                (id === 'routes'  && !routesUnlocked) ||
-                (id === 'trade'   && !tradeUnlocked)  ||
-                (id === 'cities'  && !citiesUnlocked)
-              );
+              // PRO/video layers are coin-gated; once coin-unlocked they read as open.
+              const lockedPro = !isPro && badge === 'pro' && !isLayerUnlocked(id);
+              const lockedVideo = !isPro && badge === 'video' && !isLayerUnlocked(id);
               return (
                 <TouchableOpacity key={id} onPress={() => toggleLayer(id)} activeOpacity={0.75}
                   style={[styles.layersPanelRow, active && { backgroundColor: accent + '12' }]}>
@@ -2372,12 +2362,10 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
                     <View style={[styles.layersPanelBadge, { backgroundColor: '#05966920' }]}>
                       <Text style={[styles.layersPanelBadgeText, { color: '#059669' }]}>FREE</Text>
                     </View>
-                  ) : lockedVideo ? (
+                  ) : (lockedVideo || lockedPro) ? (
                     <View style={[styles.layersPanelBadge, { backgroundColor: '#D9770620' }]}>
-                      <Text style={[styles.layersPanelBadgeText, { color: '#D97706' }]}>▶ VIDEO</Text>
+                      <Text style={[styles.layersPanelBadgeText, { color: '#D97706' }]}>🪙 {COIN_COST_MAP_LAYER}</Text>
                     </View>
-                  ) : lockedPro ? (
-                    <Crown size={13} color="#D97706" strokeWidth={2.5} />
                   ) : null}
                 </TouchableOpacity>
               );

@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import api from '../api';
 import { ENDPOINTS } from '../config/api';
+import { useCoinPopupStore } from '../store/useCoinPopupStore';
 
 export interface QuizOption {
   optionId: string;
@@ -134,6 +135,8 @@ export function useQuiz(eventId: string | null, language = 'en') {
       const submitResult: SubmitResult = res.data;
       setResult(submitResult);
       setPhase('done');
+      // Opportunistic "watch a clip for a coin" pop-up after finishing a quiz.
+      try { useCoinPopupStore.getState().maybeShow('quiz'); } catch {}
       return submitResult;
     } catch (e: any) {
       if (e?.response?.status === 409) {

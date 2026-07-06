@@ -17,6 +17,7 @@ import Purchases, {
 import RevenueCatUI, { PAYWALL_RESULT } from 'react-native-purchases-ui';
 
 import { PRO_ENTITLEMENT_ID, REVENUECAT_API_KEYS } from '../config/revenuecat';
+import { useReferralActive } from '../hooks/useCoins';
 import { refreshMe } from '../services/authService';
 import { useAuthStore } from '../store/useAuthStore';
 
@@ -66,11 +67,16 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
 
   const user = useAuthStore(s => s.user);
 
+  // Referral "free day of PRO" pass — a local, time-boxed unlock-all (no payment).
+  const referralActive = useReferralActive();
+
   // RC entitlement is the live source of truth; backend is_pro is the durable
   // fallback — set by the RevenueCat webhook, survives app updates and reinstalls.
+  // A referral pass also counts as PRO while it's active.
   const isPro =
     !!customerInfo?.entitlements.active[PRO_ENTITLEMENT] ||
-    user?.is_pro === true;
+    user?.is_pro === true ||
+    referralActive;
 
   // ── Configure SDK once ──
   useEffect(() => {
@@ -233,7 +239,7 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
     presentCustomerCenter,
     restorePurchases,
     refresh,
-  }), [ready, isPro, customerInfo, currentOffering, presentPaywall, presentPaywallIfNeeded, presentCustomerCenter, restorePurchases, refresh]);
+  }), [ready, isPro, referralActive, customerInfo, currentOffering, presentPaywall, presentPaywallIfNeeded, presentCustomerCenter, restorePurchases, refresh]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
