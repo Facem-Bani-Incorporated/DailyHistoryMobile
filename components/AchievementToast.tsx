@@ -15,8 +15,10 @@ import {
 } from 'react-native';
 import { GameIcon } from '../utils/GameIcon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { COIN_GOLD, COIN_GOLD_DEEP } from '../config/coins';
 import { useLanguage } from '../context/LanguageContext';
+import { useUiStore } from '../store/useUiStore';
 import { useTheme } from '../context/ThemeContext';
 import {
   ACHIEVEMENT_NAMES,
@@ -166,7 +168,12 @@ export default function AchievementToast() {
         transform: [{ translateY: slideY }, { scale }],
       },
     ]}>
-      <TouchableOpacity activeOpacity={0.92} onPress={dismiss}>
+      <TouchableOpacity
+        activeOpacity={0.92}
+        onPress={() => { useUiStore.getState().show('achievements'); dismiss(); }}
+        accessibilityRole="button"
+        accessibilityLabel={`${name} — ${tx(language, 'unlocked')}`}
+      >
         <View style={[s.toast, {
           backgroundColor: isDark ? '#17130C' : '#FFFDF5',
           borderColor: gold + '55',
@@ -222,6 +229,9 @@ export default function AchievementToast() {
               <Text style={s.xpNum}>100</Text>
               <Text style={s.xpLbl}>XP</Text>
             </View>
+
+            {/* Tap-to-view affordance */}
+            <Ionicons name="chevron-forward" size={16} color={gold} style={{ marginLeft: -2 }} />
           </View>
 
           {/* Timer bar */}

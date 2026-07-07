@@ -34,7 +34,18 @@ import { COINS_PER_REWARDED_AD } from '../config/coins';
 import { useReferralActive } from '../hooks/useCoins';
 import { useRewardedUnlock } from '../hooks/useRewardedUnlock';
 import { useCoinData, useCoins, useCoinStore } from '../store/useCoinStore';
+import { useUiStore } from '../store/useUiStore';
 import { haptic } from '../utils/haptics';
+
+// Localized copy for the "Explore" quick-access rows (achievements / daily
+// challenge / search) moved here from the top bar.
+const MENU_UI: Record<string, { section: string; challengeSub: string; achievementsSub: string; search: string; searchSub: string }> = {
+  en: { section: 'Explore', challengeSub: 'Answer today’s bonus quiz', achievementsSub: 'Badges you’ve unlocked', search: 'Search', searchSub: 'Find any story or figure' },
+  ro: { section: 'Explorează', challengeSub: 'Răspunde la quizul bonus de azi', achievementsSub: 'Realizările deblocate', search: 'Caută', searchSub: 'Găsește orice poveste sau figură' },
+  fr: { section: 'Explorer', challengeSub: 'Réponds au quiz bonus du jour', achievementsSub: 'Les succès débloqués', search: 'Rechercher', searchSub: 'Trouve une histoire ou une figure' },
+  de: { section: 'Entdecken', challengeSub: 'Beantworte das heutige Bonus-Quiz', achievementsSub: 'Freigeschaltete Abzeichen', search: 'Suche', searchSub: 'Finde eine Geschichte oder Person' },
+  es: { section: 'Explorar', challengeSub: 'Responde el quiz extra de hoy', achievementsSub: 'Logros desbloqueados', search: 'Buscar', searchSub: 'Encuentra una historia o figura' },
+};
 
 // Localized title for the avatar picker (ProfileModal uses the global t()
 // table, but these strings live here to avoid touching LanguageContext).
@@ -572,6 +583,31 @@ export default function ProfileModal({ visible, onClose }: Props) {
               </View>
 
               <ReadingHeatmap />
+
+              {/* ══ EXPLORE — quick access moved out of the top bar ══ */}
+              <SectionTitle label={(MENU_UI[language] ?? MENU_UI.en).section} theme={theme} />
+              <View style={[s.card, { backgroundColor: isPremium ? '#0F0D14' : theme.card, borderColor: isPremium ? '#2A2230' : theme.border }]}>
+                <SettingRow
+                  icon="ribbon-outline" iconColor="#34C759" iconBg={'#34C75912'}
+                  title={t('achievements')} subtitle={(MENU_UI[language] ?? MENU_UI.en).achievementsSub}
+                  theme={theme}
+                  onPress={() => { onClose(); useUiStore.getState().show('achievements'); }}
+                />
+                <Hairline theme={theme} inset />
+                <SettingRow
+                  icon="trophy-outline" iconColor="#FFB300" iconBg={'#FFB30012'}
+                  title={t('daily_challenge')} subtitle={(MENU_UI[language] ?? MENU_UI.en).challengeSub}
+                  theme={theme}
+                  onPress={() => { onClose(); useUiStore.getState().show('challenge'); }}
+                />
+                <Hairline theme={theme} inset />
+                <SettingRow
+                  icon="search-outline" iconColor="#5856D6" iconBg={'#5856D612'}
+                  title={(MENU_UI[language] ?? MENU_UI.en).search} subtitle={(MENU_UI[language] ?? MENU_UI.en).searchSub}
+                  theme={theme}
+                  onPress={() => { onClose(); useUiStore.getState().requestSearch(); }}
+                />
+              </View>
 
               {/* ══ COINS & REWARDS ══ */}
               <SectionTitle label={coinT(language, 'section')} theme={theme} />

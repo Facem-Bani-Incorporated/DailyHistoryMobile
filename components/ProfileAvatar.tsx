@@ -1,12 +1,17 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Image, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { buildAvatarUrl } from '../config/urls';
 import { useAuthStore } from '../store/useAuthStore';
 import { useUserAvatar } from '../store/usePreferencesStore';
+import { useUiStore } from '../store/useUiStore';
 import ProfileModal from './ProfileModal';
 
 export default function ProfileAvatar() {
-  const [modalVisible, setModalVisible] = useState(false);
+  // Visibility lives in useUiStore so reward pop-ups (e.g. a level-up) can open
+  // the profile too, not just a tap on the avatar.
+  const modalVisible = useUiStore((s) => s.open.profile);
+  const showProfile = useUiStore((s) => s.show);
+  const hideProfile = useUiStore((s) => s.hide);
   const user = useAuthStore((state) => state.user);
   const chosenAvatar = useUserAvatar();
 
@@ -29,9 +34,11 @@ export default function ProfileAvatar() {
   return (
     <>
       <TouchableOpacity
-        onPress={() => setModalVisible(true)}
+        onPress={() => showProfile('profile')}
         style={styles.container}
         activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel="Profile"
       >
         <Image
           source={{ uri: imageUrl }}
@@ -43,7 +50,7 @@ export default function ProfileAvatar() {
 
       <ProfileModal
         visible={modalVisible}
-        onClose={() => setModalVisible(false)}
+        onClose={() => hideProfile('profile')}
       />
     </>
   );

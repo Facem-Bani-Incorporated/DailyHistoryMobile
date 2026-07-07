@@ -3,7 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
-import { Award, Search, Trophy } from 'lucide-react-native';
+import { Trophy, Users } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
@@ -24,6 +24,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 import api from '../../api';
 import AchievementsModal from '../../components/AchievementsModal';
+import FriendsModal from '../../components/FriendsModal';
 import AchievementToast from '../../components/AchievementToast';
 import CelebrationOverlay from '../../components/CelebrationOverlay';
 import { HistoryCardSkeleton } from '../../components/Skeletons';
@@ -58,6 +59,7 @@ import { useAuthStore } from '../../store/useAuthStore';
 import { useCoinPopupStore } from '../../store/useCoinPopupStore';
 import { useCoins, useCoinStore, useIsEventUnlocked } from '../../store/useCoinStore';
 import { useUnlockStore } from '../../store/useUnlockStore';
+import { useUiStore } from '../../store/useUiStore';
 import { getLevelForXP, getXPProgress, useGamificationStore } from '../../store/useGamificationStore';
 import { useNotificationEventStore } from '../../store/useNotificationEventStore';
 import { useInterestQuizDone, usePreferencesStore, useUserInterests } from '../../store/usePreferencesStore';
@@ -693,7 +695,7 @@ const RING_STROKE = 2;
 const RING_R = (AVATAR_SLOT - RING_STROKE) / 2;
 const RING_C = 2 * Math.PI * RING_R;
 
-const ProfileWithXP = ({ gold, theme, isDark }: { gold: string; theme: any; isDark: boolean }) => {
+const ProfileWithXP = ({ gold, theme, isDark, badgeCnt = 0 }: { gold: string; theme: any; isDark: boolean; badgeCnt?: number }) => {
   const totalXP = useGamificationStore((s: any) => s.totalXP ?? 0);
   const level = getLevelForXP(totalXP).level;
   const fillAnim = useRef(new Animated.Value(0)).current;
@@ -726,6 +728,11 @@ const ProfileWithXP = ({ gold, theme, isDark }: { gold: string; theme: any; isDa
             origin={`${AVATAR_SLOT / 2}, ${AVATAR_SLOT / 2}`} />
         </Svg>
         <View style={pwx.avatarHolder}><ProfileAvatar /></View>
+        {badgeCnt > 0 && (
+          <View style={[pwx.badge, { backgroundColor: isDark ? '#C17B2A' : '#FF6D00' }]}>
+            <Text style={pwx.badgeT}>{badgeCnt}</Text>
+          </View>
+        )}
       </View>
       <Text style={[pwx.levelText, { color: gold }]} numberOfLines={1}>
         LVL {level}
@@ -744,6 +751,11 @@ const pwx = StyleSheet.create({
     letterSpacing: 1.2,
     marginTop: 3,
   },
+  badge: {
+    position: 'absolute', top: -3, right: -3, minWidth: 15, height: 15,
+    borderRadius: 7.5, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3,
+  },
+  badgeT: { fontSize: 8.5, fontWeight: '900', color: '#FFF' },
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -870,10 +882,15 @@ export default function HomeScreen() {
   const handleUnlockDay2Main = useCallback(() => spendForDay(() => setDay2MainUnlocked(true)), [spendForDay]);
   const handleUnlockDay2Discover = useCallback(() => spendForDay(() => setDay2DiscoverUnlocked(true)), [spendForDay]);
 
-  const [achVis, setAchVis] = useState(false);
   const [leadVis, setLeadVis] = useState(false);
   const [recapVis, setRecapVis] = useState(false);
   const [calVis, setCalVis] = useState(false);
+
+  // Cross-component overlays (openable from the profile sheet + reward pop-ups).
+  const uiOpen = useUiStore(s => s.open);
+  const uiShow = useUiStore(s => s.show);
+  const uiHide = useUiStore(s => s.hide);
+  const searchTick = useUiStore(s => s.searchTick);
 
   // Interest quiz: shown once, ranks each day's events by the user's picks.
   const interests = useUserInterests();
@@ -901,8 +918,8 @@ export default function HomeScreen() {
   const clearPendingEvent = useNotificationEventStore(s => s.clearPendingEvent);
   const [notifEvent, setNotifEvent] = useState<any>(null);
 
-  // ── Daily Challenge (noon bonus quiz) ──
-  const [challengeVisible, setChallengeVisible] = useState(false);
+  // ── Daily Challenge (noon bonus quiz) ── visibility lives in useUiStore so the
+  // floating pill, the profile row, and deep-links can all open it.
   const [challengeDone, setChallengeDone] = useState(true); // hidden until checked
 
   const refreshChallengeDone = useCallback(() => {
@@ -913,12 +930,17 @@ export default function HomeScreen() {
   useEffect(() => {
     if (!pendingEvent) return;
     if (pendingEvent.__dailyChallenge) {
-      setChallengeVisible(true);
+      uiShow('challenge');
     } else {
       setNotifEvent(pendingEvent);
     }
     clearPendingEvent();
   }, [pendingEvent]);
+
+  // Profile row → switch to the Search tab.
+  useEffect(() => {
+    if (searchTick > 0) setTab('search');
+  }, [searchTick]);
 
   // Interstitials fire at natural moments (quiz done, map exit), not on story count.
   // showInterstitial() is passed down to screens that own those moments.
@@ -1363,33 +1385,16 @@ export default function HomeScreen() {
                   </TouchableOpacity>
                 )}
                 {!isPro && <CoinButton isDark={isDark} />}
-                {!isPro && <ProStarButton gold={goldColor} onPress={() => presentPaywall()} />}
 
-                <TouchableOpacity onPress={() => { haptic('light'); setAchVis(true); }}
+                <TouchableOpacity onPress={() => { haptic('light'); uiShow('friends'); }}
                   activeOpacity={0.6}
                   hitSlop={HEADER_HIT}
-                  accessibilityRole="button" accessibilityLabel={t('achievements')}
-                  style={[ms.iconBtn, {
-                    backgroundColor: badgeCnt > 0 ? goldColor + '18' : 'transparent',
-                    borderColor: badgeCnt > 0 ? goldColor + '40' : isPremium ? '#2A2230' : 'transparent',
-                    borderWidth: badgeCnt > 0 || isPremium ? 1 : 0,
-                  }]}>
-                  <Award size={18} color={badgeCnt > 0 ? goldColor : theme.subtext} strokeWidth={1.8} />
-                  {badgeCnt > 0 && (
-                    <View style={[ms.achBadge, { backgroundColor: isPremium ? '#C17B2A' : '#FF6D00' }]}>
-                      <Text style={ms.achBadgeT}>{badgeCnt}</Text>
-                    </View>
-                  )}
+                  accessibilityRole="button" accessibilityLabel="Friends"
+                  style={ms.iconBtn}>
+                  <Users size={18} color={theme.subtext} strokeWidth={1.8} />
                 </TouchableOpacity>
 
-                <TouchableOpacity onPress={() => switchTab('search')} activeOpacity={0.6}
-                  hitSlop={HEADER_HIT}
-                  accessibilityRole="button" accessibilityLabel={t('search')}
-                  style={[ms.iconBtn, { backgroundColor: tab === 'search' ? goldColor + '18' : 'transparent' }]}>
-                  <Search size={18} color={tab === 'search' ? goldColor : theme.subtext} strokeWidth={1.8} />
-                </TouchableOpacity>
-
-                <ProfileWithXP gold={goldColor} theme={theme} isDark={isDark} />
+                <ProfileWithXP gold={goldColor} theme={theme} isDark={isDark} badgeCnt={badgeCnt} />
               </View>
             </View>
 
@@ -1487,7 +1492,7 @@ export default function HomeScreen() {
           >
             <TouchableOpacity
               activeOpacity={0.9}
-              onPress={() => { haptic('medium'); setChallengeVisible(true); }}
+              onPress={() => { haptic('medium'); uiShow('challenge'); }}
               style={{
                 flexDirection: 'row', alignItems: 'center', gap: 8,
                 paddingVertical: 11, paddingHorizontal: 18, borderRadius: 26,
@@ -1516,8 +1521,9 @@ export default function HomeScreen() {
           <TabBar active={tab} onSwitch={switchTab} unseenSaved={unseenSaved} t={t} />
         </View>
 
-        <AchievementsModal visible={achVis} onClose={() => setAchVis(false)} />
+        <AchievementsModal visible={uiOpen.achievements} onClose={() => uiHide('achievements')} />
         <LeaderboardModal visible={leadVis} onClose={() => setLeadVis(false)} />
+        <FriendsModal visible={uiOpen.friends} onClose={() => uiHide('friends')} />
         <MonthlyRecapModal visible={recapVis} onClose={() => setRecapVis(false)} />
         <InterestQuiz
           visible={quizVis}
@@ -1540,8 +1546,8 @@ export default function HomeScreen() {
           allEvents={allEvents}
         />
         <DailyChallengeModal
-          visible={challengeVisible}
-          onClose={() => { setChallengeVisible(false); refreshChallengeDone(); }}
+          visible={uiOpen.challenge}
+          onClose={() => { uiHide('challenge'); refreshChallengeDone(); }}
           freeEvents={mem.current[mk('free', isoFor(0))]?.data ?? []}
           allEvents={allEvents}
         />

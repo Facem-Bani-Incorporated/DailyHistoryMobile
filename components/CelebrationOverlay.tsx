@@ -16,6 +16,7 @@ import { COIN_GOLD, COIN_GOLD_DEEP } from '../config/coins';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { getLevelForXP, LEVEL_NAMES, useGamificationStore } from '../store/useGamificationStore';
+import { useUiStore } from '../store/useUiStore';
 import { haptic } from '../utils/haptics';
 import { GameIcon } from '../utils/GameIcon';
 
@@ -25,11 +26,11 @@ const STREAK_MILESTONES = [3, 7, 14, 30, 100, 365];
 type Celebration = { type: 'level'; value: number } | { type: 'streak'; value: number };
 
 const L: Record<string, Record<string, string>> = {
-  en: { levelUp: 'LEVEL UP', level: 'Level', streak: 'STREAK', dayStreak: 'day streak', keep: 'Keep it up', cont: 'Continue' },
-  ro: { levelUp: 'NIVEL NOU', level: 'Nivel', streak: 'STREAK', dayStreak: 'zile la rând', keep: 'Ține-o tot așa', cont: 'Continuă' },
-  fr: { levelUp: 'NIVEAU SUPÉRIEUR', level: 'Niveau', streak: 'SÉRIE', dayStreak: 'jours de suite', keep: 'Continue comme ça', cont: 'Continuer' },
-  de: { levelUp: 'LEVEL-AUFSTIEG', level: 'Level', streak: 'SERIE', dayStreak: 'Tage in Folge', keep: 'Weiter so', cont: 'Weiter' },
-  es: { levelUp: 'SUBIDA DE NIVEL', level: 'Nivel', streak: 'RACHA', dayStreak: 'días seguidos', keep: 'Sigue así', cont: 'Continuar' },
+  en: { levelUp: 'LEVEL UP', level: 'Level', streak: 'STREAK', dayStreak: 'day streak', view: 'View my progress', dismiss: 'Not now' },
+  ro: { levelUp: 'NIVEL NOU', level: 'Nivel', streak: 'STREAK', dayStreak: 'zile la rând', view: 'Vezi progresul', dismiss: 'Mai târziu' },
+  fr: { levelUp: 'NIVEAU SUPÉRIEUR', level: 'Niveau', streak: 'SÉRIE', dayStreak: 'jours de suite', view: 'Voir ma progression', dismiss: 'Plus tard' },
+  de: { levelUp: 'LEVEL-AUFSTIEG', level: 'Level', streak: 'SERIE', dayStreak: 'Tage in Folge', view: 'Fortschritt ansehen', dismiss: 'Später' },
+  es: { levelUp: 'SUBIDA DE NIVEL', level: 'Nivel', streak: 'RACHA', dayStreak: 'días seguidos', view: 'Ver mi progreso', dismiss: 'Ahora no' },
 };
 
 /* ── Sparkle burst — a handful of particles flying outward on show ── */
@@ -143,11 +144,11 @@ export default function CelebrationOverlay() {
     ]).start();
   }, [current]);
 
-  const dismiss = () => {
+  const dismiss = (after?: () => void) => {
     Animated.parallel([
       Animated.timing(scale, { toValue: 0.85, duration: 180, easing: Easing.in(Easing.quad), useNativeDriver: true }),
       Animated.timing(opacity, { toValue: 0, duration: 180, useNativeDriver: true }),
-    ]).start(() => setCurrent(null));
+    ]).start(() => { setCurrent(null); after?.(); });
   };
 
   if (!current) return null;
@@ -159,8 +160,8 @@ export default function CelebrationOverlay() {
   const border = gold + '55';
 
   return (
-    <Modal visible transparent animationType="fade" statusBarTranslucent onRequestClose={dismiss}>
-      <TouchableOpacity activeOpacity={1} onPress={dismiss} style={s.backdrop}>
+    <Modal visible transparent animationType="fade" statusBarTranslucent onRequestClose={() => dismiss()}>
+      <TouchableOpacity activeOpacity={1} onPress={() => dismiss()} style={s.backdrop}>
         <Animated.View style={[s.card, { backgroundColor: bg, borderColor: border, opacity, transform: [{ scale }] }]}>
           <LinearGradient colors={[gold + '18', 'transparent']} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
           <SparkleBurst trigger={burst} color={gold} />
@@ -182,8 +183,18 @@ export default function CelebrationOverlay() {
             {isLevel ? levelName : tx('dayStreak')}
           </Text>
 
-          <TouchableOpacity onPress={dismiss} activeOpacity={0.85} style={[s.cta, { backgroundColor: gold }]}>
-            <Text style={s.ctaText}>{isLevel ? tx('cont') : tx('keep')}</Text>
+          <TouchableOpacity
+            onPress={() => dismiss(() => useUiStore.getState().show('profile'))}
+            activeOpacity={0.85}
+            style={[s.cta, { backgroundColor: gold }]}
+            accessibilityRole="button"
+            accessibilityLabel={tx('view')}
+          >
+            <Text style={s.ctaText}>{tx('view')}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={() => dismiss()} activeOpacity={0.7} style={s.dismiss}>
+            <Text style={[s.dismissText, { color: theme.subtext }]}>{tx('dismiss')}</Text>
           </TouchableOpacity>
         </Animated.View>
       </TouchableOpacity>
@@ -204,4 +215,6 @@ const s = StyleSheet.create({
   sub: { fontSize: 14, fontWeight: '600', marginTop: 4, textAlign: 'center', opacity: 0.9 },
   cta: { alignSelf: 'stretch', paddingVertical: 14, borderRadius: 15, alignItems: 'center', marginTop: 22 },
   ctaText: { color: '#1a1208', fontWeight: '900', fontSize: 15, letterSpacing: 0.3 },
+  dismiss: { paddingVertical: 12, marginTop: 2 },
+  dismissText: { fontSize: 13, fontWeight: '700', opacity: 0.7 },
 });
