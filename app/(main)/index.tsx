@@ -25,6 +25,9 @@ import Svg, { Circle } from 'react-native-svg';
 import api from '../../api';
 import AchievementsModal from '../../components/AchievementsModal';
 import AchievementToast from '../../components/AchievementToast';
+import CelebrationOverlay from '../../components/CelebrationOverlay';
+import { HistoryCardSkeleton } from '../../components/Skeletons';
+import OfflineState from '../../components/OfflineState';
 import XPFloatToast from '../../components/XPFloatToast';
 import AdCard from '../../components/AdCard';
 import CalendarModal from '../../components/CalendarModal';
@@ -569,7 +572,8 @@ const ProStarButton = ({ gold, onPress }: { gold: string; onPress: () => void })
   const glow = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.7] });
 
   return (
-    <TouchableOpacity activeOpacity={0.7} onPress={onPress} style={_proStar.btn}>
+    <TouchableOpacity activeOpacity={0.7} onPress={onPress} style={_proStar.btn}
+      hitSlop={HEADER_HIT} accessibilityRole="button" accessibilityLabel="Get PRO">
       {/* Glow backdrop */}
       <Animated.View style={[_proStar.glow, {
         backgroundColor: gold + '25',
@@ -597,6 +601,10 @@ const _proStar = StyleSheet.create({
     borderRadius: 17,
   },
 });
+
+// Expands the touch area of the compact (~30-34px) header icons to the ~44px
+// accessibility minimum without changing their visual size.
+const HEADER_HIT = { top: 10, bottom: 10, left: 8, right: 8 };
 
 // ═════════════════════════════════════════════════════════════════════════════
 // COIN BUTTON — persistent header balance pill.
@@ -653,6 +661,8 @@ const CoinButton = ({ isDark }: { isDark: boolean }) => {
     <TouchableOpacity
       activeOpacity={0.7}
       onPress={() => { haptic('light'); useCoinPopupStore.getState().show('no_coins'); }}
+      hitSlop={HEADER_HIT}
+      accessibilityRole="button" accessibilityLabel={`${coins} coins — earn more`}
       style={[_coinBtn.pill, { backgroundColor: bg, borderColor: border }]}
     >
       <Animated.View style={[_coinBtn.glow, { backgroundColor: COIN_GOLD, opacity: glowOp }]} pointerEvents="none" />
@@ -916,6 +926,10 @@ export default function HomeScreen() {
   // ── Data loading ──
   const mem = useRef<Record<string, PD>>({});
   const [tick, setTick] = useState(0);
+  // Set when a fetch fails with no cache to fall back on — lets us show a branded
+  // offline state (with retry) instead of an empty-day card on a network failure.
+  const netErrRef = useRef(false);
+  const [offline, setOffline] = useState(false);
 
   const fetchOne = useCallback(async (o: number, tierArg: Tier = 'free', force = false): Promise<PD> => {
     const iso = isoFor(o);
@@ -945,6 +959,8 @@ export default function HomeScreen() {
         mem.current[key] = { data: stale.data, empty: stale.empty };
         return mem.current[key];
       }
+      // No network and nothing cached → remember so the UI can offer a retry.
+      netErrRef.current = true;
       return EMPTY;
     }
   }, []);
@@ -964,11 +980,30 @@ export default function HomeScreen() {
     }));
   }, []);
 
+  const retryLoad = useCallback(() => {
+    haptic('light');
+    netErrRef.current = false;
+    setOffline(false);
+    setLoading(true);
+    Promise.all([fetchOne(0, 'free', true), fetchOne(-1, 'free', true), fetchOne(1, 'free', true), fetchOne(2, 'free', true)])
+      .then(() => {
+        const todayPg = mem.current[mk('free', isoFor(0))];
+        const gotData = !!todayPg && todayPg.data.length > 0;
+        setOffline(!gotData && netErrRef.current);
+        setLoading(false);
+        setTick(t => t + 1);
+        if (gotData) fetchAll();
+      });
+  }, [fetchOne, fetchAll]);
+
   useEffect(() => {
     recordVisit();
     try { genMonthlyRecap(); } catch { }
     setTimeout(() => { if (getUnseenMonthlyRecap()) setRecapVis(true); }, 2000);
     Promise.all([fetchOne(0), fetchOne(-1), fetchOne(1), fetchOne(2)]).then(async () => {
+      const todayPg = mem.current[mk('free', isoFor(0))];
+      const gotData = !!todayPg && todayPg.data.length > 0;
+      if (!gotData && netErrRef.current) setOffline(true);
       setLoading(false);
       setTick(t => t + 1);
       fetchAll();
@@ -1244,6 +1279,7 @@ export default function HomeScreen() {
       <View style={ms.root}>
         <StatusBar style={isDark ? 'light' : 'dark'} />
         <AchievementToast />
+        <CelebrationOverlay />
         <XPFloatToast />
 
         {/* ═════════════════ CHROME (header) ═════════════════ */}
@@ -1262,7 +1298,9 @@ export default function HomeScreen() {
               <View style={ms.headerLeft}>
                 <StreakIcon />
                 <TouchableOpacity onPress={() => { haptic('light'); setLeadVis(true); }}
-                  activeOpacity={0.6} style={ms.iconBtn}>
+                  activeOpacity={0.6} style={ms.iconBtn}
+                  hitSlop={HEADER_HIT}
+                  accessibilityRole="button" accessibilityLabel={t('leaderboard')}>
                   <Trophy size={18} color={theme.subtext} strokeWidth={1.8} />
                 </TouchableOpacity>
               </View>
@@ -1272,7 +1310,8 @@ export default function HomeScreen() {
                 <Animated.View style={[ms.dateCenterNav, { transform: [{ translateX: dateAnim }] }]}>
 
                   <TouchableOpacity onPress={() => { haptic('light'); setCalVis(true); }}
-                    activeOpacity={0.7} style={ms.dateCenter}>
+                    activeOpacity={0.7} style={ms.dateCenter}
+                    accessibilityRole="button" accessibilityLabel={t('calendar')}>
                     <View style={ms.datePrimary}>
                       <CelestialDay
                         date={offDate(off)}
@@ -1328,6 +1367,8 @@ export default function HomeScreen() {
 
                 <TouchableOpacity onPress={() => { haptic('light'); setAchVis(true); }}
                   activeOpacity={0.6}
+                  hitSlop={HEADER_HIT}
+                  accessibilityRole="button" accessibilityLabel={t('achievements')}
                   style={[ms.iconBtn, {
                     backgroundColor: badgeCnt > 0 ? goldColor + '18' : 'transparent',
                     borderColor: badgeCnt > 0 ? goldColor + '40' : isPremium ? '#2A2230' : 'transparent',
@@ -1342,6 +1383,8 @@ export default function HomeScreen() {
                 </TouchableOpacity>
 
                 <TouchableOpacity onPress={() => switchTab('search')} activeOpacity={0.6}
+                  hitSlop={HEADER_HIT}
+                  accessibilityRole="button" accessibilityLabel={t('search')}
                   style={[ms.iconBtn, { backgroundColor: tab === 'search' ? goldColor + '18' : 'transparent' }]}>
                   <Search size={18} color={tab === 'search' ? goldColor : theme.subtext} strokeWidth={1.8} />
                 </TouchableOpacity>
@@ -1402,11 +1445,10 @@ export default function HomeScreen() {
             : tab === 'search' ? <SearchScreen allEvents={allEvents} />
             : tab === 'timeline' ? <TimelineScreen allEvents={allEvents} onInterstitial={!isPro ? showInterstitial : undefined} topInset={shouldShowBanner ? 0 : undefined} />
             : loading ? (
-              <View style={ms.loadW}>
-                <View style={[ms.loadP, { borderColor: goldColor + '25' }]}>
-                  <Text style={{ color: goldColor, fontSize: 22, opacity: 0.4 }}>{'\u25CB'}</Text>
-                </View>
-              </View>
+              <HistoryCardSkeleton isDark={isDark} />
+            )
+            : (offline && swipeOn) ? (
+              <OfflineState onRetry={retryLoad} />
             )
             : swipeOn ? (
               <Animated.FlatList

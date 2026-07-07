@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { GameIcon } from '../utils/GameIcon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { COIN_GOLD, COIN_GOLD_DEEP } from '../config/coins';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import {
@@ -150,9 +151,7 @@ export default function AchievementToast() {
   const name = (ACHIEVEMENT_NAMES[language] ?? ACHIEVEMENT_NAMES.en)[achievement.id] ?? achievement.id;
   const stars = tierStars(achievement.category);
   const accent = accentColor(achievement.category);
-  const goldDark = '#E8B84D';
-  const goldLight = '#C77E08';
-  const gold = isDark ? goldDark : goldLight;
+  const gold = isDark ? COIN_GOLD : COIN_GOLD_DEEP;
 
   // Shimmer translate across icon
   const shimmerX = shimmer.interpolate({ inputRange: [0, 1], outputRange: [-60, 60] });

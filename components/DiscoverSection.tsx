@@ -1088,7 +1088,7 @@ const st = StyleSheet.create({
   /* ── PRO gold border — applied to any card with isPro ── */
   cardProBorder: {
     borderWidth: 1.5,
-    borderColor: '#D4A017',
+    borderColor: COIN_GOLD,
   },
 
   /* ── PRO pill — gold star badge ── */
