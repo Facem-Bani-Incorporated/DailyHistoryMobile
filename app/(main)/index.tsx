@@ -45,7 +45,7 @@ import TimelineScreen from '../../components/TimelineScreen';
 import MonthlyRecapModal from '../../components/MonthlyRecapModal';
 import { AD_UNIT_IDS, ADS_CONFIG } from '../../config/ads';
 import { ENDPOINTS } from '../../config/api';
-import { COIN_COST_DAY, COIN_COST_EVENT } from '../../config/coins';
+import { COIN_COST_DAY, COIN_COST_EVENT, COIN_GOLD, COIN_GOLD_DEEP } from '../../config/coins';
 import { AllEventsProvider } from '../../context/AllEventsContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useRevenueCat } from '../../context/RevenueCatContext';
@@ -54,6 +54,7 @@ import { useInterstitialAd } from '../../hooks/useInterstitialAd';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useCoinPopupStore } from '../../store/useCoinPopupStore';
 import { useCoins, useCoinStore, useIsEventUnlocked } from '../../store/useCoinStore';
+import { useUnlockStore } from '../../store/useUnlockStore';
 import { getLevelForXP, getXPProgress, useGamificationStore } from '../../store/useGamificationStore';
 import { useNotificationEventStore } from '../../store/useNotificationEventStore';
 import { useInterestQuizDone, usePreferencesStore, useUserInterests } from '../../store/usePreferencesStore';
@@ -331,7 +332,8 @@ const ProCardSection = ({ event, allEvents, gold, isPro, onPaywall, t, language 
       useCoinStore.getState().unlockEvent(eventId);
       haptic('success');
     } else {
-      useCoinPopupStore.getState().show('no_coins');
+      // No coins → the per-event sheet lets them watch one clip to unlock for free.
+      useUnlockStore.getState().open(event);
     }
   };
 
@@ -594,6 +596,83 @@ const _proStar = StyleSheet.create({
     height: 34,
     borderRadius: 17,
   },
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// COIN BUTTON — persistent header balance pill.
+// Closes the earn/spend loop: always shows the user's coins, taps to the
+// "watch a clip for a coin" modal, and celebrates every earned coin with a
+// count-up + pop + gold glow so watching a rewarded ad feels rewarding.
+// ═════════════════════════════════════════════════════════════════════════════
+const CoinButton = ({ isDark }: { isDark: boolean }) => {
+  const coins = useCoins();
+  const prev = useRef(coins);
+  const [display, setDisplay] = useState(coins);
+  const count = useRef(new Animated.Value(coins)).current;
+  const pop = useRef(new Animated.Value(0)).current;
+  const glow = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (coins === prev.current) return;
+    const increased = coins > prev.current;
+    const from = prev.current;
+    prev.current = coins;
+
+    // Count-up (JS-driven — animates the displayed number).
+    count.stopAnimation();
+    count.setValue(from);
+    const id = count.addListener(({ value }) => setDisplay(Math.round(value)));
+    Animated.timing(count, {
+      toValue: coins, duration: 650, easing: Easing.out(Easing.cubic), useNativeDriver: false,
+    }).start(() => { setDisplay(coins); count.removeListener(id); });
+
+    // Celebrate a gain with a pop + glow flash.
+    if (increased) {
+      pop.setValue(0); glow.setValue(0);
+      Animated.parallel([
+        Animated.sequence([
+          Animated.spring(pop, { toValue: 1, useNativeDriver: true, tension: 180, friction: 6 }),
+          Animated.timing(pop, { toValue: 0, duration: 260, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+        ]),
+        Animated.sequence([
+          Animated.timing(glow, { toValue: 1, duration: 200, useNativeDriver: true }),
+          Animated.timing(glow, { toValue: 0, duration: 700, useNativeDriver: true }),
+        ]),
+      ]).start();
+    }
+    return () => count.removeListener(id);
+  }, [coins]);
+
+  const scale = pop.interpolate({ inputRange: [0, 1], outputRange: [1, 1.28] });
+  const glowOp = glow.interpolate({ inputRange: [0, 1], outputRange: [0, 0.9] });
+
+  const bg = isDark ? COIN_GOLD + '1C' : COIN_GOLD + '22';
+  const border = COIN_GOLD + (isDark ? '44' : '55');
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.7}
+      onPress={() => { haptic('light'); useCoinPopupStore.getState().show('no_coins'); }}
+      style={[_coinBtn.pill, { backgroundColor: bg, borderColor: border }]}
+    >
+      <Animated.View style={[_coinBtn.glow, { backgroundColor: COIN_GOLD, opacity: glowOp }]} pointerEvents="none" />
+      <Animated.Text style={[_coinBtn.emoji, { transform: [{ scale }] }]}>🪙</Animated.Text>
+      <Text style={[_coinBtn.count, { color: isDark ? COIN_GOLD : COIN_GOLD_DEEP }]}>
+        {display}
+      </Text>
+    </TouchableOpacity>
+  );
+};
+
+const _coinBtn = StyleSheet.create({
+  pill: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    height: 30, paddingHorizontal: 9, borderRadius: 11, borderWidth: 1,
+    overflow: 'hidden',
+  },
+  glow: { position: 'absolute', left: -6, right: -6, top: -6, bottom: -6, borderRadius: 20 },
+  emoji: { fontSize: 13 },
+  count: { fontSize: 13, fontWeight: '900', letterSpacing: -0.2, minWidth: 10, textAlign: 'center' },
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -1096,6 +1175,7 @@ export default function HomeScreen() {
             theme={theme}
             t={t}
             isPro={isPro}
+            isDark={isDark}
             onPaywall={() => presentPaywall()}
           />
         );
@@ -1243,6 +1323,7 @@ export default function HomeScreen() {
                     <Text style={{ fontSize: 10, fontWeight: '900', color: '#FF375F' }}>DEV</Text>
                   </TouchableOpacity>
                 )}
+                {!isPro && <CoinButton isDark={isDark} />}
                 {!isPro && <ProStarButton gold={goldColor} onPress={() => presentPaywall()} />}
 
                 <TouchableOpacity onPress={() => { haptic('light'); setAchVis(true); }}

@@ -6,6 +6,7 @@ import EventImage from './EventImage';
 import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  Dimensions,
   Easing,
   Platform,
   ScrollView,
@@ -15,9 +16,12 @@ import {
   View,
 } from 'react-native';
 
+import { COIN_GOLD } from '../config/coins';
 import { useLanguage } from '../context/LanguageContext';
+import { useCoinData, useCoinStore } from '../store/useCoinStore';
 import { useGamificationStore } from '../store/useGamificationStore';
 import { getEventId } from '../store/useSavedStore';
+import { useUnlockStore } from '../store/useUnlockStore';
 import { haptic } from '../utils/haptics';
 import { StoryModal } from './StoryModal';
 
@@ -30,6 +34,7 @@ interface DiscoverSectionProps {
   theme: any;
   t: (key: string) => string;
   isPro?: boolean;
+  isDark?: boolean;
   onPaywall?: () => void;
 }
 
@@ -126,6 +131,18 @@ const ProPill = ({ compact }: { compact?: boolean }) => (
   </View>
 );
 
+/* ── Unlock-with-coin chip — shown on every locked PRO card ─────── */
+const UnlockChip = ({ compact }: { compact?: boolean }) => (
+  <View style={[st.unlockChip, compact && st.unlockChipCompact]}>
+    <Text style={[st.unlockCoin, compact && st.unlockCoinCompact]}>🪙</Text>
+    <Text style={[st.unlockChipT, compact && st.unlockChipTCompact]}>UNLOCK</Text>
+  </View>
+);
+
+/* Decide the top badge for a PRO card: locked → coin chip; unlocked/subscribed → PRO pill. */
+const ProBadge = ({ locked, compact }: { locked: boolean; compact?: boolean }) =>
+  locked ? <UnlockChip compact={compact} /> : <ProPill compact={compact} />;
+
 /* ── Already Read badge — small pill overlay ─ */
 const ReadBadge = () => (
   <View style={rb.badge} pointerEvents="none">
@@ -172,14 +189,55 @@ const Masthead = ({ issue, count, theme, t }: {
 );
 
 /* ═══════════════════════════════════════════
+   SKELETON — shimmer placeholder shown while the
+   ScrollView measures itself (avoids the empty flash
+   before the editorial grid can lay out).
+   ═══════════════════════════════════════════ */
+const DiscoverSkeleton = ({ isDark }: { isDark: boolean }) => {
+  const shimmer = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.timing(shimmer, { toValue: 1, duration: 1200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, []);
+  const opacity = shimmer.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.4, 0.85, 0.4] });
+  const block = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)';
+
+  const H = Dimensions.get('window').height;
+  const heroH = Math.floor(H * 0.30);
+  const editH = Math.floor(H * 0.18);
+  const mosaicH = Math.floor(H * 0.16);
+
+  return (
+    <View pointerEvents="none">
+      {/* masthead */}
+      <View style={[st.masthead, { justifyContent: 'center' }]}>
+        <Animated.View style={{ width: 160, height: 12, borderRadius: 6, backgroundColor: block, opacity }} />
+      </View>
+      {/* hero */}
+      <Animated.View style={{ height: heroH, borderRadius: 18, backgroundColor: block, opacity, marginBottom: GAP }} />
+      {/* editorial */}
+      <Animated.View style={{ height: editH, borderRadius: 16, backgroundColor: block, opacity, marginBottom: GAP }} />
+      {/* mosaic duo */}
+      <View style={{ flexDirection: 'row', gap: GAP }}>
+        <Animated.View style={{ flex: 1, height: mosaicH, borderRadius: 14, backgroundColor: block, opacity }} />
+        <Animated.View style={{ flex: 1, height: mosaicH, borderRadius: 14, backgroundColor: block, opacity }} />
+      </View>
+    </View>
+  );
+};
+
+/* ═══════════════════════════════════════════
    HERO — Cinematic featured story
    Top-bar: FEATURE chip + Roman number
    Bottom: category · year, serif title,
    lede line, hairline CTA
    ═══════════════════════════════════════════ */
 const HeroCard = ({
-  event, lang, number, onPress, height, isRead, subscribed = true,
-}: { event: any; lang: string; number: number; onPress: () => void; height: number; isRead?: boolean; subscribed?: boolean }) => {
+  event, lang, number, onPress, height, isRead, subscribed = true, unlocked = false,
+}: { event: any; lang: string; number: number; onPress: () => void; height: number; isRead?: boolean; subscribed?: boolean; unlocked?: boolean }) => {
   const title = event.titleTranslations?.[lang] ?? event.titleTranslations?.en ?? '';
   const narrative = event.narrativeTranslations?.[lang] ?? event.narrativeTranslations?.en ?? '';
   const category = (event.category ?? 'HISTORY').replace(/_/g, ' ');
@@ -187,7 +245,7 @@ const HeroCard = ({
   const yearNum = parseInt(year) || 0;
   const accent = getCatColor(event.category);
   const pro = isProEvent(event);
-  const locked = pro && !subscribed;
+  const locked = pro && !subscribed && !unlocked;
 
   return (
     <TouchableOpacity activeOpacity={0.94} onPress={onPress} style={[st.heroCard, { height }, pro && st.cardProBorder]}>
@@ -211,7 +269,7 @@ const HeroCard = ({
           <Text style={st.heroFeatureTxt}>FEATURE</Text>
         </View>
         <View style={st.heroTopRight}>
-          {pro && <ProPill compact />}
+          {pro && <ProBadge locked={locked} compact />}
           <Text style={[st.heroNumRoman, { marginLeft: pro ? 8 : 0 }]}>
             {toRoman(number)}
           </Text>
@@ -241,9 +299,9 @@ const HeroCard = ({
         <View style={st.heroCtaRow}>
           {locked ? (
             <>
-              <View style={[st.heroCtaLine, { backgroundColor: '#E8B84D' }]} />
-              <Ionicons name="lock-closed" size={11} color="#E8B84D" style={{ marginRight: 5 }} />
-              <Text style={[st.heroCtaTxt, { color: '#E8B84D' }]}>UNLOCK WITH PRO</Text>
+              <View style={[st.heroCtaLine, { backgroundColor: COIN_GOLD }]} />
+              <Ionicons name="lock-open" size={11} color={COIN_GOLD} style={{ marginRight: 5 }} />
+              <Text style={[st.heroCtaTxt, { color: COIN_GOLD }]}>UNLOCK · 1 🪙</Text>
             </>
           ) : (
             <>
@@ -265,14 +323,15 @@ const HeroCard = ({
    hairline CTA. Article-style composition.
    ═══════════════════════════════════════════ */
 const EditorialCard = ({
-  event, lang, number, onPress, height, isRead,
-}: { event: any; lang: string; number: number; onPress: () => void; height: number; isRead?: boolean }) => {
+  event, lang, number, onPress, height, isRead, subscribed = true, unlocked = false,
+}: { event: any; lang: string; number: number; onPress: () => void; height: number; isRead?: boolean; subscribed?: boolean; unlocked?: boolean }) => {
   const title = event.titleTranslations?.[lang] ?? event.titleTranslations?.en ?? '';
   const category = (event.category ?? 'HISTORY').replace(/_/g, ' ');
   const year = extractYear(event);
   const yearNum = parseInt(year) || 0;
   const accent = getCatColor(event.category);
   const pro = isProEvent(event);
+  const locked = pro && !subscribed && !unlocked;
 
   return (
     <TouchableOpacity activeOpacity={0.94} onPress={onPress} style={[st.editCard, { height }, pro && st.cardProBorder]}>
@@ -303,7 +362,7 @@ const EditorialCard = ({
             <Text style={[st.editCatT, { color: accent }]}>{category}</Text>
           </View>
           <View style={st.editNumWrap}>
-            {pro && <ProPill compact />}
+            {pro && <ProBadge locked={locked} compact />}
             <Text style={[st.editNumRoman, pro && { marginLeft: 6 }]}>
               {toRoman(number)}
             </Text>
@@ -313,9 +372,19 @@ const EditorialCard = ({
         <Text style={st.editTitle} numberOfLines={3}>{title}</Text>
 
         <View style={st.editCtaRow}>
-          <View style={[st.editCtaLine, { backgroundColor: accent + '55' }]} />
-          <Text style={st.editCtaTxt}>CONTINUE</Text>
-          <Ionicons name="arrow-forward" size={10} color="rgba(255,255,255,0.55)" style={{ marginLeft: 5 }} />
+          {locked ? (
+            <>
+              <View style={[st.editCtaLine, { backgroundColor: COIN_GOLD }]} />
+              <Ionicons name="lock-open" size={10} color={COIN_GOLD} style={{ marginRight: 4 }} />
+              <Text style={[st.editCtaTxt, { color: COIN_GOLD }]}>UNLOCK · 1 🪙</Text>
+            </>
+          ) : (
+            <>
+              <View style={[st.editCtaLine, { backgroundColor: accent + '55' }]} />
+              <Text style={st.editCtaTxt}>CONTINUE</Text>
+              <Ionicons name="arrow-forward" size={10} color="rgba(255,255,255,0.55)" style={{ marginLeft: 5 }} />
+            </>
+          )}
         </View>
       </View>
     </TouchableOpacity>
@@ -328,13 +397,14 @@ const EditorialCard = ({
    editorial bottom with category, title, year
    ═══════════════════════════════════════════ */
 const CuratedCard = ({
-  event, lang, number, onPress, width, height, isRead,
-}: { event: any; lang: string; number: number; onPress: () => void; width: number; height: number; isRead?: boolean }) => {
+  event, lang, number, onPress, width, height, isRead, subscribed = true, unlocked = false,
+}: { event: any; lang: string; number: number; onPress: () => void; width: number; height: number; isRead?: boolean; subscribed?: boolean; unlocked?: boolean }) => {
   const title = event.titleTranslations?.[lang] ?? event.titleTranslations?.en ?? '';
   const category = (event.category ?? 'HISTORY').replace(/_/g, ' ');
   const year = extractYear(event);
   const accent = getCatColor(event.category);
   const pro = isProEvent(event);
+  const locked = pro && !subscribed && !unlocked;
 
   return (
     <TouchableOpacity activeOpacity={0.94} onPress={onPress} style={[st.curCard, { width, height }, pro && st.cardProBorder]}>
@@ -354,7 +424,7 @@ const CuratedCard = ({
 
       {pro && (
         <View style={{ position: 'absolute', top: 10, right: 10, zIndex: 3 }}>
-          <ProPill compact />
+          <ProBadge locked={locked} compact />
         </View>
       )}
 
@@ -380,14 +450,15 @@ const CuratedCard = ({
    Image left 40%, editorial text right 60%
    ═══════════════════════════════════════════ */
 const ExtrasWideCard = ({
-  event, lang, onPress, isRead,
-}: { event: any; lang: string; onPress: () => void; isRead?: boolean }) => {
+  event, lang, onPress, isRead, subscribed = true, unlocked = false,
+}: { event: any; lang: string; onPress: () => void; isRead?: boolean; subscribed?: boolean; unlocked?: boolean }) => {
   const title = event.titleTranslations?.[lang] ?? event.titleTranslations?.en ?? '';
   const narrative = event.narrativeTranslations?.[lang] ?? event.narrativeTranslations?.en ?? '';
   const category = (event.category ?? 'HISTORY').replace(/_/g, ' ');
   const year = extractYear(event);
   const accent = getCatColor(event.category);
   const pro = isProEvent(event);
+  const locked = pro && !subscribed && !unlocked;
 
   return (
     <TouchableOpacity activeOpacity={0.93} onPress={onPress} style={[ew.card, pro && st.cardProBorder]}>
@@ -404,10 +475,17 @@ const ExtrasWideCard = ({
           </View>
         )}
         {pro && (
-          <View style={ew.proTag}>
-            <Ionicons name="star" size={8} color="#1a1208" />
-            <Text style={ew.proTagT}>PRO</Text>
-          </View>
+          locked ? (
+            <View style={[ew.proTag, { gap: 3 }]}>
+              <Text style={{ fontSize: 8 }}>🪙</Text>
+              <Text style={ew.proTagT}>UNLOCK</Text>
+            </View>
+          ) : (
+            <View style={ew.proTag}>
+              <Ionicons name="star" size={8} color="#1a1208" />
+              <Text style={ew.proTagT}>PRO</Text>
+            </View>
+          )
         )}
       </View>
       {isRead && <ReadBadge />}
@@ -421,9 +499,18 @@ const ExtrasWideCard = ({
           <Text style={ew.lead} numberOfLines={1}>{narrative}</Text>
         )}
         <View style={ew.ctaRow}>
-          <View style={[ew.ctaLine, { backgroundColor: accent + '60' }]} />
-          <Text style={ew.ctaT}>READ STORY</Text>
-          <Ionicons name="arrow-forward" size={9} color="rgba(255,255,255,0.55)" style={{ marginLeft: 4 }} />
+          {locked ? (
+            <>
+              <View style={[ew.ctaLine, { backgroundColor: COIN_GOLD }]} />
+              <Text style={[ew.ctaT, { color: COIN_GOLD }]}>UNLOCK · 1 🪙</Text>
+            </>
+          ) : (
+            <>
+              <View style={[ew.ctaLine, { backgroundColor: accent + '60' }]} />
+              <Text style={ew.ctaT}>READ STORY</Text>
+              <Ionicons name="arrow-forward" size={9} color="rgba(255,255,255,0.55)" style={{ marginLeft: 4 }} />
+            </>
+          )}
         </View>
       </View>
     </TouchableOpacity>
@@ -445,7 +532,7 @@ const ew = StyleSheet.create({
   proTag: {
     position: 'absolute', top: 9, right: 9,
     flexDirection: 'row', alignItems: 'center', gap: 3,
-    backgroundColor: '#E8B84D', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 5,
+    backgroundColor: COIN_GOLD, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 5,
   },
   proTagT: { fontSize: 8, fontWeight: '900', color: '#1a1208', letterSpacing: 1.4 },
   body: { flex: 1, padding: 14, justifyContent: 'space-between' },
@@ -468,13 +555,14 @@ const ew = StyleSheet.create({
    Image top 55%, editorial text bottom 45%
    ═══════════════════════════════════════════ */
 const ExtrasTileCard = ({
-  event, lang, onPress, width, isRead,
-}: { event: any; lang: string; onPress: () => void; width: number; isRead?: boolean }) => {
+  event, lang, onPress, width, isRead, subscribed = true, unlocked = false,
+}: { event: any; lang: string; onPress: () => void; width: number; isRead?: boolean; subscribed?: boolean; unlocked?: boolean }) => {
   const title = event.titleTranslations?.[lang] ?? event.titleTranslations?.en ?? '';
   const category = (event.category ?? 'HISTORY').replace(/_/g, ' ');
   const year = extractYear(event);
   const accent = getCatColor(event.category);
   const pro = isProEvent(event);
+  const locked = pro && !subscribed && !unlocked;
 
   return (
     <TouchableOpacity activeOpacity={0.93} onPress={onPress} style={[et.card, { width }, pro && st.cardProBorder]}>
@@ -490,10 +578,17 @@ const ExtrasTileCard = ({
           <Text style={[et.catChipT, { color: accent }]}>{category.slice(0, 9).toUpperCase()}</Text>
         </View>
         {pro && (
-          <View style={et.proTag}>
-            <Ionicons name="star" size={8} color="#1a1208" />
-            <Text style={et.proTagT}>PRO</Text>
-          </View>
+          locked ? (
+            <View style={[et.proTag, { gap: 2 }]}>
+              <Text style={{ fontSize: 7.5 }}>🪙</Text>
+              <Text style={et.proTagT}>UNLOCK</Text>
+            </View>
+          ) : (
+            <View style={et.proTag}>
+              <Ionicons name="star" size={8} color="#1a1208" />
+              <Text style={et.proTagT}>PRO</Text>
+            </View>
+          )
         )}
         {year !== '' && <Text style={et.yearOverlay}>{year}</Text>}
       </View>
@@ -501,9 +596,18 @@ const ExtrasTileCard = ({
       <View style={et.body}>
         <Text style={et.title} numberOfLines={2}>{title}</Text>
         <View style={et.ctaRow}>
-          <View style={[et.ctaAccent, { backgroundColor: accent }]} />
-          <Text style={et.ctaT}>READ</Text>
-          <Ionicons name="arrow-forward" size={9} color="rgba(255,255,255,0.5)" style={{ marginLeft: 4 }} />
+          {locked ? (
+            <>
+              <View style={[et.ctaAccent, { backgroundColor: COIN_GOLD }]} />
+              <Text style={[et.ctaT, { color: COIN_GOLD }]}>UNLOCK · 1 🪙</Text>
+            </>
+          ) : (
+            <>
+              <View style={[et.ctaAccent, { backgroundColor: accent }]} />
+              <Text style={et.ctaT}>READ</Text>
+              <Ionicons name="arrow-forward" size={9} color="rgba(255,255,255,0.5)" style={{ marginLeft: 4 }} />
+            </>
+          )}
         </View>
       </View>
     </TouchableOpacity>
@@ -524,7 +628,7 @@ const et = StyleSheet.create({
   proTag: {
     position: 'absolute', top: 9, right: 9,
     flexDirection: 'row', alignItems: 'center', gap: 3,
-    backgroundColor: '#E8B84D', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 5,
+    backgroundColor: COIN_GOLD, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 5,
   },
   proTagT: { fontSize: 7.5, fontWeight: '900', color: '#1a1208', letterSpacing: 1.3 },
   yearOverlay: {
@@ -547,8 +651,8 @@ const et = StyleSheet.create({
    Groups: [wide] + [tile, tile] repeating
    ═══════════════════════════════════════════ */
 const ExtrasGrid = ({
-  extras, lang, cW, handleSelect, readIds,
-}: { extras: any[]; lang: string; cW: number; handleSelect: (e: any) => void; readIds: Set<string> }) => {
+  extras, lang, cW, handleSelect, readIds, subscribed, isUnlocked,
+}: { extras: any[]; lang: string; cW: number; handleSelect: (e: any) => void; readIds: Set<string>; subscribed: boolean; isUnlocked: (e: any) => boolean }) => {
   const TILE_GAP = 8;
   const tileW = Math.floor((cW - TILE_GAP) / 2);
 
@@ -574,11 +678,11 @@ const ExtrasGrid = ({
       {groups.map((group, gi) => (
         <AnimatedCard key={gi} delay={Math.min(60 + gi * 50, 350)} style={{ marginBottom: TILE_GAP }}>
           {group.type === 'wide' ? (
-            <ExtrasWideCard event={group.event} lang={lang} onPress={() => handleSelect(group.event)} isRead={readIds.has(getEventId(group.event))} />
+            <ExtrasWideCard event={group.event} lang={lang} onPress={() => handleSelect(group.event)} isRead={readIds.has(getEventId(group.event))} subscribed={subscribed} unlocked={isUnlocked(group.event)} />
           ) : (
             <View style={{ flexDirection: 'row', gap: TILE_GAP }}>
-              <ExtrasTileCard event={group.events[0]} lang={lang} onPress={() => handleSelect(group.events[0])} width={tileW} isRead={readIds.has(getEventId(group.events[0]))} />
-              <ExtrasTileCard event={group.events[1]} lang={lang} onPress={() => handleSelect(group.events[1])} width={tileW} isRead={readIds.has(getEventId(group.events[1]))} />
+              <ExtrasTileCard event={group.events[0]} lang={lang} onPress={() => handleSelect(group.events[0])} width={tileW} isRead={readIds.has(getEventId(group.events[0]))} subscribed={subscribed} unlocked={isUnlocked(group.events[0])} />
+              <ExtrasTileCard event={group.events[1]} lang={lang} onPress={() => handleSelect(group.events[1])} width={tileW} isRead={readIds.has(getEventId(group.events[1]))} subscribed={subscribed} unlocked={isUnlocked(group.events[1])} />
             </View>
           )}
         </AnimatedCard>
@@ -608,9 +712,14 @@ const ExtrasGrid = ({
    │   curated       │   curated         │
    └─────────────────┴───────────────────┘
    ═══════════════════════════════════════════ */
-export const DiscoverSection = ({ events, theme, t, isPro = true, onPaywall }: DiscoverSectionProps) => {
+export const DiscoverSection = ({ events, theme, t, isPro = true, isDark = true, onPaywall }: DiscoverSectionProps) => {
   const { language } = useLanguage();
   const readEventIds = useGamificationStore(s => s.readEventIds);
+  // Reactive coin-unlock set so a PRO card flips from "locked" to readable the
+  // instant it's unlocked (via a coin or a watched clip).
+  const coinData = useCoinData();
+  const unlockedSet = new Set(coinData.unlockedEvents);
+  const isUnlocked = (event: any) => unlockedSet.has(getEventId(event));
   const [selected, setSelected] = useState<any>(null);
   const [cW, setCW] = useState(0);
   const [cH, setCH] = useState(0);
@@ -621,9 +730,11 @@ export const DiscoverSection = ({ events, theme, t, isPro = true, onPaywall }: D
   const issueNumber = new Date().getDate();
 
   const handleSelect = (event: any) => {
-    if (isProEvent(event) && !isPro) {
+    // Locked PRO story → open the per-event unlock sheet (coin / watch-a-clip),
+    // NOT the paywall. Already-unlocked (or subscribed) stories open the reader.
+    if (isProEvent(event) && !isPro && !useCoinStore.getState().isEventUnlocked(getEventId(event))) {
       haptic('medium');
-      onPaywall?.();
+      useUnlockStore.getState().open(event);
       return;
     }
     haptic('light');
@@ -678,6 +789,7 @@ export const DiscoverSection = ({ events, theme, t, isPro = true, onPaywall }: D
         bounces
         contentContainerStyle={{ paddingBottom: 28 }}
       >
+        {!ready && <DiscoverSkeleton isDark={isDark} />}
         {ready && (
           <>
             <Masthead issue={issueNumber} count={secondary.length} theme={theme} t={t} />
@@ -691,6 +803,7 @@ export const DiscoverSection = ({ events, theme, t, isPro = true, onPaywall }: D
                 height={heroH}
                 isRead={isRead(hero)}
                 subscribed={isPro}
+                unlocked={isUnlocked(hero)}
               />
             </AnimatedCard>
 
@@ -703,6 +816,8 @@ export const DiscoverSection = ({ events, theme, t, isPro = true, onPaywall }: D
                   onPress={() => handleSelect(rest[0])}
                   height={editH}
                   isRead={isRead(rest[0])}
+                  subscribed={isPro}
+                  unlocked={isUnlocked(rest[0])}
                 />
               </AnimatedCard>
             )}
@@ -718,6 +833,8 @@ export const DiscoverSection = ({ events, theme, t, isPro = true, onPaywall }: D
                     width={mosaicLeftW}
                     height={mosaicH}
                     isRead={isRead(rest[1])}
+                    subscribed={isPro}
+                    unlocked={isUnlocked(rest[1])}
                   />
                 </AnimatedCard>
                 <AnimatedCard delay={440} style={{ width: mosaicRightW }}>
@@ -729,6 +846,8 @@ export const DiscoverSection = ({ events, theme, t, isPro = true, onPaywall }: D
                     width={mosaicRightW}
                     height={mosaicH}
                     isRead={isRead(rest[2])}
+                    subscribed={isPro}
+                    unlocked={isUnlocked(rest[2])}
                   />
                 </AnimatedCard>
               </View>
@@ -744,6 +863,8 @@ export const DiscoverSection = ({ events, theme, t, isPro = true, onPaywall }: D
                   width={cW}
                   height={Math.floor(usable * 0.32)}
                   isRead={isRead(rest[1])}
+                  subscribed={isPro}
+                  unlocked={isUnlocked(rest[1])}
                 />
               </AnimatedCard>
             )}
@@ -764,7 +885,7 @@ export const DiscoverSection = ({ events, theme, t, isPro = true, onPaywall }: D
                   <View style={[st.extrasLine, { backgroundColor: theme.gold + '35' }]} />
                 </View>
 
-                <ExtrasGrid extras={extras} lang={language} cW={cW} handleSelect={handleSelect} readIds={readEventIds} />
+                <ExtrasGrid extras={extras} lang={language} cW={cW} handleSelect={handleSelect} readIds={readEventIds} subscribed={isPro} isUnlocked={isUnlocked} />
               </View>
             )}
           </>
@@ -974,7 +1095,7 @@ const st = StyleSheet.create({
   proPill: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6,
-    backgroundColor: '#E8B84D',
+    backgroundColor: COIN_GOLD,
     shadowColor: '#000',
     shadowOpacity: 0.35,
     shadowRadius: 4,
@@ -984,4 +1105,17 @@ const st = StyleSheet.create({
   proPillCompact: { paddingHorizontal: 7, paddingVertical: 3, gap: 3 },
   proPillT: { fontSize: 9, fontWeight: '900', color: '#1a1208', letterSpacing: 1.6 },
   proPillTCompact: { fontSize: 8, letterSpacing: 1.3 },
+
+  /* ── Unlock-with-coin chip ── */
+  unlockChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6,
+    backgroundColor: COIN_GOLD,
+    shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 4,
+  },
+  unlockChipCompact: { paddingHorizontal: 7, paddingVertical: 3, gap: 3 },
+  unlockCoin: { fontSize: 10 },
+  unlockCoinCompact: { fontSize: 9 },
+  unlockChipT: { fontSize: 9, fontWeight: '900', color: '#1a1208', letterSpacing: 1.4 },
+  unlockChipTCompact: { fontSize: 8, letterSpacing: 1.1 },
 });

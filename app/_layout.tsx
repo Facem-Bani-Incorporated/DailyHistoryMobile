@@ -8,6 +8,7 @@ import { ActivityIndicator, View } from 'react-native';
 
 import CoinRewardModal from '../components/CoinRewardModal';
 import OnboardingScreen from '../components/OnBoardingScreen';
+import UnlockStoryModal from '../components/UnlockStoryModal';
 import { LanguageProvider } from '../context/LanguageContext';
 import { RevenueCatProvider } from '../context/RevenueCatContext';
 import { ThemeProvider, useTheme } from '../context/ThemeContext';
@@ -199,6 +200,8 @@ function AppContent() {
       </Stack>
       {/* Global "watch a clip for a coin" pop-up — controlled via useCoinPopupStore */}
       <CoinRewardModal />
+      {/* Global per-event "Unlock this story" sheet — controlled via useUnlockStore */}
+      <UnlockStoryModal />
     </>
   );
 }

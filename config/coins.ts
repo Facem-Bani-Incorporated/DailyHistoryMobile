@@ -1,6 +1,14 @@
 // config/coins.ts
 // Central tuning for the coin economy + referral pass. Keep all magic numbers here.
 
+// ── Coin / gold visual tokens ──
+// Single source of truth for the coin accent so every coin surface (header pill,
+// CoinRewardModal, UnlockStoryModal, Discover unlock chips, LockedTomorrowCard)
+// reads the same gold. COIN_GOLD is tuned for dark backgrounds; COIN_GOLD_DEEP is
+// the readable variant on light backgrounds. Pick with `isDark ? COIN_GOLD : COIN_GOLD_DEEP`.
+export const COIN_GOLD = '#E8B84D';
+export const COIN_GOLD_DEEP = '#C77E08';
+
 // ── Costs (coins spent to unlock) ──
 export const COIN_COST_EVENT = 1;      // unlock one PRO event
 export const COIN_COST_MAP_LAYER = 1;  // unlock one PRO map layer

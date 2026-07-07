@@ -6,9 +6,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Coins, X } from 'lucide-react-native';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
+  Easing,
   Modal,
   Platform,
   StyleSheet,
@@ -16,7 +18,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { COINS_PER_REWARDED_AD } from '../config/coins';
+import { COIN_GOLD, COIN_GOLD_DEEP, COINS_PER_REWARDED_AD } from '../config/coins';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { useRewardedUnlock } from '../hooks/useRewardedUnlock';
@@ -25,38 +27,37 @@ import { useCoins, useCoinStore } from '../store/useCoinStore';
 import { haptic } from '../utils/haptics';
 
 const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
-const GOLD = '#FFB300';
 
 const L: Record<string, Record<string, string>> = {
   en: {
     title: 'Earn a coin', sub: 'Watch a short clip and get a coin to unlock any PRO story or map.',
     balance: 'Your coins', watch: 'Watch & earn +1', loading: 'Loading clip…',
     earned: 'Nice! +1 coin', earnedSub: 'Spend it on any PRO story or map layer.',
-    later: 'Maybe later', done: 'Done', coins: 'coins',
+    later: 'Maybe later', done: 'Done', coins: 'coins', duration: '~15–30s', reward: '+1 🪙 per clip',
   },
   ro: {
     title: 'Câștigă o monedă', sub: 'Vizionează un clip scurt și primești o monedă ca să deblochezi orice poveste sau hartă PRO.',
     balance: 'Monedele tale', watch: 'Vizionează & +1', loading: 'Se încarcă clipul…',
     earned: 'Super! +1 monedă', earnedSub: 'Folosește-o pe orice poveste sau strat de hartă PRO.',
-    later: 'Mai târziu', done: 'Gata', coins: 'monede',
+    later: 'Mai târziu', done: 'Gata', coins: 'monede', duration: '~15–30s', reward: '+1 🪙 / clip',
   },
   fr: {
     title: 'Gagne une pièce', sub: 'Regarde une courte pub et obtiens une pièce pour débloquer une histoire ou carte PRO.',
     balance: 'Tes pièces', watch: 'Regarder & +1', loading: 'Chargement…',
     earned: 'Super ! +1 pièce', earnedSub: 'Utilise-la sur une histoire ou couche de carte PRO.',
-    later: 'Plus tard', done: 'OK', coins: 'pièces',
+    later: 'Plus tard', done: 'OK', coins: 'pièces', duration: '~15–30s', reward: '+1 🪙 / pub',
   },
   de: {
     title: 'Münze verdienen', sub: 'Sieh dir einen kurzen Clip an und erhalte eine Münze für jede PRO-Geschichte oder Karte.',
     balance: 'Deine Münzen', watch: 'Ansehen & +1', loading: 'Clip lädt…',
     earned: 'Super! +1 Münze', earnedSub: 'Nutze sie für eine PRO-Geschichte oder Kartenebene.',
-    later: 'Später', done: 'Fertig', coins: 'Münzen',
+    later: 'Später', done: 'Fertig', coins: 'Münzen', duration: '~15–30s', reward: '+1 🪙 / Clip',
   },
   es: {
     title: 'Gana una moneda', sub: 'Mira un clip corto y consigue una moneda para desbloquear cualquier historia o mapa PRO.',
     balance: 'Tus monedas', watch: 'Ver y +1', loading: 'Cargando…',
     earned: '¡Genial! +1 moneda', earnedSub: 'Úsala en cualquier historia o capa de mapa PRO.',
-    later: 'Más tarde', done: 'Listo', coins: 'monedas',
+    later: 'Más tarde', done: 'Listo', coins: 'monedas', duration: '~15–30s', reward: '+1 🪙 / clip',
   },
 };
 
@@ -64,6 +65,7 @@ export default function CoinRewardModal() {
   const { theme, isDark } = useTheme();
   const { language } = useLanguage();
   const tx = (k: string) => (L[language] ?? L.en)[k] ?? L.en[k] ?? k;
+  const GOLD = isDark ? COIN_GOLD : COIN_GOLD_DEEP;
 
   const visible = useCoinPopupStore(s => s.visible);
   const hide = useCoinPopupStore(s => s.hide);
@@ -71,10 +73,25 @@ export default function CoinRewardModal() {
   const { showForUnlock, isUnlockReady } = useRewardedUnlock();
 
   const [phase, setPhase] = useState<'offer' | 'watching' | 'earned'>('offer');
+  const pulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (visible) setPhase('offer');
   }, [visible]);
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 1400, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 1400, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      ]),
+    );
+    if (visible && phase !== 'watching') loop.start();
+    return () => loop.stop();
+  }, [visible, phase]);
+
+  const coinScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.06] });
+  const ringOp = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.15, 0.45] });
 
   const onWatch = () => {
     haptic('medium');
@@ -103,8 +120,16 @@ export default function CoinRewardModal() {
             <X size={18} color={theme.subtext} strokeWidth={2.4} />
           </TouchableOpacity>
 
-          <View style={[s.coinCircle, { backgroundColor: GOLD + '1A', borderColor: GOLD + '44' }]}>
-            <Coins size={34} color={GOLD} strokeWidth={2} />
+          <View style={s.coinWrap}>
+            <Animated.View style={[s.coinRing, { borderColor: GOLD, opacity: ringOp, transform: [{ scale: coinScale.interpolate({ inputRange: [1, 1.06], outputRange: [1.15, 1.32] }) }] }]} pointerEvents="none" />
+            <Animated.View style={[s.coinCircle, { backgroundColor: GOLD + '1A', borderColor: GOLD + '44', transform: [{ scale: coinScale }] }]}>
+              <Coins size={34} color={GOLD} strokeWidth={2} />
+            </Animated.View>
+            {phase !== 'earned' && (
+              <View style={[s.rewardBadge, { backgroundColor: GOLD }]}>
+                <Text style={s.rewardBadgeText}>{tx('reward')}</Text>
+              </View>
+            )}
           </View>
 
           {phase === 'earned' ? (
@@ -146,6 +171,9 @@ export default function CoinRewardModal() {
                 <>
                   <Ionicons name="play-circle" size={18} color="#1a1208" />
                   <Text style={s.ctaText}>{tx('watch')}</Text>
+                  <View style={s.durationBadge}>
+                    <Text style={s.durationText}>{tx('duration')}</Text>
+                  </View>
                 </>
               )}
             </TouchableOpacity>
@@ -169,7 +197,13 @@ const s = StyleSheet.create({
     shadowColor: '#000', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.3, shadowRadius: 24, elevation: 10,
   },
   close: { position: 'absolute', top: 14, right: 14, padding: 4, zIndex: 2 },
-  coinCircle: { width: 76, height: 76, borderRadius: 38, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', marginBottom: 16, marginTop: 6 },
+  coinWrap: { alignItems: 'center', justifyContent: 'center', marginBottom: 16, marginTop: 10, width: 96, height: 96 },
+  coinRing: { position: 'absolute', width: 76, height: 76, borderRadius: 38, borderWidth: 1.5 },
+  coinCircle: { width: 76, height: 76, borderRadius: 38, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  rewardBadge: { position: 'absolute', bottom: -4, alignSelf: 'center', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
+  rewardBadgeText: { fontSize: 10, fontWeight: '900', color: '#1a1208', letterSpacing: 0.2 },
+  durationBadge: { backgroundColor: 'rgba(0,0,0,0.18)', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
+  durationText: { fontSize: 9, fontWeight: '800', color: 'rgba(0,0,0,0.6)', letterSpacing: 0.3 },
   title: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3, fontFamily: SERIF, textAlign: 'center' },
   sub: { fontSize: 13, fontWeight: '500', textAlign: 'center', marginTop: 8, lineHeight: 19, opacity: 0.85, paddingHorizontal: 4 },
   balance: { flexDirection: 'row', alignItems: 'center', gap: 7, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 9, marginTop: 18 },

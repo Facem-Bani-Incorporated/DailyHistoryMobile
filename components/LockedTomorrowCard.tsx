@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { COIN_GOLD, COIN_GOLD_DEEP } from '../config/coins';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 
@@ -164,7 +165,7 @@ export default function LockedTomorrowCard({
     }
   }, [isReady]);
 
-  const gold = isDark ? '#E8B84D' : '#C77E08';
+  const gold = isDark ? COIN_GOLD : COIN_GOLD_DEEP;
   const isMain = variant === 'main';
 
   const coinMode = typeof coinCost === 'number';
