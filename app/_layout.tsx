@@ -4,7 +4,7 @@ import * as Notifications from 'expo-notifications';
 import * as Linking from 'expo-linking';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, AppState, View } from 'react-native';
 
 import CoinRewardModal from '../components/CoinRewardModal';
 import OnboardingScreen from '../components/OnBoardingScreen';
@@ -16,6 +16,7 @@ import { useAdsInit } from '../hooks/useAdsInit';
 import { useCoinsFromXp } from '../hooks/useCoins';
 import { useGamificationSync } from '../hooks/useGamificationSync';
 import { useReferralRewards } from '../hooks/useReferralRewards';
+import { useNotifications } from '../hooks/usenotifications';
 import { useAuthStore } from '../store/useAuthStore';
 import { useNotificationEventStore } from '../store/useNotificationEventStore';
 
@@ -66,6 +67,29 @@ function AppContent() {
   // ── Coin economy: grant coins per 1000 XP + referral "free day of PRO" ──
   useCoinsFromXp();
   useReferralRewards();
+
+  // ── Refresh the scheduled 9 AM (event) + 12 PM (quiz) notifications with fresh DB
+  // content on app open and on foreground, so the newest TikTok-style hooks propagate
+  // daily without the user re-toggling in Settings. scheduleForTomorrow() self-guards on
+  // the enabled/permission state; we throttle to at most once every 6h to avoid re-fetching
+  // the next 7 days on every quick foreground.
+  const { scheduleForTomorrow } = useNotifications();
+  const lastScheduleRef = useRef(0);
+  useEffect(() => {
+    if (!isReady || !token) return;
+    const REFRESH_INTERVAL = 6 * 60 * 60 * 1000;
+    const maybeSchedule = () => {
+      const now = Date.now();
+      if (now - lastScheduleRef.current < REFRESH_INTERVAL) return;
+      lastScheduleRef.current = now;
+      scheduleForTomorrow();
+    };
+    maybeSchedule();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') maybeSchedule();
+    });
+    return () => sub.remove();
+  }, [isReady, token, scheduleForTomorrow]);
 
   // ── Handle notification taps (deep-link to event) ──
   useEffect(() => {
