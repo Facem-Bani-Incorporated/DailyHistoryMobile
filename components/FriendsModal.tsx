@@ -7,7 +7,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Check, Crown, UserPlus, Users, X } from 'lucide-react-native';
+import { Check, Crown, Gift, Share2, Trophy, UserPlus, Users, X } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -16,6 +16,7 @@ import {
   Modal,
   Platform,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -23,8 +24,11 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getStoreUrl } from '../config/urls';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
+import { useAuthStore } from '../store/useAuthStore';
+import { useCoinStore } from '../store/useCoinStore';
 import {
   acceptRequest,
   declineRequest,
@@ -67,6 +71,15 @@ const L: Record<string, Record<string, string>> = {
     errExists: 'Already friends or a request is pending', errSelf: "That's you 🙂",
     errEmpty: 'Enter a username', errGeneric: 'Something went wrong',
     removeTitle: 'Remove friend?', removeMsg: 'Remove {name} from your friends?', cancel: 'Cancel',
+    rewardTitle: 'Add a friend and win a free PRO day',
+    rewardSub: 'Every friend who accepts your request = +1 day of free PRO. Days stack!',
+    passActive: 'PRO pass active — {time} left',
+    how1: 'Ask your friend for their username (it\'s on their profile).',
+    how2: 'Type it above and tap Add.',
+    how3: 'When they accept, you win a free PRO day 🎉',
+    yourUsername: 'Your username', invite: 'Invite',
+    inviteShareMsg: 'Join me on Daily History! Add me as a friend — my username is:',
+    howTitle: 'How it works',
   },
   ro: {
     title: 'Prieteni', kicker: 'CERCUL TĂU',
@@ -81,6 +94,15 @@ const L: Record<string, Record<string, string>> = {
     errExists: 'Sunteți deja prieteni sau există o cerere', errSelf: 'Ești chiar tu 🙂',
     errEmpty: 'Introdu un nume de utilizator', errGeneric: 'Ceva nu a mers bine',
     removeTitle: 'Elimini prietenul?', removeMsg: 'Îl elimini pe {name} din prieteni?', cancel: 'Anulează',
+    rewardTitle: 'Adaugă un prieten și câștigă o zi de PRO gratis',
+    rewardSub: 'Fiecare prieten care îți acceptă cererea = +1 zi de PRO gratis. Zilele se adună!',
+    passActive: 'Pass PRO activ — mai ai {time}',
+    how1: 'Cere-i prietenului numele lui de utilizator (e pe profilul lui).',
+    how2: 'Scrie-l mai sus și apasă Adaugă.',
+    how3: 'Când acceptă, câștigi o zi de PRO gratis 🎉',
+    yourUsername: 'Numele tău de utilizator', invite: 'Invită',
+    inviteShareMsg: 'Hai pe Daily History! Adaugă-mă ca prieten — numele meu de utilizator este:',
+    howTitle: 'Cum funcționează',
   },
   fr: {
     title: 'Amis', kicker: 'VOTRE CERCLE',
@@ -95,6 +117,15 @@ const L: Record<string, Record<string, string>> = {
     errExists: 'Déjà amis ou demande en attente', errSelf: "C'est vous 🙂",
     errEmpty: "Entrez un nom d'utilisateur", errGeneric: 'Une erreur est survenue',
     removeTitle: "Retirer l'ami ?", removeMsg: 'Retirer {name} de vos amis ?', cancel: 'Annuler',
+    rewardTitle: 'Ajoutez un ami et gagnez un jour de PRO gratuit',
+    rewardSub: 'Chaque ami qui accepte votre demande = +1 jour de PRO gratuit. Les jours se cumulent !',
+    passActive: 'Pass PRO actif — {time} restant',
+    how1: "Demandez à votre ami son nom d'utilisateur (sur son profil).",
+    how2: 'Saisissez-le ci-dessus et appuyez sur Ajouter.',
+    how3: "Quand il accepte, vous gagnez un jour de PRO gratuit 🎉",
+    yourUsername: "Votre nom d'utilisateur", invite: 'Inviter',
+    inviteShareMsg: "Rejoins-moi sur Daily History ! Ajoute-moi en ami — mon nom d'utilisateur est :",
+    howTitle: 'Comment ça marche',
   },
   de: {
     title: 'Freunde', kicker: 'DEIN KREIS',
@@ -109,6 +140,15 @@ const L: Record<string, Record<string, string>> = {
     errExists: 'Bereits befreundet oder Anfrage offen', errSelf: 'Das bist du 🙂',
     errEmpty: 'Benutzernamen eingeben', errGeneric: 'Etwas ist schiefgelaufen',
     removeTitle: 'Freund entfernen?', removeMsg: '{name} aus deinen Freunden entfernen?', cancel: 'Abbrechen',
+    rewardTitle: 'Füge einen Freund hinzu und gewinne einen gratis PRO-Tag',
+    rewardSub: 'Jeder Freund, der deine Anfrage annimmt = +1 gratis PRO-Tag. Tage stapeln sich!',
+    passActive: 'PRO-Pass aktiv — noch {time}',
+    how1: 'Frag deinen Freund nach seinem Benutzernamen (steht im Profil).',
+    how2: 'Gib ihn oben ein und tippe auf Hinzufügen.',
+    how3: 'Sobald er annimmt, gewinnst du einen gratis PRO-Tag 🎉',
+    yourUsername: 'Dein Benutzername', invite: 'Einladen',
+    inviteShareMsg: 'Komm zu Daily History! Füge mich als Freund hinzu — mein Benutzername ist:',
+    howTitle: 'So funktioniert es',
   },
   es: {
     title: 'Amigos', kicker: 'TU CÍRCULO',
@@ -123,6 +163,15 @@ const L: Record<string, Record<string, string>> = {
     errExists: 'Ya sois amigos o hay una solicitud', errSelf: 'Ese eres tú 🙂',
     errEmpty: 'Escribe un nombre de usuario', errGeneric: 'Algo salió mal',
     removeTitle: '¿Eliminar amigo?', removeMsg: '¿Eliminar a {name} de tus amigos?', cancel: 'Cancelar',
+    rewardTitle: 'Añade un amigo y gana un día de PRO gratis',
+    rewardSub: 'Cada amigo que acepte tu solicitud = +1 día de PRO gratis. ¡Los días se acumulan!',
+    passActive: 'Pase PRO activo — queda {time}',
+    how1: 'Pídele a tu amigo su nombre de usuario (está en su perfil).',
+    how2: 'Escríbelo arriba y pulsa Añadir.',
+    how3: 'Cuando acepte, ganas un día de PRO gratis 🎉',
+    yourUsername: 'Tu nombre de usuario', invite: 'Invitar',
+    inviteShareMsg: '¡Únete a Daily History! Añádeme como amigo — mi nombre de usuario es:',
+    howTitle: 'Cómo funciona',
   },
 };
 
@@ -144,11 +193,44 @@ const Avatar = ({ uri, name, size = 42, ring }: { uri?: string | null; name: str
   );
 };
 
-export default function FriendsModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+export default function FriendsModal({
+  visible, onClose, onOpenLeaderboard,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  /** When set, shows a trophy button in the header that jumps to the global leaderboard. */
+  onOpenLeaderboard?: () => void;
+}) {
   const { theme, isDark } = useTheme();
   const { t, language } = useLanguage();
   const insets = useSafeAreaInsets();
   const tx = useCallback((k: string) => (L[language] ?? L.en)[k] ?? L.en[k] ?? k, [language]);
+
+  const user = useAuthStore(s => s.user);
+  const myUsername = user?.username || user?.email?.split('@')[0] || '';
+
+  // Referral pass countdown — recomputed each time the modal opens.
+  const [passLeftMs, setPassLeftMs] = useState(0);
+  useEffect(() => {
+    if (!visible) return;
+    try {
+      const until = useCoinStore.getState().getData().referralPassUntil ?? 0;
+      setPassLeftMs(Math.max(0, until - Date.now()));
+    } catch { setPassLeftMs(0); }
+  }, [visible]);
+  const passLeftLabel = useMemo(() => {
+    if (passLeftMs <= 0) return null;
+    const h = Math.floor(passLeftMs / 3600_000);
+    const d = Math.floor(h / 24);
+    return d >= 1 ? `${d}d ${h % 24}h` : `${Math.max(1, h)}h`;
+  }, [passLeftMs]);
+
+  const onInvite = useCallback(() => {
+    haptic('medium');
+    Share.share({
+      message: `${(L[language] ?? L.en).inviteShareMsg ?? L.en.inviteShareMsg}\n\n@${myUsername}\n${getStoreUrl()}`,
+    }).catch(() => {});
+  }, [language, myUsername]);
 
   const [tab, setTab] = useState<Tab>('board');
   const [board, setBoard] = useState<FriendLeaderboardEntry[]>([]);
@@ -160,6 +242,9 @@ export default function FriendsModal({ visible, onClose }: { visible: boolean; o
   const [username, setUsername] = useState('');
   const [adding, setAdding] = useState(false);
   const [addMsg, setAddMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  // How-to steps: expanded for first-timers (no friends yet), collapsed after.
+  const [howOpen, setHowOpen] = useState(false);
+  const howInitialized = React.useRef(false);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -172,6 +257,11 @@ export default function FriendsModal({ visible, onClose }: { visible: boolean; o
       setFriends(fr);
       setIncoming(inc);
       setOutgoing(out);
+
+      if (!howInitialized.current) {
+        howInitialized.current = true;
+        setHowOpen(fr.length === 0);
+      }
 
       // Build id→avatar map so the leaderboard shows real photos where we have them.
       const avatarById = new Map<string, string | undefined>();
@@ -280,13 +370,90 @@ export default function FriendsModal({ visible, onClose }: { visible: boolean; o
               <Text style={[s.hdrKicker, { color: ACCENT }]}>{tx('kicker')}</Text>
               <Text style={[s.hdrTitle, { color: theme.text }]}>{tx('title')}</Text>
             </View>
-            <TouchableOpacity
-              onPress={() => { haptic('medium'); loadAll(); }}
-              style={[s.iconBtn, { backgroundColor: cardBg, borderColor: cardBorder }]}
-              activeOpacity={0.75}
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {onOpenLeaderboard && (
+                <TouchableOpacity
+                  onPress={() => { haptic('light'); onOpenLeaderboard(); }}
+                  style={[s.iconBtn, { backgroundColor: cardBg, borderColor: cardBorder }]}
+                  activeOpacity={0.75}
+                  accessibilityRole="button" accessibilityLabel={t('leaderboard')}
+                >
+                  <Trophy size={18} color={ACCENT} strokeWidth={2} />
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                onPress={() => { haptic('medium'); loadAll(); }}
+                style={[s.iconBtn, { backgroundColor: cardBg, borderColor: cardBorder }]}
+                activeOpacity={0.75}
+              >
+                <Ionicons name="refresh" size={18} color={theme.text} />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Referral reward banner — add a friend, win a stacking free PRO day */}
+          <View style={s.addWrap}>
+            <LinearGradient
+              colors={isDark ? ['#2A1F0A', '#1C1508'] : ['#FFF4D6', '#FFEDBF']}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={[s.rewardCard, { borderColor: ACCENT + (isDark ? '45' : '70') }]}
             >
-              <Ionicons name="refresh" size={18} color={theme.text} />
-            </TouchableOpacity>
+              <View style={s.rewardHead}>
+                <View style={[s.rewardIcon, { backgroundColor: ACCENT + '25' }]}>
+                  <Gift size={18} color={ACCENT} strokeWidth={2.2} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.rewardTitle, { color: isDark ? '#FFDF9E' : '#6B4A00' }]}>
+                    {tx('rewardTitle')}
+                  </Text>
+                  <Text style={[s.rewardSub, { color: isDark ? '#D9C08A' : '#8A6A1F' }]}>
+                    {tx('rewardSub')}
+                  </Text>
+                </View>
+              </View>
+
+              {passLeftLabel && (
+                <View style={[s.passChip, { backgroundColor: ACCENT + '22', borderColor: ACCENT + '55' }]}>
+                  <Crown size={12} color={ACCENT} strokeWidth={2.4} fill={ACCENT} />
+                  <Text style={[s.passChipText, { color: isDark ? '#FFDF9E' : '#6B4A00' }]}>
+                    {tx('passActive').replace('{time}', passLeftLabel)}
+                  </Text>
+                </View>
+              )}
+
+              {/* How it works — 3 steps so nobody gets stuck adding a friend.
+                  Expanded by default only for first-timers; toggleable anytime. */}
+              <TouchableOpacity
+                onPress={() => { haptic('light'); setHowOpen(v => !v); }}
+                activeOpacity={0.7}
+                style={s.howToggle}
+              >
+                <Text style={[s.howTitle, { color: isDark ? '#B99D5E' : '#9A7A2F' }]}>{tx('howTitle')}</Text>
+                <Ionicons name={howOpen ? 'chevron-up' : 'chevron-down'} size={14} color={isDark ? '#B99D5E' : '#9A7A2F'} />
+              </TouchableOpacity>
+              {howOpen && ([1, 2, 3] as const).map(n => (
+                <View key={n} style={s.howRow}>
+                  <View style={[s.howNum, { backgroundColor: ACCENT + '28' }]}>
+                    <Text style={[s.howNumText, { color: isDark ? '#FFDF9E' : '#6B4A00' }]}>{n}</Text>
+                  </View>
+                  <Text style={[s.howText, { color: isDark ? '#D9C08A' : '#7A5C15' }]}>{tx(`how${n}`)}</Text>
+                </View>
+              ))}
+
+              {/* Your username + invite — the info a friend needs to add you back */}
+              <View style={s.rewardFooter}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={[s.youLabel, { color: isDark ? '#B99D5E' : '#9A7A2F' }]}>{tx('yourUsername')}</Text>
+                  <Text style={[s.youName, { color: isDark ? '#FFDF9E' : '#6B4A00' }]} numberOfLines={1}>
+                    @{myUsername}
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={onInvite} activeOpacity={0.85} style={[s.inviteBtn, { backgroundColor: ACCENT }]}>
+                  <Share2 size={14} color="#1a1208" strokeWidth={2.4} />
+                  <Text style={s.inviteBtnText}>{tx('invite')}</Text>
+                </TouchableOpacity>
+              </View>
+            </LinearGradient>
           </View>
 
           {/* Add friend row */}
@@ -504,6 +671,31 @@ const s = StyleSheet.create({
   iconBtn: { width: 40, height: 40, borderRadius: 13, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
 
   addWrap: { paddingHorizontal: 16, marginBottom: 12 },
+
+  rewardCard: { borderRadius: 18, borderWidth: 1, padding: 14 },
+  rewardHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 11 },
+  rewardIcon: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  rewardTitle: { fontSize: 14, fontWeight: '900', letterSpacing: -0.2, lineHeight: 18 },
+  rewardSub: { fontSize: 11.5, fontWeight: '600', lineHeight: 15.5, marginTop: 3 },
+  passChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start',
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 9, borderWidth: 1, marginTop: 10,
+  },
+  passChipText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.2 },
+  howToggle: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 11 },
+  howTitle: { fontSize: 10, fontWeight: '900', letterSpacing: 1.4, textTransform: 'uppercase' },
+  howRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 9, marginTop: 7 },
+  howNum: { width: 19, height: 19, borderRadius: 7, alignItems: 'center', justifyContent: 'center', marginTop: 0.5 },
+  howNumText: { fontSize: 10.5, fontWeight: '900' },
+  howText: { flex: 1, fontSize: 12, fontWeight: '600', lineHeight: 16.5 },
+  rewardFooter: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12 },
+  youLabel: { fontSize: 9, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase' },
+  youName: { fontSize: 14.5, fontWeight: '900', letterSpacing: -0.2, marginTop: 1 },
+  inviteBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 14, height: 36, borderRadius: 11,
+  },
+  inviteBtnText: { color: '#1a1208', fontWeight: '900', fontSize: 12.5, letterSpacing: 0.3 },
   inputRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     borderRadius: 14, borderWidth: 1, paddingLeft: 14, paddingRight: 6, height: 50,
