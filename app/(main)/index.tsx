@@ -3,7 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
-import { Award, Search, Trophy } from 'lucide-react-native';
+import { Award, CalendarClock, Search, Trophy, Users } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
@@ -67,6 +67,9 @@ import { scheduleDailyForDays } from '../../utils/Notifications';
 import { maybeRequestReview } from '../../utils/review';
 import { isDailyChallengeDone } from '../../utils/dailyChallenge';
 import DailyChallengeModal from '../../components/DailyChallengeModal';
+import FriendsModal from '../../components/FriendsModal';
+import { isYearQuizDone } from '../../utils/yearQuiz';
+import YearQuizModal from '../../components/YearQuizModal';
 import SavedScreen from './saved';
 
 const { width: W, height: H } = Dimensions.get('window');
@@ -872,6 +875,7 @@ export default function HomeScreen() {
 
   const [achVis, setAchVis] = useState(false);
   const [leadVis, setLeadVis] = useState(false);
+  const [friendsVis, setFriendsVis] = useState(false);
   const [recapVis, setRecapVis] = useState(false);
   const [calVis, setCalVis] = useState(false);
 
@@ -909,6 +913,15 @@ export default function HomeScreen() {
     isDailyChallengeDone().then(setChallengeDone).catch(() => {});
   }, []);
   useEffect(() => { refreshChallengeDone(); }, [refreshChallengeDone, user?.id]);
+
+  // ── Year Quiz (guess the year of one mystery story per day) ──
+  const [yearQuizVisible, setYearQuizVisible] = useState(false);
+  const [yearQuizDone, setYearQuizDone] = useState(true); // hidden until checked
+
+  const refreshYearQuizDone = useCallback(() => {
+    isYearQuizDone().then(setYearQuizDone).catch(() => {});
+  }, []);
+  useEffect(() => { refreshYearQuizDone(); }, [refreshYearQuizDone, user?.id]);
 
   useEffect(() => {
     if (!pendingEvent) return;
@@ -1297,11 +1310,11 @@ export default function HomeScreen() {
               {/* Left — gamification */}
               <View style={ms.headerLeft}>
                 <StreakIcon />
-                <TouchableOpacity onPress={() => { haptic('light'); setLeadVis(true); }}
+                <TouchableOpacity onPress={() => { haptic('light'); setFriendsVis(true); }}
                   activeOpacity={0.6} style={ms.iconBtn}
                   hitSlop={HEADER_HIT}
-                  accessibilityRole="button" accessibilityLabel={t('leaderboard')}>
-                  <Trophy size={18} color={theme.subtext} strokeWidth={1.8} />
+                  accessibilityRole="button" accessibilityLabel={t('friends')}>
+                  <Users size={18} color={theme.subtext} strokeWidth={1.8} />
                 </TouchableOpacity>
               </View>
 
@@ -1479,27 +1492,47 @@ export default function HomeScreen() {
             ) : null}
         </View>
 
-        {/* ═════════════════ DAILY CHALLENGE — floating pill above the tab bar ═════════════════ */}
-        {tab === 'today' && !loading && !challengeDone && (
+        {/* ═════════════════ DAILY QUESTS — floating pills above the tab bar ═════════════════ */}
+        {tab === 'today' && !loading && (!challengeDone || !yearQuizDone) && (
           <View
             pointerEvents="box-none"
-            style={{ position: 'absolute', left: 0, right: 0, bottom: floatingBarPad + 10, alignItems: 'center', zIndex: 20 }}
+            style={{ position: 'absolute', left: 0, right: 0, bottom: floatingBarPad + 10, alignItems: 'center', gap: 8, zIndex: 20 }}
           >
-            <TouchableOpacity
-              activeOpacity={0.9}
-              onPress={() => { haptic('medium'); setChallengeVisible(true); }}
-              style={{
-                flexDirection: 'row', alignItems: 'center', gap: 8,
-                paddingVertical: 11, paddingHorizontal: 18, borderRadius: 26,
-                backgroundColor: goldColor,
-                shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 6,
-              }}
-            >
-              <Trophy size={16} color="#1a1208" />
-              <Text style={{ color: '#1a1208', fontWeight: '900', fontSize: 13, letterSpacing: 0.3 }}>
-                {t('daily_challenge')} · 1000 XP
-              </Text>
-            </TouchableOpacity>
+            {!challengeDone && (
+              <TouchableOpacity
+                activeOpacity={0.9}
+                onPress={() => { haptic('medium'); setChallengeVisible(true); }}
+                style={{
+                  flexDirection: 'row', alignItems: 'center', gap: 8,
+                  paddingVertical: 11, paddingHorizontal: 18, borderRadius: 26,
+                  backgroundColor: goldColor,
+                  shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 6,
+                }}
+              >
+                <Trophy size={16} color="#1a1208" />
+                <Text style={{ color: '#1a1208', fontWeight: '900', fontSize: 13, letterSpacing: 0.3 }}>
+                  {t('daily_challenge')} · 1000 XP
+                </Text>
+              </TouchableOpacity>
+            )}
+            {!yearQuizDone && (
+              <TouchableOpacity
+                activeOpacity={0.9}
+                onPress={() => { haptic('medium'); setYearQuizVisible(true); }}
+                style={{
+                  flexDirection: 'row', alignItems: 'center', gap: 8,
+                  paddingVertical: 11, paddingHorizontal: 18, borderRadius: 26,
+                  backgroundColor: isDark ? '#1C1915' : '#FFFFFF',
+                  borderWidth: 1.5, borderColor: goldColor,
+                  shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 6,
+                }}
+              >
+                <CalendarClock size={16} color={goldColor} />
+                <Text style={{ color: goldColor, fontWeight: '900', fontSize: 13, letterSpacing: 0.3 }}>
+                  {t('year_quiz')} · 500 XP
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -1518,6 +1551,16 @@ export default function HomeScreen() {
 
         <AchievementsModal visible={achVis} onClose={() => setAchVis(false)} />
         <LeaderboardModal visible={leadVis} onClose={() => setLeadVis(false)} />
+        <FriendsModal
+          visible={friendsVis}
+          onClose={() => setFriendsVis(false)}
+          // Trophy in the friends header keeps the global leaderboard one tap away
+          // (the top-bar slot it used to occupy now belongs to Friends).
+          onOpenLeaderboard={() => {
+            setFriendsVis(false);
+            setTimeout(() => setLeadVis(true), 350); // let the closing modal settle first (iOS)
+          }}
+        />
         <MonthlyRecapModal visible={recapVis} onClose={() => setRecapVis(false)} />
         <InterestQuiz
           visible={quizVis}
@@ -1544,6 +1587,11 @@ export default function HomeScreen() {
           onClose={() => { setChallengeVisible(false); refreshChallengeDone(); }}
           freeEvents={mem.current[mk('free', isoFor(0))]?.data ?? []}
           allEvents={allEvents}
+        />
+        <YearQuizModal
+          visible={yearQuizVisible}
+          onClose={() => { setYearQuizVisible(false); refreshYearQuizDone(); }}
+          events={mem.current[mk('free', isoFor(0))]?.data ?? []}
         />
       </View>
     </AllEventsProvider>
