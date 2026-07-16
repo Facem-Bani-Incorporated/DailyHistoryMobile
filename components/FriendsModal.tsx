@@ -24,6 +24,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { REFERRAL_COINS } from '../config/coins';
 import { getStoreUrl } from '../config/urls';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
@@ -42,6 +43,7 @@ import {
 import { useAuthStore } from '../store/useAuthStore';
 import { useCoinStore } from '../store/useCoinStore';
 import { haptic } from '../utils/haptics';
+import CoinIcon from './CoinIcon';
 
 const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
 const SANS = Platform.OS === 'ios' ? 'System' : 'sans-serif';
@@ -71,8 +73,8 @@ const getAvatarColor = (name: string): string => {
 const L: Record<string, Record<string, string>> = {
   en: {
     kicker: 'YOUR CIRCLE', title: 'Friends',
-    rewardTitle: 'Invite a friend, get a day of PRO',
-    rewardSub: 'Share your username. Every friend who accepts adds another free day.',
+    rewardTitle: 'Add a friend, you both get {n} coins',
+    rewardSub: 'Share your username. When they accept, the coins land for both of you.',
     passLeft: '{time} of PRO left',
     invite: 'Invite',
     addPlaceholder: 'Add by username', add: 'Add',
@@ -91,8 +93,8 @@ const L: Record<string, Record<string, string>> = {
   },
   ro: {
     kicker: 'CERCUL TĂU', title: 'Prieteni',
-    rewardTitle: 'Invită un prieten, primești o zi de PRO',
-    rewardSub: 'Dă-i numele tău de utilizator. Fiecare prieten care acceptă îți adaugă încă o zi gratis.',
+    rewardTitle: 'Adaugă un prieten, primiți amândoi {n} bănuți',
+    rewardSub: 'Dă-i numele tău de utilizator. Când acceptă, bănuții intră la amândoi.',
     passLeft: 'îți mai rămân {time} de PRO',
     invite: 'Invită',
     addPlaceholder: 'Adaugă după nume', add: 'Adaugă',
@@ -111,8 +113,8 @@ const L: Record<string, Record<string, string>> = {
   },
   fr: {
     kicker: 'VOTRE CERCLE', title: 'Amis',
-    rewardTitle: 'Invitez un ami, gagnez un jour de PRO',
-    rewardSub: "Partagez votre nom d'utilisateur. Chaque ami qui accepte ajoute un jour gratuit.",
+    rewardTitle: 'Ajoutez un ami, vous gagnez {n} pièces chacun',
+    rewardSub: "Partagez votre nom d'utilisateur. Quand il accepte, les pièces arrivent pour vous deux.",
     passLeft: '{time} de PRO restant',
     invite: 'Inviter',
     addPlaceholder: "Ajouter par nom d'utilisateur", add: 'Ajouter',
@@ -131,8 +133,8 @@ const L: Record<string, Record<string, string>> = {
   },
   de: {
     kicker: 'DEIN KREIS', title: 'Freunde',
-    rewardTitle: 'Lade einen Freund ein, hol dir einen PRO-Tag',
-    rewardSub: 'Teile deinen Benutzernamen. Jeder Freund, der annimmt, bringt einen weiteren Gratistag.',
+    rewardTitle: 'Füge einen Freund hinzu — {n} Münzen für euch beide',
+    rewardSub: 'Teile deinen Benutzernamen. Nimmt er an, bekommt ihr beide die Münzen.',
     passLeft: 'noch {time} PRO',
     invite: 'Einladen',
     addPlaceholder: 'Per Benutzername hinzufügen', add: 'Hinzufügen',
@@ -151,8 +153,8 @@ const L: Record<string, Record<string, string>> = {
   },
   es: {
     kicker: 'TU CÍRCULO', title: 'Amigos',
-    rewardTitle: 'Invita a un amigo, gana un día de PRO',
-    rewardSub: 'Comparte tu nombre de usuario. Cada amigo que acepte añade otro día gratis.',
+    rewardTitle: 'Añade un amigo y ganáis {n} monedas cada uno',
+    rewardSub: 'Comparte tu nombre de usuario. Cuando acepte, las monedas llegan a los dos.',
     passLeft: 'te queda {time} de PRO',
     invite: 'Invitar',
     addPlaceholder: 'Añadir por nombre', add: 'Añadir',
@@ -313,9 +315,16 @@ export default function FriendsModal({
     }
   }, [username, tx, loadAll]);
 
-  const onAccept = useCallback(async (id: number) => {
+  const onAccept = useCallback(async (r: Friend) => {
     haptic('success');
-    try { await acceptRequest(id); await loadAll(); } catch { haptic('error'); }
+    try {
+      await acceptRequest(r.friendshipId);
+      // Pay the accepter now rather than waiting for the next foreground check.
+      // The inviter gets theirs from useReferralRewards; creditFriendOnce keeps
+      // the pair to a single payout whichever side fires first.
+      useCoinStore.getState().creditFriendOnce(String(r.userId));
+      await loadAll();
+    } catch { haptic('error'); }
   }, [loadAll]);
 
   const onDecline = useCallback(async (id: number) => {
@@ -397,7 +406,12 @@ export default function FriendsModal({
           >
             {/* Referral — the whole pitch in two lines, then the action */}
             <View style={[s.reward, { borderColor: GOLD + '38' }]}>
-              <Text style={[s.rewardTitle, { color: theme.text }]}>{tx('rewardTitle')}</Text>
+              <View style={s.rewardTitleRow}>
+                <Text style={[s.rewardTitle, { color: theme.text }]}>
+                  {tx('rewardTitle').replace('{n}', String(REFERRAL_COINS))}
+                </Text>
+                <CoinIcon size={15} />
+              </View>
               <Text style={[s.rewardSub, { color: theme.subtext }]}>{tx('rewardSub')}</Text>
 
               <View style={s.rewardRow}>
@@ -548,7 +562,7 @@ export default function FriendsModal({
                               style={[s.circleBtn, { borderColor: line }]}>
                               <X size={15} color={theme.subtext} strokeWidth={2.4} />
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={() => onAccept(r.friendshipId)} activeOpacity={0.85}
+                            <TouchableOpacity onPress={() => onAccept(r)} activeOpacity={0.85}
                               style={[s.circleBtn, { backgroundColor: accent, borderColor: accent }]}>
                               <Check size={15} color={INK} strokeWidth={3} />
                             </TouchableOpacity>
@@ -598,7 +612,8 @@ const s = StyleSheet.create({
 
   // ── Referral ──
   reward: { marginHorizontal: 20, borderRadius: 18, borderWidth: 1, padding: 16 },
-  rewardTitle: { fontSize: 15.5, fontWeight: '800', letterSpacing: -0.2, fontFamily: SERIF },
+  rewardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  rewardTitle: { fontSize: 15.5, fontWeight: '800', letterSpacing: -0.2, fontFamily: SERIF, flexShrink: 1 },
   rewardSub: { fontSize: 12.5, fontWeight: '500', fontFamily: SANS, lineHeight: 17.5, marginTop: 5, opacity: 0.9 },
   rewardRow: { flexDirection: 'row', alignItems: 'center', gap: 9, marginTop: 14 },
   handle: { flex: 1, height: 38, borderRadius: 11, borderWidth: 1, justifyContent: 'center', paddingHorizontal: 12 },

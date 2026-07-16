@@ -1,14 +1,15 @@
 // hooks/useReferralRewards.ts
-// Grants the referral reward (a stacking 24h "free day of PRO" pass) when someone
-// you invited accepts your friend request. Detection is client-side and reuses the
-// Friends feature: when a user who was in your *outgoing* pending requests shows up
-// in your friends list, they accepted your invite → you get a day.
+// Pays both sides of a new friendship REFERRAL_COINS, once per friend.
 //
-// No payments involved — the pass just OR's into isPro (see useReferralActive /
-// RevenueCatContext), unlocking every event and map layer while active.
+// Detection is client-side and reuses the Friends feature: any user who appears
+// in your friends list for the first time is a new friendship, so this covers
+// both directions with one rule — the inviter sees the invitee appear once they
+// accept, and the invitee sees the inviter. The accepter is usually credited
+// sooner, by the Friends sheet on the accept tap; whoever gets there first wins,
+// and useCoinStore.creditFriendOnce makes the pair pay out exactly once.
 import { useCallback, useEffect, useRef } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
-import { getFriends, getOutgoingRequests } from '../services/friendsService';
+import { getFriends } from '../services/friendsService';
 import { useAuthStore } from '../store/useAuthStore';
 import { useCoinStore } from '../store/useCoinStore';
 
@@ -26,26 +27,25 @@ export function useReferralRewards() {
     lastCheck.current = now;
 
     try {
-      const [friends, outgoing] = await Promise.all([getFriends(), getOutgoingRequests()]);
+      const friends = await getFriends();
       const friendIds = friends.map(f => String(f.userId));
-      const outgoingIds = outgoing.map(f => String(f.userId));
 
       const coin = useCoinStore.getState();
       const data = coin.getData();
 
-      // A friend who was previously in my outgoing (pending) snapshot accepted my
-      // invite. Credit each such friend exactly once.
-      const newlyAccepted = friendIds.filter(
-        id => data.pendingOutgoingIds.includes(id) && !data.creditedReferralFriendIds.includes(id),
-      );
-
-      for (const id of newlyAccepted) {
-        coin.creditReferral(id);
-        coin.grantReferralDays(1);
+      if (!data.referralBaselineReady) {
+        // First run for this account on this device: everyone already on the list
+        // predates the reward, so record them as known and pay nothing. Without
+        // this, signing in with existing friends would mint coins for each one.
+        coin.setReferralBaseline(friendIds);
+        return;
       }
 
+      const appeared = friendIds.filter(id => !data.knownFriendIds.includes(id));
+      for (const id of appeared) coin.creditFriendOnce(id);
+
       // Refresh baselines for the next diff.
-      coin.setReferralBaseline(friendIds, outgoingIds);
+      coin.setReferralBaseline(friendIds);
     } catch {
       // network hiccup — try again next foreground
     }

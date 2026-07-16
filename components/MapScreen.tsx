@@ -58,6 +58,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../api';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
+import CoinIcon from './CoinIcon';
 import { useRevenueCat } from '../context/RevenueCatContext';
 import { useAllEvents } from '../context/AllEventsContext';
 import { haptic } from '../utils/haptics';
@@ -2364,7 +2365,8 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
                     </View>
                   ) : (lockedVideo || lockedPro) ? (
                     <View style={[styles.layersPanelBadge, { backgroundColor: '#D9770620' }]}>
-                      <Text style={[styles.layersPanelBadgeText, { color: '#D97706' }]}>🪙 {COIN_COST_MAP_LAYER}</Text>
+                      <CoinIcon size={9} />
+                      <Text style={[styles.layersPanelBadgeText, { color: '#D97706' }]}>{COIN_COST_MAP_LAYER}</Text>
                     </View>
                   ) : null}
                 </TouchableOpacity>
@@ -3584,7 +3586,7 @@ const styles = StyleSheet.create({
   layersPanelDesc: { fontSize: 10.5, fontWeight: '500', opacity: 0.55, marginTop: 1 },
   layersPanelDot: { width: 7, height: 7, borderRadius: 3.5 },
   layersPanelSep: { height: StyleSheet.hairlineWidth, marginHorizontal: 12, marginVertical: 4 },
-  layersPanelBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  layersPanelBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
   layersPanelBadgeText: { fontSize: 9, fontWeight: '800', letterSpacing: 0.4 },
 
   chipsRow: { position: 'absolute', left: 0, right: 0, zIndex: 18 },

@@ -32,6 +32,7 @@ import OfflineState from '../../components/OfflineState';
 import XPFloatToast from '../../components/XPFloatToast';
 import AdCard from '../../components/AdCard';
 import CalendarModal from '../../components/CalendarModal';
+import CoinIcon from '../../components/CoinIcon';
 import CelestialDay from '../../components/CelestialDay';
 import { DiscoverSection } from '../../components/DiscoverSection';
 import { HistoryCard } from '../../components/HistoryCard';
@@ -409,8 +410,9 @@ const ProCardSection = ({ event, allEvents, gold, isPro, onPaywall, t, language 
               <View style={[_proSec.ctaBtn, { backgroundColor: gold }]}>
                 <Ionicons name="lock-open-outline" size={15} color="#0A0815" />
                 <Text style={_proSec.ctaBtnText}>
-                  {(PRO_COIN_T[language] ?? PRO_COIN_T.en).unlock} · {COIN_COST_EVENT} 🪙
+                  {(PRO_COIN_T[language] ?? PRO_COIN_T.en).unlock} · {COIN_COST_EVENT}
                 </Text>
+                <CoinIcon size={13} style={{ marginLeft: -4 }} />
                 <Text style={[_proSec.ctaBtnText, { opacity: 0.7 }]}>({coins})</Text>
               </View>
             </Animated.View>
@@ -670,7 +672,7 @@ const CoinButton = ({ isDark }: { isDark: boolean }) => {
       style={[_coinBtn.pill, { backgroundColor: bg, borderColor: border }]}
     >
       <Animated.View style={[_coinBtn.glow, { backgroundColor: COIN_GOLD, opacity: glowOp }]} pointerEvents="none" />
-      <Animated.Text style={[_coinBtn.emoji, { transform: [{ scale }] }]}>🪙</Animated.Text>
+      <Animated.View style={{ transform: [{ scale }] }}><CoinIcon size={14} /></Animated.View>
       <Text style={[_coinBtn.count, { color: isDark ? COIN_GOLD : COIN_GOLD_DEEP }]}>
         {display}
       </Text>
@@ -685,7 +687,7 @@ const _coinBtn = StyleSheet.create({
     overflow: 'hidden',
   },
   glow: { position: 'absolute', left: -6, right: -6, top: -6, bottom: -6, borderRadius: 20 },
-  emoji: { fontSize: 13 },
+  
   count: { fontSize: 13, fontWeight: '900', letterSpacing: -0.2, minWidth: 10, textAlign: 'center' },
 });
 

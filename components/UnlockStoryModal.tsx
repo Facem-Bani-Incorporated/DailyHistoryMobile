@@ -30,6 +30,7 @@ import { COIN_COST_EVENT, COIN_GOLD, COIN_GOLD_DEEP, COINS_PER_REWARDED_AD } fro
 import { useLanguage } from '../context/LanguageContext';
 import { useRevenueCat } from '../context/RevenueCatContext';
 import { useTheme } from '../context/ThemeContext';
+import CoinIcon from './CoinIcon';
 import { useRewardedUnlock } from '../hooks/useRewardedUnlock';
 import { useCoins, useCoinStore } from '../store/useCoinStore';
 import { getEventId } from '../store/useSavedStore';
@@ -207,7 +208,7 @@ export default function UnlockStoryModal() {
 
             {/* Balance chip */}
             <View style={[s.balance, { borderColor: border }]}>
-              <Text style={s.coinEmoji}>🪙</Text>
+              <CoinIcon size={14} />
               <Text style={[s.balanceText, { color: theme.text }]}>
                 {coins} <Text style={{ color: theme.subtext, fontWeight: '700' }}>{tx('balance').toLowerCase()}</Text>
               </Text>
@@ -219,7 +220,8 @@ export default function UnlockStoryModal() {
                 {/* Spend a coin → unlock */}
                 <TouchableOpacity onPress={onSpend} disabled={watching} activeOpacity={0.9} style={[s.cta, { backgroundColor: GOLD, opacity: watching ? 0.6 : 1 }]}>
                   <Ionicons name="lock-open" size={17} color="#1a1208" />
-                  <Text style={s.ctaText}>{tx('unlockNow')} · {COIN_COST_EVENT} 🪙</Text>
+                  <Text style={s.ctaText}>{tx('unlockNow')} · {COIN_COST_EVENT}</Text>
+                  <CoinIcon size={13} />
                 </TouchableOpacity>
 
                 {/* Secondary — keep surfacing the ad even when they have coins */}
@@ -234,7 +236,8 @@ export default function UnlockStoryModal() {
                       <Ionicons name="play-circle" size={16} color={goldText} />
                       <Text style={[s.ctaGhostText, { color: goldText }]}>{tx('watchEarn')}</Text>
                       <View style={[s.plusPill, { backgroundColor: goldText + '22' }]}>
-                        <Text style={[s.plusText, { color: goldText }]}>+1 🪙</Text>
+                        <Text style={[s.plusText, { color: goldText }]}>+1</Text>
+                        <CoinIcon size={11} />
                       </View>
                     </>
                   )}
@@ -291,7 +294,7 @@ const s = StyleSheet.create({
   hint: { fontSize: 12.5, fontWeight: '500', lineHeight: 18, marginTop: 10, opacity: 0.9 },
 
   balance: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 11, paddingHorizontal: 12, paddingVertical: 7, marginTop: 14 },
-  coinEmoji: { fontSize: 13 },
+
   balanceText: { fontSize: 14, fontWeight: '900', letterSpacing: -0.2 },
 
   cta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, alignSelf: 'stretch', paddingVertical: 15, borderRadius: 15, marginTop: 16 },

@@ -17,6 +17,7 @@ import {
   EVENTS_OPEN_TRIGGER,
   REFERRAL_PASS_MS,
   XP_PER_COIN,
+  REFERRAL_COINS,
 } from '../config/coins';
 import { useAuthStore } from './useAuthStore';
 
@@ -31,7 +32,7 @@ export interface CoinData {
   referralPassUntil: number | null; // epoch ms; while > now, everything is unlocked
   creditedReferralFriendIds: string[]; // invited friends already rewarded
   knownFriendIds: string[];      // baseline to detect newly accepted friends (local)
-  pendingOutgoingIds: string[];  // snapshot of my outgoing requests (local)
+  referralBaselineReady: boolean; // false until the first sync — see creditFriendOnce (local)
   lastCoinPopupAt: number | null;   // cooldown for the "watch a clip" pop-up (local)
   eventsOpenedDate: string | null;  // for the ">6 events opened today" trigger (local)
   eventsOpenedCount: number;
@@ -46,7 +47,7 @@ export const EMPTY_COINS: CoinData = {
   referralPassUntil: null,
   creditedReferralFriendIds: [],
   knownFriendIds: [],
-  pendingOutgoingIds: [],
+  referralBaselineReady: false,
   lastCoinPopupAt: null,
   eventsOpenedDate: null,
   eventsOpenedCount: 0,
@@ -91,8 +92,9 @@ interface CoinState {
   // referral pass
   grantReferralDays: (days?: number) => void;
   isReferralActive: () => boolean;
-  setReferralBaseline: (knownFriendIds: string[], pendingOutgoingIds: string[]) => void;
+  setReferralBaseline: (knownFriendIds: string[]) => void;
   creditReferral: (friendId: string) => void;
+  creditFriendOnce: (friendId: string) => boolean;
 
   // coin pop-up
   registerEventOpen: () => boolean; // true when the ">6 events" trigger fires
@@ -165,11 +167,29 @@ export const useCoinStore = create<CoinState>()(
           const until = read().referralPassUntil;
           return !!until && Date.now() < until;
         },
-        setReferralBaseline: (knownFriendIds, pendingOutgoingIds) => {
-          write({ knownFriendIds: uniq(knownFriendIds), pendingOutgoingIds: uniq(pendingOutgoingIds) });
+        setReferralBaseline: (knownFriendIds) => {
+          write({ knownFriendIds: uniq(knownFriendIds), referralBaselineReady: true });
         },
         creditReferral: (friendId) => {
           write({ creditedReferralFriendIds: uniq([...read().creditedReferralFriendIds, String(friendId)]) });
+        },
+
+        /**
+         * Pays REFERRAL_COINS for a new friendship, at most once per friend ever.
+         * Both the accepter (from the Friends sheet) and the inviter (from the
+         * background check) call this for the same pair, so the credit list — not
+         * the call site — is what makes it exactly once. Returns true if it paid.
+         */
+        creditFriendOnce: (friendId) => {
+          const d = read();
+          const id = String(friendId);
+          if (d.creditedReferralFriendIds.includes(id)) return false;
+          write({
+            creditedReferralFriendIds: uniq([...d.creditedReferralFriendIds, id]),
+            coins: Math.max(0, d.coins + REFERRAL_COINS),
+            knownFriendIds: uniq([...d.knownFriendIds, id]),
+          });
+          return true;
         },
 
         registerEventOpen: () => {

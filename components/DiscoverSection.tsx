@@ -16,6 +16,7 @@ import {
   View,
 } from 'react-native';
 
+import CoinIcon from './CoinIcon';
 import { COIN_GOLD } from '../config/coins';
 import { useLanguage } from '../context/LanguageContext';
 import { useCoinData, useCoinStore } from '../store/useCoinStore';
@@ -134,7 +135,7 @@ const ProPill = ({ compact }: { compact?: boolean }) => (
 /* ── Unlock-with-coin chip — shown on every locked PRO card ─────── */
 const UnlockChip = ({ compact }: { compact?: boolean }) => (
   <View style={[st.unlockChip, compact && st.unlockChipCompact]}>
-    <Text style={[st.unlockCoin, compact && st.unlockCoinCompact]}>🪙</Text>
+    <CoinIcon size={compact ? 9 : 10} />
     <Text style={[st.unlockChipT, compact && st.unlockChipTCompact]}>UNLOCK</Text>
   </View>
 );
@@ -301,7 +302,8 @@ const HeroCard = ({
             <>
               <View style={[st.heroCtaLine, { backgroundColor: COIN_GOLD }]} />
               <Ionicons name="lock-open" size={11} color={COIN_GOLD} style={{ marginRight: 5 }} />
-              <Text style={[st.heroCtaTxt, { color: COIN_GOLD }]}>UNLOCK · 1 🪙</Text>
+              <Text style={[st.heroCtaTxt, { color: COIN_GOLD }]}>UNLOCK · 1</Text>
+              <CoinIcon size={10} style={{ marginLeft: 3 }} />
             </>
           ) : (
             <>
@@ -376,7 +378,8 @@ const EditorialCard = ({
             <>
               <View style={[st.editCtaLine, { backgroundColor: COIN_GOLD }]} />
               <Ionicons name="lock-open" size={10} color={COIN_GOLD} style={{ marginRight: 4 }} />
-              <Text style={[st.editCtaTxt, { color: COIN_GOLD }]}>UNLOCK · 1 🪙</Text>
+              <Text style={[st.editCtaTxt, { color: COIN_GOLD }]}>UNLOCK · 1</Text>
+              <CoinIcon size={9} style={{ marginLeft: 3 }} />
             </>
           ) : (
             <>
@@ -477,7 +480,7 @@ const ExtrasWideCard = ({
         {pro && (
           locked ? (
             <View style={[ew.proTag, { gap: 3 }]}>
-              <Text style={{ fontSize: 8 }}>🪙</Text>
+              <CoinIcon size={8} />
               <Text style={ew.proTagT}>UNLOCK</Text>
             </View>
           ) : (
@@ -502,7 +505,8 @@ const ExtrasWideCard = ({
           {locked ? (
             <>
               <View style={[ew.ctaLine, { backgroundColor: COIN_GOLD }]} />
-              <Text style={[ew.ctaT, { color: COIN_GOLD }]}>UNLOCK · 1 🪙</Text>
+              <Text style={[ew.ctaT, { color: COIN_GOLD }]}>UNLOCK · 1</Text>
+              <CoinIcon size={9} style={{ marginLeft: 3 }} />
             </>
           ) : (
             <>
@@ -580,7 +584,7 @@ const ExtrasTileCard = ({
         {pro && (
           locked ? (
             <View style={[et.proTag, { gap: 2 }]}>
-              <Text style={{ fontSize: 7.5 }}>🪙</Text>
+              <CoinIcon size={7.5} />
               <Text style={et.proTagT}>UNLOCK</Text>
             </View>
           ) : (
@@ -599,7 +603,8 @@ const ExtrasTileCard = ({
           {locked ? (
             <>
               <View style={[et.ctaAccent, { backgroundColor: COIN_GOLD }]} />
-              <Text style={[et.ctaT, { color: COIN_GOLD }]}>UNLOCK · 1 🪙</Text>
+              <Text style={[et.ctaT, { color: COIN_GOLD }]}>UNLOCK · 1</Text>
+              <CoinIcon size={8.5} style={{ marginLeft: 3 }} />
             </>
           ) : (
             <>
@@ -1114,8 +1119,7 @@ const st = StyleSheet.create({
     shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 4,
   },
   unlockChipCompact: { paddingHorizontal: 7, paddingVertical: 3, gap: 3 },
-  unlockCoin: { fontSize: 10 },
-  unlockCoinCompact: { fontSize: 9 },
+
   unlockChipT: { fontSize: 9, fontWeight: '900', color: '#1a1208', letterSpacing: 1.4 },
   unlockChipTCompact: { fontSize: 8, letterSpacing: 1.1 },
 });

@@ -30,4 +30,8 @@ export const EVENTS_OPEN_TRIGGER = 6;
 // grants one day; days stack.
 export const REFERRAL_PASS_MS = 24 * 60 * 60 * 1000; // 24h per accepted invite
 
+// Both sides of a new friendship get this, once per friend. The inviter is
+// credited when the invite is accepted; the accepter, when they accept.
+export const REFERRAL_COINS = 5;
+
 export type CoinPopupTrigger = 'quiz' | 'map' | 'daily_quiz' | 'events' | 'no_coins';

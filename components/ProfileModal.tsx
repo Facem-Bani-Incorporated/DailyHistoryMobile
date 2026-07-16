@@ -66,6 +66,7 @@ import {
   LEVEL_NAMES,
   useGamificationStore,
 } from '../store/useGamificationStore';
+import CoinIcon from './CoinIcon';
 import ReadingHeatmap from './ReadingHeatmap';
 import SupportModal from './SupportModal';
 
@@ -615,7 +616,7 @@ export default function ProfileModal({ visible, onClose }: Props) {
                 {/* Balance + get-a-coin */}
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 14 }}>
                   <View style={{ width: 38, height: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: `${gold}18` }}>
-                    <Text style={{ fontSize: 18 }}>🪙</Text>
+                    <CoinIcon size={18} />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={{ color: theme.text, fontSize: 20, fontWeight: '900', letterSpacing: -0.3 }}>

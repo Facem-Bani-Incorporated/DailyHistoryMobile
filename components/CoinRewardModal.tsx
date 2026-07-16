@@ -5,7 +5,7 @@
 // failed 0-coin unlock, plus the "Get a coin" button in the profile).
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Coins, X } from 'lucide-react-native';
+import { X } from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -21,6 +21,7 @@ import {
 import { COINS_PER_REWARDED_AD } from '../config/coins';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
+import CoinIcon from './CoinIcon';
 import { useRewardedUnlock } from '../hooks/useRewardedUnlock';
 import { useCoinPopupStore } from '../store/useCoinPopupStore';
 import { useCoins, useCoinStore } from '../store/useCoinStore';
@@ -40,31 +41,31 @@ const L: Record<string, Record<string, string>> = {
     title: 'Earn a coin', sub: 'Watch a short clip and get a coin to unlock any PRO story or map.',
     balance: 'Your coins', watch: 'Watch & earn +1', loading: 'Loading clip…',
     earned: 'Nice! +1 coin', earnedSub: 'Spend it on any PRO story or map layer.',
-    later: 'Maybe later', done: 'Done', coins: 'coins', duration: '~15–30s', reward: '+1 🪙 per clip',
+    later: 'Maybe later', done: 'Done', coins: 'coins', duration: '~15–30s', reward: '+1 per clip',
   },
   ro: {
     title: 'Câștigă o monedă', sub: 'Vizionează un clip scurt și primești o monedă ca să deblochezi orice poveste sau hartă PRO.',
     balance: 'Monedele tale', watch: 'Vizionează & +1', loading: 'Se încarcă clipul…',
     earned: 'Super! +1 monedă', earnedSub: 'Folosește-o pe orice poveste sau strat de hartă PRO.',
-    later: 'Mai târziu', done: 'Gata', coins: 'monede', duration: '~15–30s', reward: '+1 🪙 / clip',
+    later: 'Mai târziu', done: 'Gata', coins: 'monede', duration: '~15–30s', reward: '+1 / clip',
   },
   fr: {
     title: 'Gagne une pièce', sub: 'Regarde une courte pub et obtiens une pièce pour débloquer une histoire ou carte PRO.',
     balance: 'Tes pièces', watch: 'Regarder & +1', loading: 'Chargement…',
     earned: 'Super ! +1 pièce', earnedSub: 'Utilise-la sur une histoire ou couche de carte PRO.',
-    later: 'Plus tard', done: 'OK', coins: 'pièces', duration: '~15–30s', reward: '+1 🪙 / pub',
+    later: 'Plus tard', done: 'OK', coins: 'pièces', duration: '~15–30s', reward: '+1 / pub',
   },
   de: {
     title: 'Münze verdienen', sub: 'Sieh dir einen kurzen Clip an und erhalte eine Münze für jede PRO-Geschichte oder Karte.',
     balance: 'Deine Münzen', watch: 'Ansehen & +1', loading: 'Clip lädt…',
     earned: 'Super! +1 Münze', earnedSub: 'Nutze sie für eine PRO-Geschichte oder Kartenebene.',
-    later: 'Später', done: 'Fertig', coins: 'Münzen', duration: '~15–30s', reward: '+1 🪙 / Clip',
+    later: 'Später', done: 'Fertig', coins: 'Münzen', duration: '~15–30s', reward: '+1 / Clip',
   },
   es: {
     title: 'Gana una moneda', sub: 'Mira un clip corto y consigue una moneda para desbloquear cualquier historia o mapa PRO.',
     balance: 'Tus monedas', watch: 'Ver y +1', loading: 'Cargando…',
     earned: '¡Genial! +1 moneda', earnedSub: 'Úsala en cualquier historia o capa de mapa PRO.',
-    later: 'Más tarde', done: 'Listo', coins: 'monedas', duration: '~15–30s', reward: '+1 🪙 / clip',
+    later: 'Más tarde', done: 'Listo', coins: 'monedas', duration: '~15–30s', reward: '+1 / clip',
   },
 };
 
@@ -194,7 +195,7 @@ export default function CoinRewardModal() {
                 start={{ x: 0.2, y: 0 }} end={{ x: 0.8, y: 1 }}
                 style={s.coinCircle}
               >
-                <Coins size={36} color={INK} strokeWidth={2.2} />
+                <CoinIcon size={40} />
               </LinearGradient>
             </Animated.View>
             {phase !== 'earned' && (
@@ -217,7 +218,7 @@ export default function CoinRewardModal() {
           )}
 
           <View style={[s.balance, { borderColor: border, backgroundColor: GOLD + '12' }]}>
-            <Coins size={15} color={GOLD_DEEP} strokeWidth={2.4} />
+            <CoinIcon size={15} />
             <Text style={[s.balanceText, { color: theme.text }]}>
               {coins} <Text style={{ color: theme.subtext, fontWeight: '600' }}>{tx('coins')}</Text>
             </Text>

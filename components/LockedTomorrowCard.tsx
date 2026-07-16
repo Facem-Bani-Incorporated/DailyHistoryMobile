@@ -14,6 +14,7 @@ import {
 import { COIN_GOLD, COIN_GOLD_DEEP } from '../config/coins';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
+import CoinIcon from './CoinIcon';
 
 const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
 
@@ -174,7 +175,7 @@ export default function LockedTomorrowCard({
     ? tx(language, 'coinSub')
     : tx(language, isMain ? 'lockedSub' : 'discoverSub');
   const ctaText = coinMode
-    ? `${tx(language, 'coinCta')} · ${coinCost} 🪙`
+    ? `${tx(language, 'coinCta')} · ${coinCost}`
     : (isReady ? tx(language, 'cta') : tx(language, 'ctaDisabled'));
 
   // Event teaser data
@@ -296,9 +297,11 @@ export default function LockedTomorrowCard({
               <Text style={[styles.ctaText, { color: isReady ? '#000' : theme.subtext }]}>
                 {ctaText}
               </Text>
+              {coinMode && <CoinIcon size={13} style={{ marginLeft: -4 }} />}
               {coinMode ? (
                 <View style={styles.durationBadge}>
-                  <Text style={styles.durationText}>{coins} 🪙</Text>
+                  <Text style={styles.durationText}>{coins}</Text>
+                  <CoinIcon size={9} />
                 </View>
               ) : isReady ? (
                 <View style={styles.durationBadge}>
@@ -475,6 +478,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   durationBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
     backgroundColor: 'rgba(0,0,0,0.18)',
     borderRadius: 6,
     paddingHorizontal: 6,
