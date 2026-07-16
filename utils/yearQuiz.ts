@@ -61,3 +61,38 @@ export function pickDailyEvent(pool: any[], iso: string = todayIso()): any | nul
   for (let i = 0; i < iso.length; i++) hash = iso.charCodeAt(i) + ((hash << 5) - hash);
   return sorted[Math.abs(hash) % sorted.length];
 }
+
+/**
+ * Hides the answer when the title spells it out ("Apollo 11 Lands — 1969").
+ * Only the answer year is masked, not every 3-4 digit run: titles legitimately
+ * carry numbers that aren't years ("101st Airborne", "700,000 Dead") and blanking
+ * those would mangle the clue for no gain.
+ */
+export function maskYearInTitle(title: string, year: number): string {
+  if (!title || !year) return title;
+  return title.replace(new RegExp(`\\b${year}\\b`, 'g'), '????');
+}
+
+// ── Shareable result grid ─────────────────────────────────────────────────────
+
+/**
+ * Wordle-style emoji grid for sharing a result. Each square encodes how close a
+ * guess was, never the direction — otherwise a shared grid would hand the next
+ * player a free bisection of the answer.
+ */
+const squareFor = (guess: number, answer: number): string => {
+  const d = Math.abs(guess - answer);
+  if (d === 0) return '🟩';
+  if (d <= 25) return '🟨';
+  return '⬛';
+};
+
+export function buildShareGrid(
+  wrongGuesses: number[],
+  answer: number,
+  won: boolean,
+): string {
+  const squares = wrongGuesses.map(g => squareFor(g, answer));
+  if (won) squares.push('🟩');
+  return squares.join('');
+}

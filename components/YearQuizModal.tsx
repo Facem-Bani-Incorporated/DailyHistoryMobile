@@ -1,14 +1,15 @@
 // components/YearQuizModal.tsx — daily "Guess the Year" quiz.
 // One mystery story per day (image + title only), 3 tries to guess the year,
 // 500 XP on success. Hot/cold hints after each miss. Once per day, per user.
-import { CalendarClock, X } from 'lucide-react-native';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { CalendarClock, Share2, X } from 'lucide-react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   KeyboardAvoidingView,
   Modal,
   Platform,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -16,6 +17,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getStoreUrl } from '../config/urls';
 import { useLanguage } from '../context/LanguageContext';
 import { useRevenueCat } from '../context/RevenueCatContext';
 import { useTheme } from '../context/ThemeContext';
@@ -23,9 +25,11 @@ import { useGamificationStore } from '../store/useGamificationStore';
 import { haptic } from '../utils/haptics';
 import { maybeRequestReview } from '../utils/review';
 import {
+  buildShareGrid,
   extractYear,
   isYearQuizDone,
   markYearQuizDone,
+  maskYearInTitle,
   pickDailyEvent,
   todayIso,
   YEAR_QUIZ_TRIES,
@@ -44,7 +48,8 @@ const T: Record<string, Record<string, string>> = {
     hintEarlier: 'Earlier — try a smaller year', hintLater: 'Later — try a bigger year',
     win: 'Nailed it! +500 XP', winSub: 'It happened in {year}.',
     lose: 'Out of tries!', loseSub: 'It happened in {year}. Come back tomorrow!',
-    done: 'Continue',
+    done: 'Continue', share: 'Share result',
+    shareTitle: 'Daily History · Guess the Year',
     already: 'Quiz completed today!', alreadySub: 'Come back tomorrow for a new mystery story and 500 XP!',
     unavailable: 'No story available today. Check back later!',
   },
@@ -55,7 +60,8 @@ const T: Record<string, Record<string, string>> = {
     hintEarlier: 'Mai devreme — încearcă un an mai mic', hintLater: 'Mai târziu — încearcă un an mai mare',
     win: 'Bravo! +500 XP', winSub: 'S-a întâmplat în {year}.',
     lose: 'Ai epuizat încercările!', loseSub: 'S-a întâmplat în {year}. Revino mâine!',
-    done: 'Continuă',
+    done: 'Continuă', share: 'Distribuie rezultatul',
+    shareTitle: 'Daily History · Ghicește Anul',
     already: 'Quiz completat azi!', alreadySub: 'Revino mâine pentru o nouă poveste misterioasă și 500 XP!',
     unavailable: 'Nicio poveste disponibilă azi. Revino mai târziu!',
   },
@@ -66,7 +72,8 @@ const T: Record<string, Record<string, string>> = {
     hintEarlier: 'Plus tôt — essayez une année plus petite', hintLater: 'Plus tard — essayez une année plus grande',
     win: 'Bravo ! +500 XP', winSub: "C'était en {year}.",
     lose: "Plus d'essais !", loseSub: "C'était en {year}. Revenez demain !",
-    done: 'Continuer',
+    done: 'Continuer', share: 'Partager le résultat',
+    shareTitle: "Daily History · Devinez l'Année",
     already: "Quiz complété aujourd'hui !", alreadySub: 'Revenez demain pour une nouvelle histoire mystère et 500 XP !',
     unavailable: "Pas d'histoire disponible aujourd'hui. Revenez plus tard !",
   },
@@ -77,7 +84,8 @@ const T: Record<string, Record<string, string>> = {
     hintEarlier: 'Früher — versuche ein kleineres Jahr', hintLater: 'Später — versuche ein größeres Jahr',
     win: 'Getroffen! +500 XP', winSub: 'Es geschah im Jahr {year}.',
     lose: 'Keine Versuche mehr!', loseSub: 'Es geschah im Jahr {year}. Komm morgen wieder!',
-    done: 'Weiter',
+    done: 'Weiter', share: 'Ergebnis teilen',
+    shareTitle: 'Daily History · Errate das Jahr',
     already: 'Quiz heute abgeschlossen!', alreadySub: 'Komm morgen für eine neue Mysterygeschichte und 500 XP wieder!',
     unavailable: 'Heute keine Geschichte verfügbar. Schau später vorbei!',
   },
@@ -88,7 +96,8 @@ const T: Record<string, Record<string, string>> = {
     hintEarlier: 'Antes — prueba un año menor', hintLater: 'Después — prueba un año mayor',
     win: '¡Acertaste! +500 XP', winSub: 'Ocurrió en {year}.',
     lose: '¡Sin intentos!', loseSub: 'Ocurrió en {year}. ¡Vuelve mañana!',
-    done: 'Continuar',
+    done: 'Continuar', share: 'Compartir resultado',
+    shareTitle: 'Daily History · Adivina el Año',
     already: '¡Quiz completado hoy!', alreadySub: '¡Vuelve mañana por una nueva historia misteriosa y 500 XP!',
     unavailable: '¡No hay historia disponible hoy. Vuelve más tarde!',
   },
@@ -176,13 +185,24 @@ export default function YearQuizModal({
     if (next.length >= YEAR_QUIZ_TRIES) finalize(false);
   }, [guess, answerYear, wrongGuesses, finalize, shake]);
 
+  const rawTitle = event?.titleTranslations?.[language] ?? event?.titleTranslations?.en ?? '';
+  // While playing, a title that spells out the year would hand over the answer.
+  const title = phase === 'playing' ? maskYearInTitle(rawTitle, answerYear) : rawTitle;
+
+  const onShare = useCallback(() => {
+    haptic('medium');
+    const grid = buildShareGrid(wrongGuesses, answerYear, phase === 'won');
+    Share.share({
+      message: `${tx(language, 'shareTitle')} · ${todayIso()}\n${grid}\n${getStoreUrl()}`,
+    }).catch(() => {});
+  }, [wrongGuesses, answerYear, phase, language]);
+
   if (!visible) return null;
 
   const lastWrong = wrongGuesses[wrongGuesses.length - 1];
   const hint = lastWrong !== undefined
     ? (lastWrong > answerYear ? tx(language, 'hintEarlier') : tx(language, 'hintLater'))
     : null;
-  const title = event?.titleTranslations?.[language] ?? event?.titleTranslations?.en ?? '';
   const triesUsed = wrongGuesses.length;
 
   return (
@@ -241,10 +261,22 @@ export default function YearQuizModal({
                     </View>
                   )}
                   {!!title && <Text style={[st.storyTitle, { color: theme.text, marginTop: 12 }]}>{title}</Text>}
-                  <TouchableOpacity onPress={() => { haptic('light'); onClose(); }} activeOpacity={0.85}
-                    style={[st.cta, { backgroundColor: gold }]}>
-                    <Text style={st.ctaText}>{tx(language, 'done')}</Text>
-                  </TouchableOpacity>
+
+                  {/* Result grid — closeness only, never direction, so a shared
+                      grid can't hand the next player a bisection of the answer. */}
+                  <Text style={st.grid}>{buildShareGrid(wrongGuesses, answerYear, phase === 'won')}</Text>
+
+                  <View style={st.resultBtns}>
+                    <TouchableOpacity onPress={onShare} activeOpacity={0.85}
+                      style={[st.shareBtn, { borderColor: gold }]}>
+                      <Share2 size={15} color={gold} strokeWidth={2.4} />
+                      <Text style={[st.shareBtnText, { color: gold }]}>{tx(language, 'share')}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => { haptic('light'); onClose(); }} activeOpacity={0.85}
+                      style={[st.cta, { backgroundColor: gold, marginTop: 0 }]}>
+                      <Text style={st.ctaText}>{tx(language, 'done')}</Text>
+                    </TouchableOpacity>
+                  </View>
                 </Animated.View>
               ) : (
                 <Animated.View style={{ opacity: fadeIn }}>
@@ -359,4 +391,12 @@ const st = StyleSheet.create({
   stateSub: { fontSize: 13.5, fontWeight: '600', textAlign: 'center', marginTop: 8, lineHeight: 19, paddingHorizontal: 12 },
   cta: { paddingHorizontal: 32, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginTop: 22 },
   ctaText: { color: '#1a1208', fontWeight: '900', fontSize: 15, letterSpacing: 0.3 },
+
+  grid: { fontSize: 26, letterSpacing: 4, marginTop: 16, textAlign: 'center' },
+  resultBtns: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 22 },
+  shareBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 7,
+    paddingHorizontal: 18, height: 48, borderRadius: 14, borderWidth: 1.5,
+  },
+  shareBtnText: { fontWeight: '900', fontSize: 14, letterSpacing: 0.3 },
 });
