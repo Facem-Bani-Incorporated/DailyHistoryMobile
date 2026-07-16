@@ -1,5 +1,10 @@
 // components/DailyChallengeModal.tsx — noon bonus quiz built from TODAY's FREE events.
 // Perfect run → 1000 XP; otherwise 100 XP per correct answer. Once per day.
+//
+// Shares its visual language with YearQuizModal and CoinRewardModal: the vibrant
+// gold ramp over theme surfaces, Georgia for display text, system sans with
+// tabular figures for scores.
+import { LinearGradient } from 'expo-linear-gradient';
 import { Trophy, X, Zap } from 'lucide-react-native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -30,8 +35,18 @@ import { maybeRequestReview } from '../utils/review';
 import { generateQuestions, type Question } from './TimelineQuizModal';
 
 const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
+const SANS = Platform.OS === 'ios' ? 'System' : 'sans-serif';
+const NUM: any = { fontFamily: SANS, fontVariant: ['tabular-nums'] };
 const FEEDBACK_MS = 900;
 const MAX_QUESTIONS = 8;
+
+// Same vibrant ramp as CoinRewardModal / YearQuizModal.
+const GOLD_LIGHT = '#F7D774';
+const GOLD = '#E8B84D';
+const GOLD_DEEP = '#D4A017';
+const INK = '#3A2A05';
+const OK = '#43A854';
+const NO = '#D44343';
 
 // ── Translations ──────────────────────────────────────────────────────────────
 const T: Record<string, Record<string, string>> = {
@@ -90,20 +105,22 @@ const OptionBtn = ({
   text: string; index: number; state: 'idle' | 'correct' | 'wrong' | 'missed';
   theme: any; isDark: boolean; onPress: () => void;
 }) => {
+  const surface = (theme as any).card ?? (isDark ? '#1C1915' : '#F7F5F0');
+  const line = (theme as any).cardBorder ?? theme.border;
   const bg =
-    state === 'correct' ? '#10B981' + '22' :
-    state === 'wrong'   ? '#EF4444' + '22' :
-    state === 'missed'  ? '#10B981' + '12' :
-    isDark ? '#1C1915' : '#F7F5F0';
+    state === 'correct' ? OK + '22' :
+    state === 'wrong'   ? NO + '22' :
+    state === 'missed'  ? OK + '12' :
+    surface;
   const border =
-    state === 'correct' ? '#10B981' :
-    state === 'wrong'   ? '#EF4444' :
-    state === 'missed'  ? '#10B981' + '60' :
-    isDark ? '#2A2420' : '#E5E0D5';
+    state === 'correct' ? OK :
+    state === 'wrong'   ? NO :
+    state === 'missed'  ? OK + '60' :
+    line;
   const textColor =
-    state === 'correct' ? '#10B981' :
-    state === 'wrong'   ? '#EF4444' :
-    state === 'missed'  ? '#10B981' : theme.text;
+    state === 'correct' ? OK :
+    state === 'wrong'   ? NO :
+    state === 'missed'  ? OK : theme.text;
   const labels = ['A', 'B', 'C', 'D'];
 
   return (
@@ -120,8 +137,8 @@ const OptionBtn = ({
 const opt = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14, borderWidth: 1.5, marginBottom: 10 },
   label: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  labelText: { fontSize: 11, fontWeight: '900', letterSpacing: 0.5 },
-  text: { flex: 1, fontSize: 14, fontWeight: '600', lineHeight: 20 },
+  labelText: { fontSize: 11, fontWeight: '900', letterSpacing: 0.5, fontFamily: SANS },
+  text: { flex: 1, fontSize: 14.5, fontWeight: '600', fontFamily: SANS, lineHeight: 20 },
 });
 
 // ── Main modal ────────────────────────────────────────────────────────────────
@@ -137,7 +154,9 @@ export default function DailyChallengeModal({
   const addQuizXP = useGamificationStore(s => s.addQuizXP);
   const recordQuizDone = useGamificationStore(s => s.recordQuizDone);
 
-  const gold = isDark ? '#E8B84D' : '#C77E08';
+  const gold = isDark ? GOLD : GOLD_DEEP;
+  const surface = (theme as any).card ?? theme.background;
+  const line = (theme as any).cardBorder ?? theme.border;
 
   const [questions, setQuestions] = useState<Question[]>([]);
   const [qIndex, setQIndex] = useState(0);
@@ -228,7 +247,7 @@ export default function DailyChallengeModal({
 
   const q = questions[qIndex];
   const correctCount = answered.filter((a, i) => a !== null && questions[i] && a === questions[i].correctIndex).length;
-  const bg = isDark ? '#0D0A07' : '#FAF8F3';
+  const bg = theme.background;
   const total = questions.length;
   const accuracy = total > 0 ? Math.round((correctCount / total) * 100) : 0;
   const resultMsg =
@@ -256,7 +275,7 @@ export default function DailyChallengeModal({
                 )}
               </View>
             </View>
-            <TouchableOpacity onPress={() => { haptic('light'); onClose(); }} style={[ms.closeBtn, { borderColor: isDark ? '#2A2420' : '#E5E0D5' }]}>
+            <TouchableOpacity onPress={() => { haptic('light'); onClose(); }} style={[ms.closeBtn, { backgroundColor: surface, borderColor: line }]}>
               <X size={16} color={theme.subtext} strokeWidth={2.5} />
             </TouchableOpacity>
           </View>
@@ -270,7 +289,7 @@ export default function DailyChallengeModal({
                 const isCorrect = done && ans === questions[i].correctIndex;
                 return (
                   <View key={i} style={[ms.dot, {
-                    backgroundColor: i === qIndex ? gold : done ? (isCorrect ? '#10B981' : '#EF4444') : isDark ? '#2A2420' : '#E5E0D5',
+                    backgroundColor: i === qIndex ? gold : done ? (isCorrect ? OK : NO) : line,
                     width: i === qIndex ? 22 : 8,
                   }]} />
                 );
@@ -286,44 +305,50 @@ export default function DailyChallengeModal({
                 </View>
                 <Text style={[ms.doneTitle, { color: gold }]}>{tx(language, 'already_done')}</Text>
                 <Text style={[ms.doneSub, { color: theme.subtext }]}>{tx(language, 'already_done_sub')}</Text>
-                <TouchableOpacity onPress={() => { haptic('medium'); onClose(); }} style={[ms.primaryBtn, { backgroundColor: gold, alignSelf: 'stretch' }]}>
-                  <Text style={ms.primaryBtnText}>{tx(language, 'done')}</Text>
+                <TouchableOpacity onPress={() => { haptic('medium'); onClose(); }} activeOpacity={0.9} style={ms.ctaWrap}>
+                  <LinearGradient colors={[GOLD_LIGHT, GOLD_DEEP]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={ms.primaryBtn}>
+                    <Text style={ms.primaryBtnText}>{tx(language, 'done')}</Text>
+                  </LinearGradient>
                 </TouchableOpacity>
               </View>
             ) : total === 0 ? (
               <View style={{ alignItems: 'center', paddingTop: 40, paddingBottom: 16 }}>
                 <Text style={[ms.doneSub, { color: theme.subtext, marginBottom: 28 }]}>{tx(language, 'unavailable')}</Text>
-                <TouchableOpacity onPress={() => { haptic('medium'); onClose(); }} style={[ms.primaryBtn, { backgroundColor: gold, alignSelf: 'stretch' }]}>
-                  <Text style={ms.primaryBtnText}>{tx(language, 'done')}</Text>
+                <TouchableOpacity onPress={() => { haptic('medium'); onClose(); }} activeOpacity={0.9} style={ms.ctaWrap}>
+                  <LinearGradient colors={[GOLD_LIGHT, GOLD_DEEP]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={ms.primaryBtn}>
+                    <Text style={ms.primaryBtnText}>{tx(language, 'done')}</Text>
+                  </LinearGradient>
                 </TouchableOpacity>
               </View>
             ) : showResults ? (
               <View style={{ alignItems: 'center', paddingTop: 20 }}>
                 <Text style={[ms.resultMsg, { color: gold }]}>{resultMsg}</Text>
                 <View style={[ms.scoreCircle, { borderColor: gold + '40', backgroundColor: gold + '10' }]}>
-                  <Text style={[ms.scoreNum, { color: gold }]}>{correctCount}/{total}</Text>
+                  <Text style={[ms.scoreNum, NUM, { color: gold }]}>{correctCount}/{total}</Text>
                   <Text style={[ms.scoreLbl, { color: theme.subtext }]}>{tx(language, 'score')}</Text>
                 </View>
                 <View style={ms.statsRow}>
-                  <View style={[ms.stat, { backgroundColor: '#10B98112', borderColor: '#10B98130' }]}>
-                    <Text style={[ms.statVal, { color: '#10B981' }]}>{accuracy}%</Text>
+                  <View style={[ms.stat, { backgroundColor: OK + '12', borderColor: OK + '30' }]}>
+                    <Text style={[ms.statVal, NUM, { color: OK }]}>{accuracy}%</Text>
                     <Text style={[ms.statLbl, { color: theme.subtext }]}>{tx(language, 'accuracy')}</Text>
                   </View>
                   <View style={[ms.stat, { backgroundColor: gold + '12', borderColor: gold + '30' }]}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                       <Zap size={16} color={gold} fill={gold} />
-                      <Text style={[ms.statVal, { color: gold }]}>+{xpEarned}</Text>
+                      <Text style={[ms.statVal, NUM, { color: gold }]}>+{xpEarned}</Text>
                     </View>
                     <Text style={[ms.statLbl, { color: theme.subtext }]}>{tx(language, 'xp_earned')}</Text>
                   </View>
                 </View>
-                <TouchableOpacity onPress={() => { haptic('medium'); onClose(); }} style={[ms.primaryBtn, { backgroundColor: gold, alignSelf: 'stretch' }]}>
-                  <Text style={ms.primaryBtnText}>{tx(language, 'done')}</Text>
+                <TouchableOpacity onPress={() => { haptic('medium'); onClose(); }} activeOpacity={0.9} style={ms.ctaWrap}>
+                  <LinearGradient colors={[GOLD_LIGHT, GOLD_DEEP]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={ms.primaryBtn}>
+                    <Text style={ms.primaryBtnText}>{tx(language, 'done')}</Text>
+                  </LinearGradient>
                 </TouchableOpacity>
               </View>
             ) : q ? (
               <Animated.View style={{ opacity: fadeIn, transform: [{ translateY: slideIn }] }}>
-                <View style={[ms.qCard, { backgroundColor: isDark ? '#141007' : '#FFFFFF', borderColor: gold + '25' }]}>
+                <View style={[ms.qCard, { backgroundColor: surface, borderColor: gold + '30' }]}>
                   <View style={[ms.qAccent, { backgroundColor: gold }]} />
                   <Text style={[ms.qText, { color: theme.text }]}>{q.questionText}</Text>
                 </View>
@@ -355,25 +380,26 @@ const ms = StyleSheet.create({
   sheet: { borderTopLeftRadius: 28, borderTopRightRadius: 28, minHeight: '75%', maxHeight: '95%' },
   header: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', paddingHorizontal: 22, paddingBottom: 8 },
   title: { fontSize: 22, fontWeight: '900', letterSpacing: -0.5, fontFamily: SERIF },
-  subtitle: { fontSize: 12, fontWeight: '600', marginTop: 3, opacity: 0.7 },
+  subtitle: { fontSize: 12, fontWeight: '700', fontFamily: SANS, marginTop: 3, opacity: 0.8 },
   closeBtn: { width: 34, height: 34, borderRadius: 11, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   dots: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 22, paddingBottom: 14, flexWrap: 'wrap' },
   dot: { height: 6, borderRadius: 3 },
   scroll: { paddingHorizontal: 22, paddingTop: 4, paddingBottom: 16 },
   qCard: { borderRadius: 18, borderWidth: 1, padding: 18, marginBottom: 20, overflow: 'hidden' },
   qAccent: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4 },
-  qText: { fontSize: 16, fontWeight: '700', lineHeight: 24, fontFamily: SERIF, paddingLeft: 8 },
+  qText: { fontSize: 16.5, fontWeight: '700', lineHeight: 25, fontFamily: SERIF, paddingLeft: 8 },
   bigIcon: { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center', marginBottom: 20, borderWidth: 2 },
   doneTitle: { fontSize: 20, fontWeight: '900', fontFamily: SERIF, letterSpacing: -0.4, marginBottom: 12, textAlign: 'center' },
-  doneSub: { fontSize: 14, textAlign: 'center', lineHeight: 22, paddingHorizontal: 8, opacity: 0.75, marginBottom: 32 },
+  doneSub: { fontSize: 13.5, fontFamily: SANS, fontWeight: '500', textAlign: 'center', lineHeight: 20, paddingHorizontal: 8, opacity: 0.85, marginBottom: 32 },
   resultMsg: { fontSize: 22, fontWeight: '900', letterSpacing: -0.5, fontFamily: SERIF, marginBottom: 24, textAlign: 'center' },
   scoreCircle: { width: 130, height: 130, borderRadius: 65, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
-  scoreNum: { fontSize: 34, fontWeight: '900', letterSpacing: -1 },
-  scoreLbl: { fontSize: 10, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginTop: 2, opacity: 0.5 },
+  scoreNum: { fontSize: 36, fontWeight: '800', letterSpacing: -0.5 },
+  scoreLbl: { fontSize: 9.5, fontWeight: '800', fontFamily: SANS, letterSpacing: 1.4, textTransform: 'uppercase', marginTop: 3, opacity: 0.6 },
   statsRow: { flexDirection: 'row', gap: 12, marginBottom: 28, alignSelf: 'stretch' },
   stat: { flex: 1, alignItems: 'center', padding: 16, borderRadius: 14, borderWidth: 1, gap: 4 },
-  statVal: { fontSize: 22, fontWeight: '900', letterSpacing: -0.5 },
-  statLbl: { fontSize: 9, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', opacity: 0.5 },
-  primaryBtn: { paddingVertical: 14, borderRadius: 14, alignItems: 'center' },
-  primaryBtnText: { fontSize: 15, fontWeight: '800', color: '#000', letterSpacing: 0.2 },
+  statVal: { fontSize: 22, fontWeight: '800', letterSpacing: -0.4 },
+  statLbl: { fontSize: 9, fontWeight: '800', fontFamily: SANS, letterSpacing: 1.2, textTransform: 'uppercase', opacity: 0.6 },
+  ctaWrap: { alignSelf: 'stretch', borderRadius: 15, overflow: 'hidden' },
+  primaryBtn: { paddingVertical: 15, borderRadius: 15, alignItems: 'center' },
+  primaryBtnText: { fontSize: 15, fontWeight: '900', color: INK, letterSpacing: 0.2, fontFamily: SANS },
 });

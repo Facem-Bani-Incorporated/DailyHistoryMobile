@@ -73,26 +73,23 @@ export function maskYearInTitle(title: string, year: number): string {
   return title.replace(new RegExp(`\\b${year}\\b`, 'g'), '????');
 }
 
-// ── Shareable result grid ─────────────────────────────────────────────────────
+// ── Result feedback ───────────────────────────────────────────────────────────
 
 /**
- * Wordle-style emoji grid for sharing a result. Each square encodes how close a
- * guess was, never the direction — otherwise a shared grid would hand the next
- * player a free bisection of the answer.
+ * How close a guess landed. Drives the colour of the attempt chips; deliberately
+ * carries no direction, so what a player shares can't hand the next one a free
+ * bisection of the answer.
  */
-const squareFor = (guess: number, answer: number): string => {
+export type Closeness = 'exact' | 'close' | 'far';
+
+export const closenessOf = (guess: number, answer: number): Closeness => {
   const d = Math.abs(guess - answer);
-  if (d === 0) return '🟩';
-  if (d <= 25) return '🟨';
-  return '⬛';
+  if (d === 0) return 'exact';
+  if (d <= 25) return 'close';
+  return 'far';
 };
 
-export function buildShareGrid(
-  wrongGuesses: number[],
-  answer: number,
-  won: boolean,
-): string {
-  const squares = wrongGuesses.map(g => squareFor(g, answer));
-  if (won) squares.push('🟩');
-  return squares.join('');
+/** Wordle-style score for sharing: "2/3" when solved, "X/3" when not. */
+export function shareScore(wrongGuesses: number[], won: boolean): string {
+  return won ? `${wrongGuesses.length + 1}/${YEAR_QUIZ_TRIES}` : `X/${YEAR_QUIZ_TRIES}`;
 }
