@@ -7,6 +7,7 @@ import { create } from 'zustand';
 import type { CoinPopupTrigger } from '../config/coins';
 import { useAuthStore } from './useAuthStore';
 import { useCoinStore } from './useCoinStore';
+import { usePaywallStore } from './usePaywallStore';
 
 interface CoinPopupState {
   visible: boolean;
@@ -30,6 +31,13 @@ export const useCoinPopupStore = create<CoinPopupState>((set) => ({
     coin.markCoinPopupShown();
     set({ visible: true, trigger });
   },
-  show: (trigger) => set({ visible: true, trigger }),
+  show: (trigger) => {
+    // "no_coins" means the user wanted something and couldn't afford it — the
+    // signal the paywall policy counts toward its failed-unlock trigger.
+    if (trigger === 'no_coins') {
+      try { usePaywallStore.getState().registerFailedUnlock(); } catch {}
+    }
+    set({ visible: true, trigger });
+  },
   hide: () => set({ visible: false, trigger: null }),
 }));

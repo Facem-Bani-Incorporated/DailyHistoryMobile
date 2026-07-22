@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAllEvents } from '../context/AllEventsContext';
+import * as analytics from '../src/analytics/posthog';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { useEventImages } from '../hooks/useEventImages';
@@ -383,6 +384,21 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
 
   const { speak, stop, isPlaying } = useTTS();
 
+  // ── Analytics: story_opened on each displayed event; completion tracked in
+  // the scroll listener (fires once, when the reader reaches the end).
+  const openedAtRef = useRef(0);
+  const completedRef = useRef(false);
+  useEffect(() => {
+    if (!visible || !eventId || !currentEvent) return;
+    openedAtRef.current = Date.now();
+    completedRef.current = false;
+    analytics.capture('story_opened', {
+      story_id: eventId,
+      story_date: String(currentEvent.eventDate ?? currentEvent.event_date ?? currentEvent.year ?? '').trim(),
+      is_premium: !!currentEvent.isPro,
+    });
+  }, [visible, eventId]);
+
   useEffect(() => {
     if (visible && eventId && currentEvent)
       markEventRead(eventId, currentEvent.category ?? 'history', String(currentEvent.eventDate ?? currentEvent.event_date ?? currentEvent.year ?? '').trim());
@@ -485,6 +501,14 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
                 listener: (e: any) => {
                   const y = e.nativeEvent.contentOffset.y;
                   lastScrollYRef.current = y;
+                  // story_completed: reader reached the end of the text (once per open)
+                  if (!completedRef.current && contentH > H && y + H >= contentH - 40) {
+                    completedRef.current = true;
+                    analytics.capture('story_completed', {
+                      story_id: eventId,
+                      seconds_spent: Math.round((Date.now() - openedAtRef.current) / 1000),
+                    });
+                  }
                   if (savePosTimer.current) clearTimeout(savePosTimer.current);
                   savePosTimer.current = setTimeout(() => persistReadPos(eventId, y), 800);
                 },

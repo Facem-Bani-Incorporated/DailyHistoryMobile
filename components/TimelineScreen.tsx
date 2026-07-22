@@ -168,7 +168,7 @@ type TItem =
   | { k: 'era';  century: number; count: number; y: number; h: number }
   | { k: 'ev';   event: any;      y: number; h: number }
   | { k: 'quiz'; y: number; h: number };
-interface Props { allEvents: any[]; onInterstitial?: () => void; topInset?: number; }
+interface Props { allEvents: any[]; topInset?: number; }
 
 // ══════════════════════════════════════════════════════════════════════════════
 // EVENT ROW — no per-frame worklets, fully static styling
@@ -497,7 +497,7 @@ const es = StyleSheet.create({
 // ══════════════════════════════════════════════════════════════════════════════
 // MAIN
 // ══════════════════════════════════════════════════════════════════════════════
-export default function TimelineScreen({ allEvents, onInterstitial, topInset }: Props) {
+export default function TimelineScreen({ allEvents, topInset }: Props) {
   const { theme, isDark, isPremium } = useTheme();
   const { language, t } = useLanguage();
   const { isPro, presentPaywall } = useRevenueCat();
@@ -516,14 +516,9 @@ export default function TimelineScreen({ allEvents, onInterstitial, topInset }: 
   const quizDate = useGamificationStore(s => s.quizDate);
   const quizDoneToday = quizDate === new Date().toISOString().split('T')[0];
 
-  // Fire interstitial once, right after the quiz is completed (not re-triggered on re-mount)
-  const prevQuizDone = useRef(quizDoneToday);
-  useEffect(() => {
-    if (quizDoneToday && !prevQuizDone.current) {
-      onInterstitial?.();
-    }
-    prevQuizDone.current = quizDoneToday;
-  }, [quizDoneToday]);
+  // Interstitial after the quiz was removed deliberately: ads are user-initiated
+  // only. Interrupting the moment someone just finished a quiz is the highest-cost
+  // ad slot in the app and, at this scale, earns nothing measurable.
 
   const filteredEvents = useMemo(() => {
     let evs = allEvents;

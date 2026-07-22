@@ -6,19 +6,26 @@
 // gamification `gamificationData` sync blob (see hooks/useGamificationSync.ts)
 // so coins/unlocks survive reinstall and sync across devices.
 //
-// Coins are earned by watching a rewarded clip (+1) or every 1000 XP (+1), and
-// spent to unlock PRO events, PRO map layers, and locked future-day cards.
+// Coins are earned from a rewarded clip (+1, capped per day), every 1000 XP,
+// streak milestones, a flawless quiz, and opening the weekly recap. They are
+// spent on PRO events, PRO map layers, day unlocks, and streak restores.
 // The referral "free day of PRO" is a time-boxed pass OR'd into isPro.
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import {
   COIN_POPUP_COOLDOWN_MS,
+  COINS_WEEKLY_RECAP,
   EVENTS_OPEN_TRIGGER,
   REFERRAL_PASS_MS,
+  REWARDED_DAILY_CAP,
+  STREAK_MILESTONES,
   XP_PER_COIN,
   REFERRAL_COINS,
+  type CoinSink,
+  type CoinSource,
 } from '../config/coins';
+import * as analytics from '../src/analytics/posthog';
 import { useAuthStore } from './useAuthStore';
 
 const todayISO = () => new Date().toISOString().split('T')[0];
@@ -36,6 +43,10 @@ export interface CoinData {
   lastCoinPopupAt: number | null;   // cooldown for the "watch a clip" pop-up (local)
   eventsOpenedDate: string | null;  // for the ">6 events opened today" trigger (local)
   eventsOpenedCount: number;
+  claimedStreakMilestones: number[]; // streak lengths already paid out
+  claimedRecapWeeks: string[];       // weekKeys whose recap bonus was paid
+  rewardedDate: string | null;       // day the rewarded counter belongs to (local)
+  rewardedCount: number;             // rewarded clips watched today (local)
 }
 
 export const EMPTY_COINS: CoinData = {
@@ -51,6 +62,10 @@ export const EMPTY_COINS: CoinData = {
   lastCoinPopupAt: null,
   eventsOpenedDate: null,
   eventsOpenedCount: 0,
+  claimedStreakMilestones: [],
+  claimedRecapWeeks: [],
+  rewardedDate: null,
+  rewardedCount: 0,
 };
 
 // Only these fields cross-device-sync via the gamification blob. Device-local
@@ -58,6 +73,9 @@ export const EMPTY_COINS: CoinData = {
 const SYNCED_KEYS = [
   'coins', 'unlockedEvents', 'unlockedMapLayers', 'unlockedDays',
   'xpCoinsClaimed', 'referralPassUntil', 'creditedReferralFriendIds',
+  // Claim ledgers must sync, or a second device would pay the same milestone
+  // and recap bonus again.
+  'claimedStreakMilestones', 'claimedRecapWeeks',
 ] as const;
 
 const getUserId = (): string => {
@@ -76,10 +94,20 @@ interface CoinState {
   // reads (imperative)
   getData: () => CoinData;
 
-  // earning / spending
-  addCoins: (n: number) => void;
-  spendCoins: (n: number) => boolean;
+  // earning / spending — every movement carries a source/sink so the economy
+  // is legible in analytics without extra call-site instrumentation.
+  addCoins: (n: number, source: CoinSource) => void;
+  spendCoins: (n: number, sink: CoinSink) => boolean;
   syncXpCoins: (totalXP: number) => number;
+
+  // one-off bonuses (idempotent — each is paid at most once)
+  claimStreakMilestone: (streak: number) => number;  // returns coins granted
+  claimRecapBonus: (weekKey: string) => number;
+
+  // rewarded-ad daily budget
+  canWatchRewarded: () => boolean;
+  rewardedLeftToday: () => number;
+  registerRewardedWatch: () => void;
 
   // unlocks
   unlockEvent: (id: string) => void;
@@ -121,16 +149,69 @@ export const useCoinStore = create<CoinState>()(
 
         getData: read,
 
-        addCoins: (n) => {
+        addCoins: (n, source) => {
           if (!n) return;
-          write({ coins: Math.max(0, read().coins + n) });
+          const next = Math.max(0, read().coins + n);
+          write({ coins: next });
+          analytics.capture('coin_earned', { amount: n, source, balance: next });
         },
 
-        spendCoins: (n) => {
+        spendCoins: (n, sink) => {
           const d = read();
           if (d.coins < n) return false;
           write({ coins: d.coins - n });
+          analytics.capture('coin_spent', { amount: n, sink, balance: d.coins - n });
           return true;
+        },
+
+        // ── One-off bonuses ────────────────────────────────────────────────
+        claimStreakMilestone: (streak) => {
+          const bonus = STREAK_MILESTONES[streak];
+          if (!bonus) return 0;
+          const d = read();
+          if (d.claimedStreakMilestones.includes(streak)) return 0;
+          write({
+            coins: d.coins + bonus,
+            claimedStreakMilestones: [...d.claimedStreakMilestones, streak],
+          });
+          analytics.capture('coin_earned', {
+            amount: bonus, source: 'streak_milestone', streak, balance: d.coins + bonus,
+          });
+          return bonus;
+        },
+
+        claimRecapBonus: (weekKey) => {
+          const d = read();
+          if (!weekKey || d.claimedRecapWeeks.includes(weekKey)) return 0;
+          write({
+            coins: d.coins + COINS_WEEKLY_RECAP,
+            claimedRecapWeeks: [...d.claimedRecapWeeks, weekKey],
+          });
+          analytics.capture('coin_earned', {
+            amount: COINS_WEEKLY_RECAP, source: 'weekly_recap', week: weekKey,
+            balance: d.coins + COINS_WEEKLY_RECAP,
+          });
+          return COINS_WEEKLY_RECAP;
+        },
+
+        // ── Rewarded daily budget ──────────────────────────────────────────
+        // Past the cap an extra impression is worth little and drags eCPM down,
+        // so the offer is withdrawn rather than served cheaply.
+        rewardedLeftToday: () => {
+          const d = read();
+          const used = d.rewardedDate === todayISO() ? d.rewardedCount : 0;
+          return Math.max(0, REWARDED_DAILY_CAP - used);
+        },
+
+        canWatchRewarded: () => get().rewardedLeftToday() > 0,
+
+        registerRewardedWatch: () => {
+          const d = read();
+          const isToday = d.rewardedDate === todayISO();
+          write({
+            rewardedDate: todayISO(),
+            rewardedCount: isToday ? d.rewardedCount + 1 : 1,
+          });
         },
 
         syncXpCoins: (totalXP) => {

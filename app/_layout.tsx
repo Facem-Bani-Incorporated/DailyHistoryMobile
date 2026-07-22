@@ -8,6 +8,7 @@ import { ActivityIndicator, AppState, View } from 'react-native';
 
 import CoinRewardModal from '../components/CoinRewardModal';
 import OnboardingScreen from '../components/OnBoardingScreen';
+import StreakRestoreModal from '../components/StreakRestoreModal';
 import UnlockStoryModal from '../components/UnlockStoryModal';
 import { LanguageProvider } from '../context/LanguageContext';
 import { RevenueCatProvider } from '../context/RevenueCatContext';
@@ -19,6 +20,11 @@ import { useReferralRewards } from '../hooks/useReferralRewards';
 import { useNotifications } from '../hooks/usenotifications';
 import { useAuthStore } from '../store/useAuthStore';
 import { useNotificationEventStore } from '../store/useNotificationEventStore';
+import * as analytics from '../src/analytics/posthog';
+import { useLanguage } from '../context/LanguageContext';
+import { useRevenueCat } from '../context/RevenueCatContext';
+import { usePaywallTrigger } from '../hooks/usePaywallTrigger';
+import { usePaywallStore } from '../store/usePaywallStore';
 
 function AppContent() {
   const token = useAuthStore((state) => state.token);
@@ -58,6 +64,29 @@ function AppContent() {
     }
   };
 
+  // ── Analytics (PostHog over fetch — no native deps, OTA-safe) ──
+  const { language } = useLanguage();
+  const { isPro } = useRevenueCat();
+  useEffect(() => { analytics.init(); }, []);
+
+  // ── Paywall policy: count the launch, then pitch PRO on the 2nd session ──
+  // Deferred so the paywall never lands on top of onboarding or the first frame.
+  const { maybeShow: maybePaywall, ready: rcReady } = usePaywallTrigger();
+  useEffect(() => {
+    usePaywallStore.getState().registerSession();
+  }, []);
+  useEffect(() => {
+    // rcReady gates on RevenueCat having resolved entitlements — otherwise a
+    // paying subscriber could be shown the paywall during the startup window.
+    if (!isReady || !token || showOnboarding || !rcReady) return;
+    const id = setTimeout(() => { maybePaywall('second_session'); }, 2500);
+    return () => clearTimeout(id);
+  }, [isReady, token, showOnboarding, rcReady, maybePaywall]);
+  useEffect(() => { analytics.setSuperProps({ locale: language, is_pro: isPro }); }, [language, isPro]);
+  // Tie app events to the same person the website identifies (backend user id).
+  const userId = useAuthStore((s) => s.user?.id);
+  useEffect(() => { if (userId) analytics.identify(userId); }, [userId]);
+
   // ── Sync gamification data with backend ──
   useGamificationSync();
 
@@ -96,9 +125,19 @@ function AppContent() {
     const handleResponse = (response: Notifications.NotificationResponse | null) => {
       const data = response?.notification?.request?.content?.data;
       if (!data) return;
+      analytics.capture('notification_opened', {
+        notification_type: data.dailyChallenge ? 'daily_challenge'
+          : data.weeklyRecap ? 'weekly_recap'
+          : data.event ? 'daily_event' : 'other',
+      });
       // Daily challenge reminder → open the challenge quiz on the home screen.
       if (data.dailyChallenge) {
         useNotificationEventStore.getState().setPendingEvent({ __dailyChallenge: true });
+        return;
+      }
+      // Monday recap → open the weekly recap sheet (which pays the coin bonus).
+      if (data.weeklyRecap) {
+        useNotificationEventStore.getState().setPendingEvent({ __weeklyRecap: true });
         return;
       }
       if (data.event) useNotificationEventStore.getState().setPendingEvent(data.event);
@@ -156,11 +195,15 @@ function AppContent() {
     const isNowLoggedIn = !!token;
 
     if (wasLoggedOut && isNowLoggedIn && !onboardingActiveRef.current) {
-      onboardingActiveRef.current = true;
-      // New account (didn't exist in DB) → full onboarding; existing → PRO only.
+      // Only brand-new accounts see onboarding. A returning account used to be
+      // shown a standalone paywall on every login; that pitch now comes from
+      // usePaywallStore's intent triggers instead.
       const isNew = useAuthStore.getState().isNewAccount;
-      setOnboardingMode(isNew ? 'full' : 'proOnly');
-      setShowOnboarding(true);
+      if (isNew) {
+        onboardingActiveRef.current = true;
+        setOnboardingMode('full');
+        setShowOnboarding(true);
+      }
     }
 
     prevTokenRef.current = token || null;
@@ -226,6 +269,8 @@ function AppContent() {
       <CoinRewardModal />
       {/* Global per-event "Unlock this story" sheet — controlled via useUnlockStore */}
       <UnlockStoryModal />
+      {/* Streak-loss recovery — self-gating on lostStreak, same-day only */}
+      <StreakRestoreModal />
     </>
   );
 }

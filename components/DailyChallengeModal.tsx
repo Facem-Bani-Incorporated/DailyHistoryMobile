@@ -33,6 +33,7 @@ import {
 import { haptic } from '../utils/haptics';
 import { maybeRequestReview } from '../utils/review';
 import { generateQuestions, type Question } from './TimelineQuizModal';
+import XpBoostOffer from './XpBoostOffer';
 
 const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
 const SANS = Platform.OS === 'ios' ? 'System' : 'sans-serif';
@@ -340,6 +341,13 @@ export default function DailyChallengeModal({
                     <Text style={[ms.statLbl, { color: theme.subtext }]}>{tx(language, 'xp_earned')}</Text>
                   </View>
                 </View>
+
+                {/* Opt-in rewarded offer instead of a forced interstitial: same
+                    moment, ~4x the eCPM, and the user chooses it. */}
+                <View style={{ alignSelf: 'stretch' }}>
+                  <XpBoostOffer xpEarned={xpEarned} placement="daily_challenge_result" />
+                </View>
+
                 <TouchableOpacity onPress={() => { haptic('medium'); onClose(); }} activeOpacity={0.9} style={ms.ctaWrap}>
                   <LinearGradient colors={[GOLD_LIGHT, GOLD_DEEP]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={ms.primaryBtn}>
                     <Text style={ms.primaryBtnText}>{tx(language, 'done')}</Text>

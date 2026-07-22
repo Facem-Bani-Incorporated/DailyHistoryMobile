@@ -19,6 +19,7 @@ import RevenueCatUI, { PAYWALL_RESULT } from 'react-native-purchases-ui';
 import { PRO_ENTITLEMENT_ID, REVENUECAT_API_KEYS } from '../config/revenuecat';
 import { useReferralActive } from '../hooks/useCoins';
 import { refreshMe } from '../services/authService';
+import * as analytics from '../src/analytics/posthog';
 import { useAuthStore } from '../store/useAuthStore';
 
 // Re-exported for backwards compatibility with existing callers.
@@ -31,7 +32,7 @@ interface RevenueCatCtx {
   isPro: boolean;
   customerInfo: CustomerInfo | null;
   currentOffering: PurchasesOffering | null;
-  presentPaywall: () => Promise<PaywallOutcome>;
+  presentPaywall: (trigger?: string) => Promise<PaywallOutcome>;
   presentPaywallIfNeeded: () => Promise<PaywallOutcome>;
   presentCustomerCenter: () => Promise<void>;
   restorePurchases: () => Promise<boolean>;
@@ -172,10 +173,17 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const presentPaywall = useCallback(async (): Promise<PaywallOutcome> => {
+  const presentPaywall = useCallback(async (trigger?: string): Promise<PaywallOutcome> => {
+    const shownAt = Date.now();
+    analytics.capture('paywall_viewed', { trigger: trigger ?? 'unknown' });
     try {
       const res = await RevenueCatUI.presentPaywall();
       const outcome = mapPaywallResult(res);
+      analytics.capture('paywall_dismissed', {
+        trigger: trigger ?? 'unknown',
+        seconds_visible: Math.round((Date.now() - shownAt) / 1000),
+        outcome,
+      });
       try {
         const info = await Purchases.getCustomerInfo();
         setCustomerInfo(info);

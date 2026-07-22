@@ -170,17 +170,19 @@ export default function OnboardingScreen({ onComplete, startStep = 'features' }:
     }
   };
 
+  // Notifications is the last step: the user enters the app immediately after.
+  // The PRO pitch moved out of onboarding entirely — it now fires on intent
+  // (see store/usePaywallStore.ts), because a paywall in the first 60 seconds
+  // is friction before the product has shown any value.
   const handleEnableNotifs = async () => {
     await AsyncStorage.setItem('notif_prompt_seen', 'true');
     await requestPushPermissions();
-    if (isPro) { onComplete(); return; }
-    setStep('subscription');
+    onComplete();
   };
 
   const handleSkipNotifs = async () => {
     await AsyncStorage.setItem('notif_prompt_seen', 'true');
-    if (isPro) { onComplete(); return; }
-    setStep('subscription');
+    onComplete();
   };
 
   // ── Background image for subscription step ──
@@ -208,7 +210,7 @@ export default function OnboardingScreen({ onComplete, startStep = 'features' }:
     if (paywallLoading) return;
     setPaywallLoading(true);
     try {
-      await presentPaywall();
+      await presentPaywall('onboarding');
     } finally {
       setPaywallLoading(false);
       onComplete();

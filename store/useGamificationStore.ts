@@ -2,6 +2,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
+import * as analytics from '../src/analytics/posthog';
+import { COIN_COST_STREAK_RESTORE } from '../config/coins';
+import { useCoinStore } from './useCoinStore';
 
 const todayISO = () => new Date().toISOString().split('T')[0];
 const yesterdayISO = () => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().split('T')[0]; };
@@ -309,7 +312,11 @@ interface GamificationState {
   weeklyRecaps: Record<string, WeeklyRecap>; currentWeekKey: string | null;
   calendarLog: Record<string, DayLog>; _userId: string | null;
   readEventIds: Set<string>;
-  restoreStreak: () => void;
+  lostStreak: number;
+  lostStreakDate: string | null;
+  restoreStreak: () => boolean;
+  restoreStreakFree: () => boolean;
+  dismissStreakLoss: () => void;
   recordDailyVisit: () => void;
   markEventRead: (eventId: string, category?: string, year?: string, isPro?: boolean) => void;
   addQuizXP: (xp: number, isPro?: boolean) => void;
@@ -347,6 +354,8 @@ const initialState = {
   missionStreakCount: 0, missionStreakLastDate: null as string | null,
   explorerBonusDates: [] as string[],
   streakShieldUsedWeek: null as string | null,
+  lostStreak: 0,
+  lostStreakDate: null as string | null,
   monthlyRecaps: {} as Record<string, MonthlyRecap>,
   weeklyRecaps: {} as Record<string, WeeklyRecap>, currentWeekKey: null as string | null,
   calendarLog: {} as Record<string, DayLog>, _userId: null as string | null,
@@ -372,6 +381,7 @@ export const useGamificationStore = create<GamificationState>()(
 
         const currentWeek = getWeekKey();
         let newStreak: number;
+        let lostThisRun = 0;
         if (lastActiveDate === yesterday) {
           newStreak = currentStreak + 1;
         } else if (lastActiveDate && streakShieldUsedWeek !== currentWeek) {
@@ -379,20 +389,68 @@ export const useGamificationStore = create<GamificationState>()(
           newStreak = currentStreak > 0 ? currentStreak : 1;
           set({ streakShieldUsedWeek: currentWeek });
         } else {
+          // Gap too large and the weekly shield is spent — the streak is gone.
+          // (A falsy lastActiveDate is a first-ever visit, not a loss.)
+          if (lastActiveDate && currentStreak > 0) {
+            analytics.capture('streak_lost', { streak_length: currentStreak });
+            // Remember what was lost so it can be bought back today. Restoring
+            // must return the streak that broke, not the all-time best.
+            lostThisRun = currentStreak;
+          }
           newStreak = 1;
+        }
+
+        // Milestone bonus for reaching 3/7/14/30 days. claimStreakMilestone is
+        // idempotent and syncs its ledger, so a streak that passes the same
+        // milestone twice (after a restore) is only paid once.
+        if (newStreak > currentStreak) {
+          try { useCoinStore.getState().claimStreakMilestone(newStreak); } catch {}
         }
 
         const newLongest = Math.max(longestStreak, newStreak);
         const updates: Partial<GamificationState> = { currentStreak: newStreak, longestStreak: newLongest, lastActiveDate: today, currentWeekKey: currentWeek };
+        if (lostThisRun > 0) { updates.lostStreak = lostThisRun; updates.lostStreakDate = today; }
         if (readDate !== today) { updates.readEventsToday = []; updates.readDate = today; }
         if (xpDate !== today) { updates.todayXP = 0; updates.xpDate = today; }
         set(updates);
         setTimeout(() => { try { get().checkAchievements(); } catch {} }, 50);
       },
-restoreStreak: () => set((state) => ({
-  currentStreak: state.longestStreak,
-  lastActiveDate: todayISO(),
-})),
+      /**
+       * Buy back the streak that broke. Offer is same-day only: restoring a
+       * streak from last week would make the counter meaningless.
+       * Returns false when there is nothing to restore or the coins are short.
+       */
+      restoreStreak: () => {
+        const { lostStreak, lostStreakDate } = get();
+        if (!lostStreak || lostStreakDate !== todayISO()) return false;
+        if (!useCoinStore.getState().spendCoins(COIN_COST_STREAK_RESTORE, 'streak_restore')) return false;
+        set({
+          currentStreak: lostStreak,
+          longestStreak: Math.max(get().longestStreak, lostStreak),
+          lastActiveDate: todayISO(),
+          lostStreak: 0,
+          lostStreakDate: null,
+        });
+        analytics.capture('streak_freeze_used', { restored_to: lostStreak, cost: COIN_COST_STREAK_RESTORE });
+        return true;
+      },
+
+      /** Same as restoreStreak but paid with a rewarded clip instead of coins. */
+      restoreStreakFree: () => {
+        const { lostStreak, lostStreakDate } = get();
+        if (!lostStreak || lostStreakDate !== todayISO()) return false;
+        set({
+          currentStreak: lostStreak,
+          longestStreak: Math.max(get().longestStreak, lostStreak),
+          lastActiveDate: todayISO(),
+          lostStreak: 0,
+          lostStreakDate: null,
+        });
+        analytics.capture('streak_freeze_used', { restored_to: lostStreak, cost: 0, via: 'rewarded_ad' });
+        return true;
+      },
+
+      dismissStreakLoss: () => set({ lostStreak: 0, lostStreakDate: null }),
       markEventRead: (eventId: string, category?: string, _year?: string, isPro?: boolean) => {
         const today = todayISO();
         const state = get();

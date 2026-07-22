@@ -130,7 +130,7 @@ export default function UnlockStoryModal() {
 
   const onSpend = () => {
     haptic('medium');
-    if (useCoinStore.getState().spendCoins(COIN_COST_EVENT)) {
+    if (useCoinStore.getState().spendCoins(COIN_COST_EVENT, 'pro_story')) {
       doUnlock();
     } else {
       onWatch();
@@ -141,9 +141,10 @@ export default function UnlockStoryModal() {
     haptic('medium');
     setPhase('watching');
     showForUnlock(() => {
-      useCoinStore.getState().addCoins(COINS_PER_REWARDED_AD);
+      useCoinStore.getState().addCoins(COINS_PER_REWARDED_AD, 'rewarded_ad');
+      useCoinStore.getState().registerRewardedWatch();
       // The clip earned a coin — immediately spend it on this very story.
-      useCoinStore.getState().spendCoins(COIN_COST_EVENT);
+      useCoinStore.getState().spendCoins(COIN_COST_EVENT, 'pro_story');
       doUnlock();
     });
   };

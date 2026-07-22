@@ -5,7 +5,7 @@
 
 import { Flame, Sparkles, Target, TrendingUp, X } from 'lucide-react-native';
 import { GameIcon } from '../utils/GameIcon';
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     Animated,
     Easing,
@@ -20,6 +20,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
+import CoinIcon from './CoinIcon';
+import { useCoinStore } from '../store/useCoinStore';
 import {
     LEVEL_NAMES,
     getLevelForXP,
@@ -33,35 +35,35 @@ const T: Record<string, Record<string, string>> = {
     stories: 'Stories Read', xp: 'XP Earned', activeDays: 'Active Days',
     topCategory: 'Top Category', categories: 'Categories', goals: 'Daily Goals Hit',
     level: 'Current Level', great: 'Great week!', keep: 'Keep it up!',
-    dismiss: 'Continue', noData: 'No activity last week',
+    dismiss: 'Continue', noData: 'No activity last week', coinsBonus: 'coins for opening',
   },
   ro: {
     title: 'Rezumat Săptămânal', subtitle: 'Săptămâna ta în rezumat',
     stories: 'Povești Citite', xp: 'XP Câștigat', activeDays: 'Zile Active',
     topCategory: 'Top Categorie', categories: 'Categorii', goals: 'Obiective Zilnice',
     level: 'Nivel Curent', great: 'Săptămână excelentă!', keep: 'Continuă tot așa!',
-    dismiss: 'Continuă', noData: 'Nicio activitate săptămâna trecută',
+    dismiss: 'Continuă', noData: 'Nicio activitate săptămâna trecută', coinsBonus: 'monede bonus',
   },
   fr: {
     title: 'Bilan Hebdo', subtitle: 'Votre semaine en résumé',
     stories: 'Histoires Lues', xp: 'XP Gagnés', activeDays: 'Jours Actifs',
     topCategory: 'Catégorie Favorite', categories: 'Catégories', goals: 'Objectifs Atteints',
     level: 'Niveau Actuel', great: 'Super semaine !', keep: 'Continuez !',
-    dismiss: 'Continuer', noData: "Pas d'activité la semaine dernière",
+    dismiss: 'Continuer', noData: "Pas d'activité la semaine dernière", coinsBonus: 'pièces bonus',
   },
   de: {
     title: 'Wochenrückblick', subtitle: 'Deine Woche im Überblick',
     stories: 'Geschichten Gelesen', xp: 'XP Verdient', activeDays: 'Aktive Tage',
     topCategory: 'Top Kategorie', categories: 'Kategorien', goals: 'Tagesziele Erreicht',
     level: 'Aktuelles Level', great: 'Tolle Woche!', keep: 'Weiter so!',
-    dismiss: 'Weiter', noData: 'Keine Aktivität letzte Woche',
+    dismiss: 'Weiter', noData: 'Keine Aktivität letzte Woche', coinsBonus: 'Bonus-Münzen',
   },
   es: {
     title: 'Resumen Semanal', subtitle: 'Tu semana en resumen',
     stories: 'Historias Leídas', xp: 'XP Ganado', activeDays: 'Días Activos',
     topCategory: 'Categoría Favorita', categories: 'Categorías', goals: 'Objetivos Diarios',
     level: 'Nivel Actual', great: '¡Gran semana!', keep: '¡Sigue así!',
-    dismiss: 'Continuar', noData: 'Sin actividad la semana pasada',
+    dismiss: 'Continuar', noData: 'Sin actividad la semana pasada', coinsBonus: 'monedas extra',
   },
 };
 const tx = (lang: string, key: string) => (T[lang] ?? T.en)[key] ?? T.en[key] ?? key;
@@ -166,6 +168,9 @@ export default function WeeklyRecapModal({
   const titleScale = useRef(new Animated.Value(0.8)).current;
   const titleFade = useRef(new Animated.Value(0)).current;
 
+  // Coins for opening the recap — paid on open rather than dismiss so the
+  // balance is already updated when the sheet renders. Idempotent per week.
+  const [recapBonus, setRecapBonus] = useState(0);
   useEffect(() => {
     if (visible) {
       titleScale.setValue(0.8);
@@ -174,8 +179,13 @@ export default function WeeklyRecapModal({
         Animated.spring(titleScale, { toValue: 1, tension: 80, friction: 8, useNativeDriver: true }),
         Animated.timing(titleFade, { toValue: 1, duration: 500, useNativeDriver: true }),
       ]).start();
+      if (recap?.weekKey) {
+        try { setRecapBonus(useCoinStore.getState().claimRecapBonus(recap.weekKey)); } catch {}
+      }
+    } else {
+      setRecapBonus(0);
     }
-  }, [visible]);
+  }, [visible, recap?.weekKey]);
 
   const handleDismiss = () => {
     if (recap) markRecapSeen(recap.weekKey);
@@ -203,6 +213,18 @@ export default function WeeklyRecapModal({
               <GameIcon iconKey="chart" size={40} color={gold} />
               <Text style={[ms.title, { color: theme.text }]}>{tx(language, 'title')}</Text>
               <Text style={[ms.subtitle, { color: gold }]}>{tx(language, 'subtitle')}</Text>
+              {recapBonus > 0 && (
+                <View style={{
+                  flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10,
+                  paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999,
+                  backgroundColor: gold + '18', borderWidth: 1, borderColor: gold + '40',
+                }}>
+                  <CoinIcon size={14} />
+                  <Text style={{ color: gold, fontSize: 12, fontWeight: '800' }}>
+                    +{recapBonus} {tx(language, 'coinsBonus')}
+                  </Text>
+                </View>
+              )}
             </Animated.View>
 
             {!recap ? (

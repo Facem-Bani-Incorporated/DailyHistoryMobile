@@ -1088,7 +1088,7 @@ const PinHead = ({
 // ═══════════════════════════════════════════════════════════════════════════════
 // Main Component
 // ═══════════════════════════════════════════════════════════════════════════════
-export default function MapScreen({ onInterstitial }: { onInterstitial?: () => void } = {}) {
+export default function MapScreen() {
   const { theme, isDark } = useTheme();
   const { language } = useLanguage();
   const tLang = language !== 'en' ? (language as 'ro' | 'fr' | 'de' | 'es') : undefined;
@@ -1420,7 +1420,7 @@ export default function MapScreen({ onInterstitial }: { onInterstitial?: () => v
     if (!isPro && !freeLayers.includes(layer) && !isLayerUnlocked(layer)) {
       setLayersOpen(false);
       const coin = useCoinStore.getState();
-      if (coin.spendCoins(COIN_COST_MAP_LAYER)) {
+      if (coin.spendCoins(COIN_COST_MAP_LAYER, 'map_layer')) {
         coin.unlockMapLayer(layer);
         haptic('success');
         setMapLayer(layer);

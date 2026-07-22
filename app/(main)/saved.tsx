@@ -506,7 +506,7 @@ export default function SavedScreen({ topInset }: { topInset?: number } = {}) {
 
   const openCreateCollection = useCallback(() => {
     haptic('medium');
-    if (!isPro) { presentPaywall(); return; }
+    if (!isPro) { presentPaywall('saved_screen'); return; }
     setCreateVisible(true);
   }, [isPro, presentPaywall]);
 

@@ -48,6 +48,7 @@ import type { Tab } from '../../components/TabBar';
 import TabBar, { TABBAR_PILL_HEIGHT } from '../../components/TabBar';
 import TimelineScreen from '../../components/TimelineScreen';
 import MonthlyRecapModal from '../../components/MonthlyRecapModal';
+import WeeklyRecapModal from '../../components/WeeklyRecapModal';
 import { AD_UNIT_IDS, ADS_CONFIG } from '../../config/ads';
 import { ENDPOINTS } from '../../config/api';
 import { COIN_COST_DAY, COIN_COST_EVENT, COIN_GOLD, COIN_GOLD_DEEP } from '../../config/coins';
@@ -55,7 +56,6 @@ import { AllEventsProvider } from '../../context/AllEventsContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useRevenueCat } from '../../context/RevenueCatContext';
 import { useTheme } from '../../context/ThemeContext';
-import { useInterstitialAd } from '../../hooks/useInterstitialAd';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useCoinPopupStore } from '../../store/useCoinPopupStore';
 import { useCoins, useCoinStore, useIsEventUnlocked } from '../../store/useCoinStore';
@@ -336,7 +336,7 @@ const ProCardSection = ({ event, allEvents, gold, isPro, onPaywall, t, language 
   const handleUnlockAttempt = () => {
     if (unlocked) return;
     haptic('medium');
-    if (useCoinStore.getState().spendCoins(COIN_COST_EVENT)) {
+    if (useCoinStore.getState().spendCoins(COIN_COST_EVENT, 'pro_story')) {
       useCoinStore.getState().unlockEvent(eventId);
       haptic('success');
     } else {
@@ -849,7 +849,6 @@ export default function HomeScreen() {
   const newAch = useGamificationStore(s => s.newAchievements);
   const totalEventsRead = useGamificationStore(s => s.totalEventsRead);
 
-  const { showInterstitial } = useInterstitialAd();
   const coins = useCoins();
 
   const [tomorrowMainUnlocked, setTomorrowMainUnlocked] = useState(false);
@@ -874,7 +873,7 @@ export default function HomeScreen() {
   // Spend a coin to unlock a locked future-day card; no coins → offer the pop-up.
   const spendForDay = useCallback((onDone: () => void) => {
     haptic('medium');
-    if (useCoinStore.getState().spendCoins(COIN_COST_DAY)) {
+    if (useCoinStore.getState().spendCoins(COIN_COST_DAY, 'day_unlock')) {
       haptic('success');
       onDone();
     } else {
@@ -944,19 +943,36 @@ export default function HomeScreen() {
     if (!pendingEvent) return;
     if (pendingEvent.__dailyChallenge) {
       uiShow('challenge');
+    } else if (pendingEvent.__weeklyRecap) {
+      useGamificationStore.getState().generateWeeklyRecap();
+      setWeeklyRecapVis(true);
     } else {
       setNotifEvent(pendingEvent);
     }
     clearPendingEvent();
   }, [pendingEvent]);
 
+  // ── Weekly recap: build last week's summary on open (idempotent per week)
+  // and surface it on Mondays if it hasn't been seen. The Monday push opens it
+  // directly; this covers users who open the app without tapping the push.
+  const [weeklyRecapVis, setWeeklyRecapVis] = useState(false);
+  useEffect(() => {
+    if (!user?.id) return;
+    try {
+      const g = useGamificationStore.getState();
+      g.generateWeeklyRecap();
+      const isMonday = new Date().getDay() === 1;
+      if (isMonday && g.getUnseenRecap()) setWeeklyRecapVis(true);
+    } catch {}
+  }, [user?.id]);
+
   // Profile row → switch to the Search tab.
   useEffect(() => {
     if (searchTick > 0) setTab('search');
   }, [searchTick]);
 
-  // Interstitials fire at natural moments (quiz done, map exit), not on story count.
-  // showInterstitial() is passed down to screens that own those moments.
+  // No interstitials anywhere: every ad is user-initiated (rewarded), per the
+  // monetisation policy. See UnlockStoryModal / CoinRewardModal.
 
   // ── Data loading ──
   const mem = useRef<Record<string, PD>>({});
@@ -1155,9 +1171,9 @@ export default function HomeScreen() {
       const hintPg = mem.current[mk('free', isoFor(1))] ?? EMPTY;
       const hintEvent = [...hintPg.data].sort(sortByImpact)[0] ?? undefined;
       if (tab === 'today' && !tomorrowMainUnlocked) {
-        content = <LockedTomorrowCard variant="main" onUnlock={handleUnlockMain} isReady={true} coinCost={COIN_COST_DAY} coins={coins} dayOffset={1} hintEvent={hintEvent} bottomPad={floatingBarPad} onPaywall={() => presentPaywall()} />;
+        content = <LockedTomorrowCard variant="main" onUnlock={handleUnlockMain} isReady={true} coinCost={COIN_COST_DAY} coins={coins} dayOffset={1} hintEvent={hintEvent} bottomPad={floatingBarPad} onPaywall={() => presentPaywall('locked_tomorrow_main_day1')} />;
       } else if (tab === 'discover' && !tomorrowDiscoverUnlocked) {
-        content = <LockedTomorrowCard variant="discover" onUnlock={handleUnlockDiscover} isReady={true} coinCost={COIN_COST_DAY} coins={coins} dayOffset={1} hintEvent={hintEvent} bottomPad={floatingBarPad} onPaywall={() => presentPaywall()} />;
+        content = <LockedTomorrowCard variant="discover" onUnlock={handleUnlockDiscover} isReady={true} coinCost={COIN_COST_DAY} coins={coins} dayOffset={1} hintEvent={hintEvent} bottomPad={floatingBarPad} onPaywall={() => presentPaywall('locked_tomorrow_discover_day1')} />;
       }
     }
 
@@ -1165,9 +1181,9 @@ export default function HomeScreen() {
       const hintPg = mem.current[mk('free', isoFor(2))] ?? EMPTY;
       const hintEvent = [...hintPg.data].sort(sortByImpact)[0] ?? undefined;
       if (tab === 'today' && !day2MainUnlocked) {
-        content = <LockedTomorrowCard variant="main" onUnlock={handleUnlockDay2Main} isReady={true} coinCost={COIN_COST_DAY} coins={coins} dayOffset={2} hintEvent={hintEvent} bottomPad={floatingBarPad} onPaywall={() => presentPaywall()} />;
+        content = <LockedTomorrowCard variant="main" onUnlock={handleUnlockDay2Main} isReady={true} coinCost={COIN_COST_DAY} coins={coins} dayOffset={2} hintEvent={hintEvent} bottomPad={floatingBarPad} onPaywall={() => presentPaywall('locked_tomorrow_main_day2')} />;
       } else if (tab === 'discover' && !day2DiscoverUnlocked) {
-        content = <LockedTomorrowCard variant="discover" onUnlock={handleUnlockDay2Discover} isReady={true} coinCost={COIN_COST_DAY} coins={coins} dayOffset={2} hintEvent={hintEvent} bottomPad={floatingBarPad} onPaywall={() => presentPaywall()} />;
+        content = <LockedTomorrowCard variant="discover" onUnlock={handleUnlockDay2Discover} isReady={true} coinCost={COIN_COST_DAY} coins={coins} dayOffset={2} hintEvent={hintEvent} bottomPad={floatingBarPad} onPaywall={() => presentPaywall('locked_tomorrow_discover_day2')} />;
       }
     }
 
@@ -1204,7 +1220,7 @@ export default function HomeScreen() {
 
               {/* Animated arrow between the two cards */}
               <ProPeekHint gold={goldColor} onPress={() => {
-                if (!isPro) presentPaywall();
+                if (!isPro) presentPaywall('pro_card_tap');
               }} />
 
               {/* PRO card — exact same height as free card for symmetry */}
@@ -1213,7 +1229,7 @@ export default function HomeScreen() {
                 allEvents={allEvents}
                 gold={goldColor}
                 isPro={isPro}
-                onPaywall={() => presentPaywall()}
+                onPaywall={() => presentPaywall('pro_card_section')}
                 t={t}
                 language={language}
               />
@@ -1246,7 +1262,7 @@ export default function HomeScreen() {
             t={t}
             isPro={isPro}
             isDark={isDark}
-            onPaywall={() => presentPaywall()}
+            onPaywall={() => presentPaywall('pro_day_locked')}
           />
         );
       }
@@ -1329,10 +1345,17 @@ export default function HomeScreen() {
             {/* Single header row: [streak+trophy] | [date nav] | [achievements+search+avatar] */}
             <View style={ms.headerRow}>
 
-              {/* Left — gamification. The trophy slot moved into the Friends modal
-                  header; the top bar's social entry is the Users button on the right. */}
+              {/* Left — gamification. Global leaderboard sits next to the streak;
+                  the trophy in the Friends modal header stays as a second entry. */}
               <View style={ms.headerLeft}>
                 <StreakIcon />
+                <TouchableOpacity onPress={() => { haptic('light'); setLeadVis(true); }}
+                  activeOpacity={0.6}
+                  hitSlop={HEADER_HIT}
+                  accessibilityRole="button" accessibilityLabel={t('leaderboard')}
+                  style={ms.iconBtn}>
+                  <Trophy size={18} color={theme.subtext} strokeWidth={1.8} />
+                </TouchableOpacity>
               </View>
 
               {/* Center — date navigation */}
@@ -1454,9 +1477,9 @@ export default function HomeScreen() {
         {/* ═════════════════ CONTENT ═════════════════ */}
         <View style={{ flex: 1 }}>
           {tab === 'saved' ? <SavedScreen topInset={shouldShowBanner ? 0 : undefined} />
-            : tab === 'map' ? <MapScreen onInterstitial={!isPro ? showInterstitial : undefined} />
+            : tab === 'map' ? <MapScreen />
             : tab === 'search' ? <SearchScreen allEvents={allEvents} />
-            : tab === 'timeline' ? <TimelineScreen allEvents={allEvents} onInterstitial={!isPro ? showInterstitial : undefined} topInset={shouldShowBanner ? 0 : undefined} />
+            : tab === 'timeline' ? <TimelineScreen allEvents={allEvents} topInset={shouldShowBanner ? 0 : undefined} />
             : loading ? (
               <HistoryCardSkeleton isDark={isDark} />
             )
@@ -1562,6 +1585,7 @@ export default function HomeScreen() {
           }}
         />
         <MonthlyRecapModal visible={recapVis} onClose={() => setRecapVis(false)} />
+        <WeeklyRecapModal visible={weeklyRecapVis} onClose={() => setWeeklyRecapVis(false)} />
         <InterestQuiz
           visible={quizVis}
           initial={interests}

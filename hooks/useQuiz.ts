@@ -2,7 +2,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import api from '../api';
 import { ENDPOINTS } from '../config/api';
+import { COINS_PERFECT_QUIZ } from '../config/coins';
 import { useCoinPopupStore } from '../store/useCoinPopupStore';
+import { useCoinStore } from '../store/useCoinStore';
+import * as analytics from '../src/analytics/posthog';
 
 export interface QuizOption {
   optionId: string;
@@ -116,9 +119,17 @@ export function useQuiz(eventId: string | null, language = 'en') {
     return () => { cancelled = true; };
   }, [eventId, language]);
 
+  // First answer = the user actually engaged with the quiz (once per event).
+  const quizStartedRef = useRef(false);
+  useEffect(() => { quizStartedRef.current = false; }, [eventId]);
+
   const selectAnswer = useCallback((questionKey: string, selectedOptionId: string) => {
+    if (!quizStartedRef.current && eventId) {
+      quizStartedRef.current = true;
+      analytics.capture('quiz_started', { story_id: eventId });
+    }
     setAnswers(prev => ({ ...prev, [questionKey]: selectedOptionId }));
-  }, []);
+  }, [eventId]);
 
   const submit = useCallback(async (): Promise<SubmitResult | null> => {
     if (!eventId || !quiz || phase !== 'ready') return null;
@@ -135,6 +146,17 @@ export function useQuiz(eventId: string | null, language = 'en') {
       const submitResult: SubmitResult = res.data;
       setResult(submitResult);
       setPhase('done');
+      analytics.capture('quiz_completed', {
+        story_id: eventId,
+        score: submitResult.correctAnswers,
+        total: submitResult.totalQuestions,
+        perfect: submitResult.perfectScore,
+      });
+      // A flawless run pays a coin. The backend rejects a second submit for the
+      // same event (409), so this can't be farmed by retrying.
+      if (submitResult.perfectScore) {
+        try { useCoinStore.getState().addCoins(COINS_PERFECT_QUIZ, 'perfect_quiz'); } catch {}
+      }
       // Opportunistic "watch a clip for a coin" pop-up after finishing a quiz.
       try { useCoinPopupStore.getState().maybeShow('quiz'); } catch {}
       return submitResult;

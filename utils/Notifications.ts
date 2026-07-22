@@ -86,6 +86,27 @@ export async function scheduleDailyForDays(
         await scheduleAt(fireAt, title, body, event);
       }
 
+      // ── Weekly recap — Monday morning, after the 9 AM event so the two
+      // don't arrive in the same minute. Carries weeklyRecap so the tap opens
+      // the recap sheet (which pays the coin bonus).
+      const monday = new Date(y, m - 1, d, WEEKLY_RECAP_HOUR, 0, 0, 0);
+      if (monday.getDay() === 1 && monday.getTime() > now) {
+        const r = buildWeeklyRecapNotification(language);
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: r.title,
+            body: r.body,
+            sound: 'default',
+            data: { weeklyRecap: true },
+          },
+          trigger: {
+            type: SchedulableTriggerInputTypes.DATE,
+            date: monday,
+            ...(Platform.OS === 'android' ? { channelId: 'daily-history' } : {}),
+          },
+        });
+      }
+
       // ── Daily Challenge reminder at noon — separate hook from the 9 AM event ──
       const challengeAt = new Date(y, m - 1, d, DAILY_CHALLENGE_HOUR, 0, 0, 0);
       if (challengeAt.getTime() > now) {
@@ -108,6 +129,21 @@ export async function scheduleDailyForDays(
   } catch (e) {
     if (__DEV__) console.warn('[Notifications] Failed to schedule week:', e);
   }
+}
+
+// ── Weekly recap — Monday 10:00, one hour after the daily event push ──
+export const WEEKLY_RECAP_HOUR = 10;
+
+const WEEKLY_RECAP_TEXT: Record<string, { title: string; body: string }> = {
+  en: { title: '📊 Your week in history', body: 'See what you read last week — and collect 2 coins for opening it.' },
+  ro: { title: '📊 Săptămâna ta în istorie', body: 'Vezi ce ai citit săptămâna trecută — și iei 2 monede că-l deschizi.' },
+  es: { title: '📊 Tu semana en la historia', body: 'Mira lo que leíste la semana pasada y gana 2 monedas por abrirlo.' },
+  fr: { title: '📊 Votre semaine en histoire', body: 'Découvrez vos lectures de la semaine — et gagnez 2 pièces.' },
+  de: { title: '📊 Deine Woche in der Geschichte', body: 'Sieh, was du letzte Woche gelesen hast — und hol dir 2 Münzen.' },
+};
+
+export function buildWeeklyRecapNotification(language: string): { title: string; body: string } {
+  return WEEKLY_RECAP_TEXT[language] ?? WEEKLY_RECAP_TEXT.en;
 }
 
 // ── Daily Challenge (bonus quiz) — fires at noon, links to the challenge quiz ──

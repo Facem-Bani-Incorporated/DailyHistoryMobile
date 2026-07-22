@@ -34,7 +34,7 @@ export default function GetProButton({
     if (isPro && !forcePaywall) {
       await presentCustomerCenter();
     } else {
-      await presentPaywall();
+      await presentPaywall('get_pro_button');
     }
   };
 

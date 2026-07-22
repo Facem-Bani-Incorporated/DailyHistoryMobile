@@ -5,6 +5,8 @@ import {
   RewardedAdEventType,
 } from 'react-native-google-mobile-ads';
 import { AD_UNIT_IDS } from '../config/ads';
+import * as analytics from '../src/analytics/posthog';
+import { usePaywallStore } from '../store/usePaywallStore';
 import { initAdsSDK, logAdErr } from './useAdsInit';
 
 export function useRewardedUnlock() {
@@ -14,6 +16,7 @@ export function useRewardedUnlock() {
   const callbackRef = useRef<(() => void) | null>(null);
   const retryCount = useRef(0);
   const loadCountRef = useRef(0);
+  const placementRef = useRef<string>('unknown');
 
   const loadAd = useCallback(() => {
     setIsReady(false);
@@ -38,10 +41,18 @@ export function useRewardedUnlock() {
 
     ad.addAdEventListener(AdEventType.OPENED, () => {
       console.log('[Ads][RewardedUnlock] OPENED');
+      analytics.capture('rewarded_ad_started', { placement: placementRef.current });
     });
 
     ad.addAdEventListener(AdEventType.CLOSED, () => {
       console.log('[Ads][RewardedUnlock] CLOSED — earned=', earnedRef.current);
+      // No EARNED_REWARD by the time the ad closes = the user skipped out early.
+      if (earnedRef.current) {
+        analytics.capture('rewarded_ad_completed', { placement: placementRef.current });
+        try { usePaywallStore.getState().registerRewardedWatched(); } catch {}
+      } else {
+        analytics.capture('rewarded_ad_abandoned', { placement: placementRef.current });
+      }
       if (earnedRef.current && callbackRef.current) {
         callbackRef.current();
         callbackRef.current = null;
@@ -74,7 +85,8 @@ export function useRewardedUnlock() {
     return () => { adRef.current = null; };
   }, [loadAd]);
 
-  const showForUnlock = useCallback((onUnlocked: () => void) => {
+  const showForUnlock = useCallback((onUnlocked: () => void, placement: string = 'unknown') => {
+    placementRef.current = placement;
     if (isReady && adRef.current) {
       console.log('[Ads][RewardedUnlock] Showing ad');
       callbackRef.current = onUnlocked;

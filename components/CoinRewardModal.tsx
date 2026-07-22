@@ -6,7 +6,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { X } from 'lucide-react-native';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -22,6 +22,7 @@ import { COINS_PER_REWARDED_AD } from '../config/coins';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import CoinIcon from './CoinIcon';
+import { usePaywallTrigger } from '../hooks/usePaywallTrigger';
 import { useRewardedUnlock } from '../hooks/useRewardedUnlock';
 import { useCoinPopupStore } from '../store/useCoinPopupStore';
 import { useCoins, useCoinStore } from '../store/useCoinStore';
@@ -41,31 +42,31 @@ const L: Record<string, Record<string, string>> = {
     title: 'Earn a coin', sub: 'Watch a short clip and get a coin to unlock any PRO story or map.',
     balance: 'Your coins', watch: 'Watch & earn +1', loading: 'Loading clip…',
     earned: 'Nice! +1 coin', earnedSub: 'Spend it on any PRO story or map layer.',
-    later: 'Maybe later', done: 'Done', coins: 'coins', duration: '~15–30s', reward: '+1 per clip',
+    later: 'Maybe later', done: 'Done', coins: 'coins', duration: '~15–30s', reward: '+1 per clip', capReached: 'Daily limit reached — come back tomorrow for more coins.',
   },
   ro: {
     title: 'Câștigă o monedă', sub: 'Vizionează un clip scurt și primești o monedă ca să deblochezi orice poveste sau hartă PRO.',
     balance: 'Monedele tale', watch: 'Vizionează & +1', loading: 'Se încarcă clipul…',
     earned: 'Super! +1 monedă', earnedSub: 'Folosește-o pe orice poveste sau strat de hartă PRO.',
-    later: 'Mai târziu', done: 'Gata', coins: 'monede', duration: '~15–30s', reward: '+1 / clip',
+    later: 'Mai târziu', done: 'Gata', coins: 'monede', duration: '~15–30s', reward: '+1 / clip', capReached: 'Ai atins limita de azi — revino mâine pentru mai multe monede.',
   },
   fr: {
     title: 'Gagne une pièce', sub: 'Regarde une courte pub et obtiens une pièce pour débloquer une histoire ou carte PRO.',
     balance: 'Tes pièces', watch: 'Regarder & +1', loading: 'Chargement…',
     earned: 'Super ! +1 pièce', earnedSub: 'Utilise-la sur une histoire ou couche de carte PRO.',
-    later: 'Plus tard', done: 'OK', coins: 'pièces', duration: '~15–30s', reward: '+1 / pub',
+    later: 'Plus tard', done: 'OK', coins: 'pièces', duration: '~15–30s', reward: '+1 / pub', capReached: 'Limite du jour atteinte — reviens demain.',
   },
   de: {
     title: 'Münze verdienen', sub: 'Sieh dir einen kurzen Clip an und erhalte eine Münze für jede PRO-Geschichte oder Karte.',
     balance: 'Deine Münzen', watch: 'Ansehen & +1', loading: 'Clip lädt…',
     earned: 'Super! +1 Münze', earnedSub: 'Nutze sie für eine PRO-Geschichte oder Kartenebene.',
-    later: 'Später', done: 'Fertig', coins: 'Münzen', duration: '~15–30s', reward: '+1 / Clip',
+    later: 'Später', done: 'Fertig', coins: 'Münzen', duration: '~15–30s', reward: '+1 / Clip', capReached: 'Tageslimit erreicht — komm morgen wieder.',
   },
   es: {
     title: 'Gana una moneda', sub: 'Mira un clip corto y consigue una moneda para desbloquear cualquier historia o mapa PRO.',
     balance: 'Tus monedas', watch: 'Ver y +1', loading: 'Cargando…',
     earned: '¡Genial! +1 moneda', earnedSub: 'Úsala en cualquier historia o capa de mapa PRO.',
-    later: 'Más tarde', done: 'Listo', coins: 'monedas', duration: '~15–30s', reward: '+1 / clip',
+    later: 'Más tarde', done: 'Listo', coins: 'monedas', duration: '~15–30s', reward: '+1 / clip', capReached: 'Límite diario alcanzado — vuelve mañana.',
   },
 };
 
@@ -114,9 +115,20 @@ export default function CoinRewardModal() {
   const tx = (k: string) => (L[language] ?? L.en)[k] ?? L.en[k] ?? k;
 
   const visible = useCoinPopupStore(s => s.visible);
-  const hide = useCoinPopupStore(s => s.hide);
+  const hideRaw = useCoinPopupStore(s => s.hide);
   const coins = useCoins();
   const { showForUnlock } = useRewardedUnlock();
+  const { maybeShow: maybePaywall } = usePaywallTrigger();
+  // Daily rewarded budget: past the cap the offer is withdrawn.
+  const capReached = !useCoinStore.getState().canWatchRewarded();
+
+  // Closing this sheet is the moment the user is blocked and knows it — the one
+  // place where "unlimited PRO" answers the question they just asked. The policy
+  // store decides whether they've hit the threshold; usually this is a no-op.
+  const hide = useCallback(() => {
+    hideRaw();
+    setTimeout(() => { maybePaywall('failed_unlocks'); }, 400);
+  }, [hideRaw, maybePaywall]);
 
   const [phase, setPhase] = useState<'offer' | 'watching' | 'earned'>('offer');
 
@@ -160,7 +172,8 @@ export default function CoinRewardModal() {
     haptic('medium');
     setPhase('watching');
     showForUnlock(() => {
-      useCoinStore.getState().addCoins(COINS_PER_REWARDED_AD);
+      useCoinStore.getState().addCoins(COINS_PER_REWARDED_AD, 'rewarded_ad');
+      useCoinStore.getState().registerRewardedWatch();
       haptic('success');
       setPhase('earned');
       setBurst(b => b + 1);
@@ -230,6 +243,14 @@ export default function CoinRewardModal() {
                 <Text style={s.ctaText}>{tx('done')}</Text>
               </LinearGradient>
             </TouchableOpacity>
+          ) : capReached ? (
+            // Daily budget spent — say so plainly instead of showing a button
+            // that would fail, and tell them when it resets.
+            <View style={[s.ctaWrap, { alignItems: 'center', paddingVertical: 14 }]}>
+              <Text style={{ color: theme.subtext, fontSize: 13, fontWeight: '700', textAlign: 'center' }}>
+                {tx('capReached')}
+              </Text>
+            </View>
           ) : (
             <TouchableOpacity
               onPress={onWatch}

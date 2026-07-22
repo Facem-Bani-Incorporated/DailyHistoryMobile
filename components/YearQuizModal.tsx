@@ -42,6 +42,7 @@ import {
   YEAR_QUIZ_XP,
 } from '../utils/yearQuiz';
 import EventImage from './EventImage';
+import XpBoostOffer from './XpBoostOffer';
 
 const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
 const SANS = Platform.OS === 'ios' ? 'System' : 'sans-serif';
@@ -319,6 +320,15 @@ export default function YearQuizModal({
 
                 {phase === 'lost' && (
                   <Text style={[s.stateSub, { color: theme.subtext, marginTop: 14 }]}>{tx(language, 'comeBack')}</Text>
+                )}
+
+                {/* Opt-in rewarded offer. Placed above Share so it never sits
+                    between the player and the share action, which is the growth
+                    mechanic here. */}
+                {phase === 'won' && (
+                  <View style={{ alignSelf: 'stretch', marginTop: 18 }}>
+                    <XpBoostOffer xpEarned={YEAR_QUIZ_XP} placement="year_quiz_result" />
+                  </View>
                 )}
 
                 <View style={s.resultBtns}>

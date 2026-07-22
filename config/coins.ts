@@ -9,14 +9,53 @@
 export const COIN_GOLD = '#E8B84D';
 export const COIN_GOLD_DEEP = '#C77E08';
 
-// ── Costs (coins spent to unlock) ──
-export const COIN_COST_EVENT = 1;      // unlock one PRO event
-export const COIN_COST_MAP_LAYER = 1;  // unlock one PRO map layer
-export const COIN_COST_DAY = 1;        // unlock a locked future-day card
+// ── Costs (coins spent) ──
+// A PRO story costs 2 so it is worth two rewarded clips rather than one: the
+// clip is the highest-value ad unit in the app by an order of magnitude, and
+// the user chooses to watch it.
+export const COIN_COST_EVENT = 2;           // unlock one PRO event
+export const COIN_COST_MAP_LAYER = 1;       // unlock one PRO map layer
+export const COIN_COST_DAY = 1;             // unlock a locked day (future or archive)
+export const COIN_COST_STREAK_RESTORE = 3;  // bring a broken streak back
 
 // ── Earning ──
 export const COINS_PER_REWARDED_AD = 1; // one coin per watched rewarded clip
 export const XP_PER_COIN = 1000;        // one coin for every 1000 total XP earned
+export const COINS_PERFECT_QUIZ = 1;    // flawless quiz run
+export const COINS_WEEKLY_RECAP = 2;    // opening the Monday recap
+
+/**
+ * Rewarded clips that earn a coin per day. Past this the marginal value of an
+ * impression drops (and with it eCPM), so extra views are refused rather than
+ * served cheaply.
+ */
+export const REWARDED_DAILY_CAP = 4;
+
+/**
+ * Streak milestones and their coin bonus. Increasing rewards make the later
+ * days of a streak worth protecting — which is the point of the streak.
+ */
+export const STREAK_MILESTONES: Record<number, number> = {
+  3: 1,
+  7: 2,
+  14: 3,
+  30: 5,
+};
+
+/** Where a coin came from / went. Sent to analytics with every movement. */
+export type CoinSource =
+  | 'xp_threshold'
+  | 'rewarded_ad'
+  | 'streak_milestone'
+  | 'perfect_quiz'
+  | 'weekly_recap'
+  | 'referral';
+
+export type CoinSink =
+  | 'pro_story'
+  | 'map_layer'
+  | 'day_unlock'
+  | 'streak_restore';
 
 // ── Coin pop-up ("watch a clip for a coin") ──
 // Cooldown so the opportunistic pop-up (after quiz / leaving map / daily quiz /

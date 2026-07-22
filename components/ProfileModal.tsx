@@ -35,6 +35,8 @@ import { useReferralActive } from '../hooks/useCoins';
 import { useRewardedUnlock } from '../hooks/useRewardedUnlock';
 import { useCoinData, useCoins, useCoinStore } from '../store/useCoinStore';
 import { useUiStore } from '../store/useUiStore';
+import { usePaywallStore } from '../store/usePaywallStore';
+import * as analytics from '../src/analytics/posthog';
 import { haptic } from '../utils/haptics';
 
 // Localized copy for the "Explore" quick-access rows (achievements / daily
@@ -294,6 +296,9 @@ export default function ProfileModal({ visible, onClose }: Props) {
 
   // ── Delete account flow ──
   const [deleteVisible, setDeleteVisible] = useState(false);
+  // TEMPORARY (analytics rollout) — see the version long-press in the footer.
+  const [diagOpen, setDiagOpen] = useState(false);
+  const [diag, setDiag] = useState<ReturnType<typeof analytics.getDiagnostics> | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [confirmText, setConfirmText] = useState('');
 
@@ -310,7 +315,7 @@ export default function ProfileModal({ visible, onClose }: Props) {
   const { showForUnlock } = useRewardedUnlock();
   const onGetCoin = () => {
     haptic('medium');
-    showForUnlock(() => { useCoinStore.getState().addCoins(COINS_PER_REWARDED_AD); haptic('success'); });
+    showForUnlock(() => { useCoinStore.getState().addCoins(COINS_PER_REWARDED_AD, 'rewarded_ad'); useCoinStore.getState().registerRewardedWatch(); haptic('success'); });
   };
   const referralLeftLabel = (() => {
     if (!referralActive || !coinData.referralPassUntil) return '';
@@ -338,7 +343,7 @@ export default function ProfileModal({ visible, onClose }: Props) {
 
   const handleUnlockPro = async () => {
     haptic('medium');
-    await presentPaywall();
+    await presentPaywall('profile_upsell');
   };
 
   const handleManagePro = async () => {
@@ -768,7 +773,7 @@ export default function ProfileModal({ visible, onClose }: Props) {
                     theme={theme}
                     onPress={async () => {
                       haptic('medium');
-                      if (!isPro) { await presentPaywall(); return; }
+                      if (!isPro) { await presentPaywall('profile_theme_locked'); return; }
                       setMode('premium');
                     }}
                   />
@@ -859,8 +864,77 @@ export default function ProfileModal({ visible, onClose }: Props) {
               <View style={s.footer}>
                 <View style={[s.footerDot, { backgroundColor: gold }]} />
                 <Text style={[s.footerBrand, { color: theme.subtext }]}>Daily History</Text>
-                <Text style={[s.footerVer, { color: theme.subtext }]}>v{appVersion} ({buildNumber})</Text>
+                {/* TEMPORARY (analytics rollout): long-press the version to reveal
+                    the PostHog delivery panel. Remove once delivery is confirmed. */}
+                <Text
+                  style={[s.footerVer, { color: theme.subtext }]}
+                  onLongPress={() => { haptic('medium'); setDiagOpen(v => !v); setDiag(analytics.getDiagnostics()); }}
+                  suppressHighlighting
+                >
+                  v{appVersion} ({buildNumber})
+                </Text>
               </View>
+
+              {diagOpen && diag && (
+                <View style={[s.card, { backgroundColor: isPremium ? '#0F0D14' : theme.card, borderColor: isPremium ? '#2A2230' : theme.border, padding: 14, marginTop: 10 }]}>
+                  <Text style={{ color: theme.text, fontWeight: '800', fontSize: 12, marginBottom: 8 }}>PostHog delivery</Text>
+                  {[
+                    ['key', diag.keySet ? 'set …' + diag.keyTail : 'MISSING'],
+                    ['host', diag.host.replace('https://', '')],
+                    ['sent', String(diag.sent)],
+                    ['failed', String(diag.failed)],
+                    ['queued', String(diag.queued)],
+                    ['last', diag.lastStatus || '(nimic trimis inca)'],
+                    ['last event', diag.lastEvent || '—'],
+                    ['distinct_id', diag.distinctId ? String(diag.distinctId).slice(0, 18) + '…' : '—'],
+                  ].map(([k, v]) => (
+                    <View key={k} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 2 }}>
+                      <Text style={{ color: theme.subtext, fontSize: 11 }}>{k}</Text>
+                      <Text style={{ color: theme.text, fontSize: 11, fontWeight: '700', maxWidth: '65%' }} numberOfLines={1}>{v}</Text>
+                    </View>
+                  ))}
+                  <TouchableOpacity
+                    onPress={() => {
+                      haptic('light');
+                      analytics.capture('debug_ping', { from: 'profile_panel' });
+                      setTimeout(() => setDiag(analytics.getDiagnostics()), 1500);
+                    }}
+                    style={{ marginTop: 10, paddingVertical: 10, borderRadius: 10, backgroundColor: gold, alignItems: 'center' }}
+                  >
+                    <Text style={{ color: '#000', fontWeight: '800', fontSize: 12 }}>Trimite un eveniment de test</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => setDiag(analytics.getDiagnostics())} style={{ marginTop: 6, paddingVertical: 8, alignItems: 'center' }}>
+                    <Text style={{ color: theme.subtext, fontSize: 11, fontWeight: '700' }}>Reîmprospătează</Text>
+                  </TouchableOpacity>
+
+                  <View style={{ height: 1, backgroundColor: theme.border, marginVertical: 10 }} />
+                  <Text style={{ color: theme.text, fontWeight: '800', fontSize: 12, marginBottom: 6 }}>Paywall policy</Text>
+                  {(() => {
+                    const p = usePaywallStore.getState();
+                    return [
+                      ['sessions', String(p.sessions)],
+                      ['failed unlocks', String(p.failedUnlocks)],
+                      ['rewarded watched', String(p.rewardedWatched)],
+                      ['already fired', p.firedTriggers.join(', ') || '—'],
+                    ].map(([k, v]) => (
+                      <View key={k} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 2 }}>
+                        <Text style={{ color: theme.subtext, fontSize: 11 }}>{k}</Text>
+                        <Text style={{ color: theme.text, fontSize: 11, fontWeight: '700' }}>{v}</Text>
+                      </View>
+                    ));
+                  })()}
+                  <TouchableOpacity
+                    onPress={() => {
+                      haptic('medium');
+                      usePaywallStore.getState().reset();
+                      setDiag(analytics.getDiagnostics());
+                    }}
+                    style={{ marginTop: 8, paddingVertical: 9, borderRadius: 10, borderWidth: 1, borderColor: theme.border, alignItems: 'center' }}
+                  >
+                    <Text style={{ color: theme.subtext, fontSize: 11, fontWeight: '800' }}>Resetează contoarele de paywall</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
 
             </Animated.View>
           </ScrollView>
