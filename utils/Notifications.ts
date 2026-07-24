@@ -61,18 +61,66 @@ export async function scheduleDailyNotification(
   }
 }
 
-// ── Schedule next N days at HOUR:MINUTE local time, each with its own event ──
-// `eventsByDate` maps ISO yyyy-mm-dd → events array for that day.
-// Re-call this every app open to refresh the queue with fresh content.
+// ── Schedule a notification carrying an arbitrary data payload ──
+async function scheduleTagged(date: Date, title: string, body: string, data: Record<string, any>) {
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title,
+      body,
+      sound: 'default',
+      data,
+    },
+    trigger: {
+      type: SchedulableTriggerInputTypes.DATE,
+      date,
+      ...(Platform.OS === 'android' ? { channelId: 'daily-history' } : {}),
+    },
+  });
+}
+
+/** Same yyyy-mm-dd convention the rest of the app uses for content day keys. */
+const todayKey = () => new Date().toISOString().split('T')[0];
+const yesterdayKey = () =>
+  new Date(Date.now() - 86400000).toISOString().split('T')[0];
+
+/**
+ * Read the streak state without importing the store at module load — the store
+ * pulls in api/auth, and this file is imported from the notification handler.
+ *
+ * `streak` is the *effective* streak (same rule as getStreakInfo): a run that was
+ * already broken counts as 0, so we never threaten someone with days they've lost.
+ */
+function readStreakState(): { streak: number; activeToday: boolean } {
+  try {
+    const { useGamificationStore } = require('../store/useGamificationStore');
+    const s = useGamificationStore.getState();
+    const last = s.lastActiveDate;
+    const alive = last === todayKey() || last === yesterdayKey();
+    return {
+      streak: alive ? (s.currentStreak ?? 0) : 0,
+      activeToday: last === todayKey(),
+    };
+  } catch {
+    return { streak: 0, activeToday: false };
+  }
+}
+
+// ── Schedule the next N days of hooks at local time, each with its own event ──
+// `eventsByDate` maps ISO yyyy-mm-dd → events array for that day; include TODAY so
+// the slots still ahead of us today (noon quiz, 9 PM streak) are not skipped.
+// Each day gets: 09:00 story · 12:00 daily quiz · 21:00 streak reminder, plus the
+// Monday 10:00 weekly recap. Re-call on every app open to refresh the queue.
 export async function scheduleDailyForDays(
   eventsByDate: Record<string, any[]>,
   language: string,
-  hour: number = 9,
+  hour: number = DAILY_STORY_HOUR,
   minute: number = 0,
 ) {
   try {
     await Notifications.cancelAllScheduledNotificationsAsync();
     const now = Date.now();
+    const today = todayKey();
+    const { streak, activeToday } = readStreakState();
 
     for (const iso of Object.keys(eventsByDate).sort()) {
       const [y, m, d] = iso.split('-').map(Number);
@@ -92,44 +140,62 @@ export async function scheduleDailyForDays(
       const monday = new Date(y, m - 1, d, WEEKLY_RECAP_HOUR, 0, 0, 0);
       if (monday.getDay() === 1 && monday.getTime() > now) {
         const r = buildWeeklyRecapNotification(language);
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: r.title,
-            body: r.body,
-            sound: 'default',
-            data: { weeklyRecap: true },
-          },
-          trigger: {
-            type: SchedulableTriggerInputTypes.DATE,
-            date: monday,
-            ...(Platform.OS === 'android' ? { channelId: 'daily-history' } : {}),
-          },
-        });
+        await scheduleTagged(monday, r.title, r.body, { weeklyRecap: true });
       }
 
       // ── Daily Challenge reminder at noon — separate hook from the 9 AM event ──
       const challengeAt = new Date(y, m - 1, d, DAILY_CHALLENGE_HOUR, 0, 0, 0);
       if (challengeAt.getTime() > now) {
         const c = buildDailyChallengeNotification(language);
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: c.title,
-            body: c.body,
-            sound: 'default',
-            data: { dailyChallenge: true },
-          },
-          trigger: {
-            type: SchedulableTriggerInputTypes.DATE,
-            date: challengeAt,
-            ...(Platform.OS === 'android' ? { channelId: 'daily-history' } : {}),
-          },
-        });
+        await scheduleTagged(challengeAt, c.title, c.body, { dailyChallenge: true });
+      }
+
+      // ── Streak reminder at 9 PM — last call before the day rolls over.
+      // Skipped for today when the streak is already secured (opening the app
+      // counts), so nobody is nagged about a streak they already kept.
+      const streakAt = new Date(y, m - 1, d, STREAK_REMINDER_HOUR, 0, 0, 0);
+      const alreadySafe = iso === today && activeToday;
+      if (streakAt.getTime() > now && !alreadySafe) {
+        // `streak` is the run that would be lost if they don't open the app — the
+        // reminder fires *before* any activity that day, so the number doesn't grow
+        // with distance. Every app open reschedules the queue with fresh numbers.
+        const s = buildStreakReminderNotification(language, streak);
+        await scheduleTagged(streakAt, s.title, s.body, { streakReminder: true, iso });
       }
     }
   } catch (e) {
     if (__DEV__) console.warn('[Notifications] Failed to schedule week:', e);
   }
 }
+
+/**
+ * Drop today's 9 PM streak reminder — call it the moment the streak is secured
+ * (the app open itself does that) so the evening nag never lands unearned.
+ */
+export async function cancelStreakReminderForToday() {
+  try {
+    const today = todayKey();
+    const pending = await Notifications.getAllScheduledNotificationsAsync();
+    for (const n of pending) {
+      const data = n.content?.data as any;
+      if (data?.streakReminder && data?.iso === today) {
+        await Notifications.cancelScheduledNotificationAsync(n.identifier);
+      }
+    }
+  } catch (e) {
+    if (__DEV__) console.warn('[Notifications] Failed to cancel streak reminder:', e);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// THE THREE DAILY SLOTS
+//   09:00 — today's new story
+//   12:00 — daily quiz / challenge
+//   21:00 — streak reminder (skipped once the streak is safe)
+// Monday 10:00 carries the weekly recap on top of the 09:00 story.
+// ══════════════════════════════════════════════════════════════
+
+export const DAILY_STORY_HOUR = 9;
 
 // ── Weekly recap — Monday 10:00, one hour after the daily event push ──
 export const WEEKLY_RECAP_HOUR = 10;
@@ -159,6 +225,77 @@ const DAILY_CHALLENGE_TEXT: Record<string, { title: string; body: string }> = {
 
 export function buildDailyChallengeNotification(language: string): { title: string; body: string } {
   return DAILY_CHALLENGE_TEXT[language] ?? DAILY_CHALLENGE_TEXT.en;
+}
+
+// ── Streak reminder — fires at 9 PM so there's still time to save the day ──
+export const STREAK_REMINDER_HOUR = 21;
+
+type StreakText = {
+  /** User already has a running streak worth losing. */
+  keep: (days: number) => { title: string; body: string };
+  /** No streak yet — invite them to start one instead of threatening a loss. */
+  start: { title: string; body: string };
+};
+
+const STREAK_REMINDER_TEXT: Record<string, StreakText> = {
+  en: {
+    keep: (n) => ({
+      title: `🔥 Your ${n}-day streak ends at midnight`,
+      body: 'One story is all it takes to keep it alive. Two minutes, tops.',
+    }),
+    start: {
+      title: '🔥 Start your streak tonight',
+      body: "Read one story before midnight and day 1 is yours.",
+    },
+  },
+  ro: {
+    keep: (n) => ({
+      title: `🔥 Seria ta de ${n} zile se pierde la miezul nopții`,
+      body: 'O singură poveste și rămâne intactă. Două minute, maximum.',
+    }),
+    start: {
+      title: '🔥 Începe-ți seria în seara asta',
+      body: 'Citește o poveste până la miezul nopții și ziua 1 e a ta.',
+    },
+  },
+  es: {
+    keep: (n) => ({
+      title: `🔥 Tu racha de ${n} días termina a medianoche`,
+      body: 'Con una sola historia la mantienes viva. Dos minutos, como mucho.',
+    }),
+    start: {
+      title: '🔥 Empieza tu racha esta noche',
+      body: 'Lee una historia antes de medianoche y el día 1 es tuyo.',
+    },
+  },
+  fr: {
+    keep: (n) => ({
+      title: `🔥 Votre série de ${n} jours s'arrête à minuit`,
+      body: 'Une seule histoire suffit à la sauver. Deux minutes, pas plus.',
+    }),
+    start: {
+      title: '🔥 Lancez votre série ce soir',
+      body: 'Lisez une histoire avant minuit et le jour 1 est à vous.',
+    },
+  },
+  de: {
+    keep: (n) => ({
+      title: `🔥 Deine ${n}-Tage-Serie endet um Mitternacht`,
+      body: 'Eine Geschichte genügt, um sie zu retten. Höchstens zwei Minuten.',
+    }),
+    start: {
+      title: '🔥 Starte heute Abend deine Serie',
+      body: 'Lies eine Geschichte vor Mitternacht und Tag 1 gehört dir.',
+    },
+  },
+};
+
+export function buildStreakReminderNotification(
+  language: string,
+  streakDays: number,
+): { title: string; body: string } {
+  const text = STREAK_REMINDER_TEXT[language] ?? STREAK_REMINDER_TEXT.en;
+  return streakDays > 0 ? text.keep(streakDays) : text.start;
 }
 
 // ══════════════════════════════════════════════════════════════

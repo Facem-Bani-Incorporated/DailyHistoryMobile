@@ -66,7 +66,7 @@ import { useNotificationEventStore } from '../../store/useNotificationEventStore
 import { useInterestQuizDone, usePreferencesStore, useUserInterests } from '../../store/usePreferencesStore';
 import { useUserSavedEvents } from '../../store/useSavedStore';
 import { haptic } from '../../utils/haptics';
-import { scheduleDailyForDays } from '../../utils/Notifications';
+import { cancelStreakReminderForToday } from '../../utils/Notifications';
 import { maybeRequestReview } from '../../utils/review';
 import { isDailyChallengeDone } from '../../utils/dailyChallenge';
 import DailyChallengeModal from '../../components/DailyChallengeModal';
@@ -1049,9 +1049,11 @@ export default function HomeScreen() {
 
   useEffect(() => {
     recordVisit();
+    // recordVisit() is what secures the streak, so today's 9 PM reminder is now moot.
+    cancelStreakReminderForToday().catch(() => {});
     try { genMonthlyRecap(); } catch { }
     setTimeout(() => { if (getUnseenMonthlyRecap()) setRecapVis(true); }, 2000);
-    Promise.all([fetchOne(0), fetchOne(-1), fetchOne(1), fetchOne(2)]).then(async () => {
+    Promise.all([fetchOne(0), fetchOne(-1), fetchOne(1), fetchOne(2)]).then(() => {
       const todayPg = mem.current[mk('free', isoFor(0))];
       const gotData = !!todayPg && todayPg.data.length > 0;
       if (!gotData && netErrRef.current) setOffline(true);
@@ -1060,21 +1062,10 @@ export default function HomeScreen() {
       fetchAll();
       fetchOne(0, 'pro').catch(() => {}); fetchOne(-1, 'pro').catch(() => {}); fetchOne(1, 'pro').catch(() => {}); fetchOne(2, 'pro').catch(() => {});
       for (let i = 2; i <= 7; i++) { fetchOne(-i).catch(() => { }); fetchOne(-i, 'pro').catch(() => {}); }
-      const notifPref = await AsyncStorage.getItem('notifications_enabled');
-      if (notifPref !== 'false') {
-        // Schedule next 7 days at 9 AM local time, each with that day's free main event.
-        // Re-runs on every app open so the queue stays fresh as days roll forward.
-        const eventsByDate: Record<string, any[]> = {};
-        const days = 7;
-        await Promise.all(
-          Array.from({ length: days }, (_, i) =>
-            fetchOne(i + 1)
-              .then((d) => { eventsByDate[isoFor(i + 1)] = d.data ?? []; })
-              .catch(() => { eventsByDate[isoFor(i + 1)] = []; }),
-          ),
-        );
-        scheduleDailyForDays(eventsByDate, language, 9, 0).catch(() => {});
-      }
+      // Notification scheduling deliberately does NOT live here. It has a single
+      // owner — useNotifications() in app/_layout.tsx. Two schedulers racing here
+      // was the bug: scheduleDailyForDays() opens with cancelAllScheduledNotifications(),
+      // so whichever ran second wiped the notifications the first had already queued.
     });
   }, []);
 

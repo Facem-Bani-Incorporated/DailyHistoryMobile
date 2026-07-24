@@ -128,8 +128,12 @@ function AppContent() {
       analytics.capture('notification_opened', {
         notification_type: data.dailyChallenge ? 'daily_challenge'
           : data.weeklyRecap ? 'weekly_recap'
+          : data.streakReminder ? 'streak_reminder'
           : data.event ? 'daily_event' : 'other',
       });
+      // Streak reminder → just land on the home screen; opening the app is what
+      // records the visit and keeps the streak, so there's nothing to deep-link to.
+      if (data.streakReminder) return;
       // Daily challenge reminder → open the challenge quiz on the home screen.
       if (data.dailyChallenge) {
         useNotificationEventStore.getState().setPendingEvent({ __dailyChallenge: true });

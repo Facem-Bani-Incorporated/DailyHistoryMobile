@@ -9,13 +9,14 @@ import { ENDPOINTS } from '../config/api';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuthStore } from '../store/useAuthStore';
 import {
+    DAILY_STORY_HOUR,
     fireTestNotification,
     requestNotificationPermissions,
     scheduleDailyForDays,
     setupNotificationChannel,
 } from '../utils/Notifications';
 
-const SCHEDULE_DAYS_AHEAD = 7;
+const SCHEDULE_DAYS_AHEAD = 8; // today + the next 7 days
 
 const NOTIF_PREF_KEY = 'notifications_enabled';
 
@@ -87,13 +88,15 @@ export function useNotifications(): UseNotificationsReturn {
     return () => sub.remove();
   }, []);
 
-  // ── Helper: fetch the next N days and schedule one notification per day at 9 AM ──
+  // ── Helper: fetch the next N days and schedule that day's 9 AM / 12 PM / 9 PM hooks ──
+  // Starts at TODAY, not tomorrow: scheduleDailyForDays drops slots already in the past,
+  // so this is what lets today's noon quiz and 9 PM streak reminder still fire.
   const fetchAndScheduleWeek = useCallback(async () => {
     try {
       const eventsByDate: Record<string, any[]> = {};
       const promises = Array.from({ length: SCHEDULE_DAYS_AHEAD }, (_, i) => {
         const d = new Date();
-        d.setDate(d.getDate() + i + 1); // start tomorrow
+        d.setDate(d.getDate() + i); // start today
         const iso = d.toISOString().split('T')[0];
         return api
           .get('/daily-content/by-date', { params: { date: iso, _t: Date.now() } })
@@ -101,7 +104,7 @@ export function useNotifications(): UseNotificationsReturn {
           .catch(() => { eventsByDate[iso] = []; });
       });
       await Promise.all(promises);
-      await scheduleDailyForDays(eventsByDate, language, 9, 0);
+      await scheduleDailyForDays(eventsByDate, language, DAILY_STORY_HOUR, 0);
     } catch (e) {
       if (__DEV__) console.warn('[Notifications] week schedule failed', e);
     }
