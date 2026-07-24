@@ -19,8 +19,10 @@ import { useCoinPopupStore } from '../store/useCoinPopupStore';
 import { useCoinStore } from '../store/useCoinStore';
 import { useGamificationStore } from '../store/useGamificationStore';
 import { getEventId, useSavedStore } from '../store/useSavedStore';
+import { noteStoryFinishedAndCheck } from '../utils/review';
 import { QuizSection } from './QuizSection';
 import RelatedEvents from './RelatedEvents';
+import ReviewPromptModal from './ReviewPromptModal';
 import { SharePickerModal } from './SharePickerModal';
 
 const { height: H, width: W } = Dimensions.get('window');
@@ -339,6 +341,18 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
   const resumedThisEventRef = useRef(false);                                       // ensures we only restore once per event
   const resumeToastOpacity = useRef(new Animated.Value(0)).current;
 
+  // ── Review ask, fired once the reader reaches the end of a story ───────────
+  const [reviewVis, setReviewVis] = useState(false);
+  const reviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (reviewTimerRef.current) clearTimeout(reviewTimerRef.current); }, []);
+  // Closing the story cancels a pending ask — the modal would otherwise pop up
+  // over whatever screen the reader landed on next.
+  useEffect(() => {
+    if (visible) return;
+    if (reviewTimerRef.current) clearTimeout(reviewTimerRef.current);
+    setReviewVis(false);
+  }, [visible]);
+
   const persistReadPos = (eid: string | null, y: number) => {
     if (!eid) return;
     if (y > READ_POS_MIN) AsyncStorage.setItem(readPosKey(eid), String(Math.round(y))).catch(() => {});
@@ -507,6 +521,14 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
                     analytics.capture('story_completed', {
                       story_id: eventId,
                       seconds_spent: Math.round((Date.now() - openedAtRef.current) / 1000),
+                    });
+                    // Finishing a story is the high point of the session — the one
+                    // moment worth asking for a rating. Gated by the cooldown/cap in
+                    // utils/review.ts, and delayed so it doesn't slam the reader the
+                    // instant they land on the last line.
+                    noteStoryFinishedAndCheck().then((ok) => {
+                      if (!ok) return;
+                      reviewTimerRef.current = setTimeout(() => setReviewVis(true), 1200);
                     });
                   }
                   if (savePosTimer.current) clearTimeout(savePosTimer.current);
@@ -719,6 +741,7 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
         gallery={gallery}
         onClose={() => setSharePickerVisible(false)}
       />
+      <ReviewPromptModal visible={reviewVis} onClose={() => setReviewVis(false)} />
     </>
   );
 };
