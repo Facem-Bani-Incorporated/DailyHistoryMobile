@@ -9,25 +9,25 @@
 //  Usage:
 //    const { showRewardedAd, showRewardedAdForRestore, isRewardedReady } = useRewardedAd();
 //
-//    // XP bonus (existing behavior — backward compatible):
+//    // XP bonus:
 //    <Button onPress={showRewardedAd} disabled={!isRewardedReady} />
 //
-//    // Streak restore (new):
+//    // Streak restore:
 //    <Button onPress={showRewardedAdForRestore} disabled={!isRewardedReady} />
 //
-//  Under the hood, the ad is shared; a ref tracks which reward to grant
-//  when the user finishes watching.
+//  The ad instance itself lives in rewardedAdManager — one per app, not one per
+//  component. This hook only picks which reward to grant when the ad completes.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  AdEventType,
-  RewardedAd,
-  RewardedAdEventType,
-} from 'react-native-google-mobile-ads';
-import { AD_UNIT_IDS, ADS_CONFIG } from '../config/ads';
+import { useCallback, useEffect, useState } from 'react';
+import { ADS_CONFIG } from '../config/ads';
 import { useGamificationStore } from '../store/useGamificationStore';
-import { initAdsSDK, logAdErr } from './useAdsInit';
+import {
+  getRewardedStatus,
+  prepareRewarded,
+  showRewarded,
+  subscribeRewarded,
+} from './rewardedAdManager';
 import { pushToServer } from './useGamificationSync';
 
 type RewardKind = 'xp' | 'restore';
@@ -82,112 +82,57 @@ function restoreUserStreak() {
   pushToServer().catch((e) => console.warn('[Ads] Failed to sync restore:', e));
 }
 
+const grant = (kind: RewardKind) => () => {
+  if (kind === 'restore') restoreUserStreak();
+  else grantXPBonus();
+};
+
 // ══════════════════════════════════════════════════════════════════════════════
 // HOOK
 // ══════════════════════════════════════════════════════════════════════════════
-export function useRewardedAd() {
-  const [isReady, setIsReady] = useState(false);
-  const adRef = useRef<RewardedAd | null>(null);
-  const earnedRef = useRef(false);
-  const pendingRewardRef = useRef<RewardKind>('xp'); // default matches old behavior
+interface Options {
+  /** Start loading when the surface that offers the ad becomes visible.
+   *  StreakIcon lives in the always-mounted header, so it must NOT preload —
+   *  that is exactly the boot-time request storm we removed. */
+  preload?: boolean;
+}
 
-  const loadCountRef = useRef(0);
+export function useRewardedAd({ preload = false }: Options = {}) {
+  const [status, setStatus] = useState(getRewardedStatus);
 
-  const loadAd = useCallback(() => {
-    setIsReady(false);
-    earnedRef.current = false;
-    loadCountRef.current += 1;
-    const attempt = loadCountRef.current;
-
-    console.log(`[Ads][Rewarded] Load #${attempt} — unitId=${AD_UNIT_IDS.REWARDED}`);
-
-    const ad = RewardedAd.createForAdRequest(AD_UNIT_IDS.REWARDED);
-
-    ad.addAdEventListener(RewardedAdEventType.LOADED, () => {
-      setIsReady(true);
-      console.log(`[Ads][Rewarded] LOADED (attempt #${attempt})`);
-    });
-
-    ad.addAdEventListener(RewardedAdEventType.EARNED_REWARD, (reward) => {
-      console.log('[Ads][Rewarded] EARNED_REWARD:', JSON.stringify(reward));
-      earnedRef.current = true;
-    });
-
-    ad.addAdEventListener(AdEventType.OPENED, () => {
-      console.log('[Ads][Rewarded] OPENED');
-    });
-
-    ad.addAdEventListener(AdEventType.CLOSED, () => {
-      console.log('[Ads][Rewarded] CLOSED — earned=', earnedRef.current);
-
-      if (earnedRef.current) {
-        const kind = pendingRewardRef.current;
-        try {
-          if (kind === 'restore') {
-            restoreUserStreak();
-          } else {
-            grantXPBonus();
-          }
-        } catch (e) {
-          logAdErr('Rewarded handler', e);
-        }
-      }
-
-      pendingRewardRef.current = 'xp';
-      loadAd();
-    });
-
-    ad.addAdEventListener(AdEventType.ERROR, (error) => {
-      logAdErr(`Rewarded attempt#${attempt}`, error);
-      setIsReady(false);
-      console.log('[Ads][Rewarded] Retrying in 30s...');
-      setTimeout(loadAd, 30000);
-    });
-
-    try {
-      ad.load();
-      adRef.current = ad;
-    } catch (e) {
-      logAdErr(`Rewarded .load() throw`, e);
-    }
-  }, []);
+  useEffect(() => subscribeRewarded(setStatus), []);
 
   useEffect(() => {
-    initAdsSDK().then(() => {
-      console.log('[Ads] Loading rewarded after SDK ready');
-      loadAd();
+    if (preload) prepareRewarded();
+  }, [preload]);
+
+  const showRewardedAdFor = useCallback((kind: RewardKind, placement?: string) => {
+    return showRewarded({
+      placement: placement ?? (kind === 'restore' ? 'streak_restore' : 'xp_bonus'),
+      onReward: grant(kind),
+      // No reward when the ad could not be served — unlike the unlock flow,
+      // free XP and free streak restores would devalue the whole mechanic.
+      onUnavailable: () => {
+        console.warn('[Ads][Rewarded] unavailable — no reward granted for', kind);
+      },
     });
-    return () => { adRef.current = null; };
-  }, [loadAd]);
+  }, []);
 
-  // ── Existing behavior: show ad for XP bonus (backward compatible) ──
-  const showRewardedAd = useCallback(() => {
-    if (isReady && adRef.current) {
-      pendingRewardRef.current = 'xp';
-      adRef.current.show();
-    }
-  }, [isReady]);
+  const showRewardedAd = useCallback(
+    () => showRewardedAdFor('xp'),
+    [showRewardedAdFor],
+  );
 
-  // ── New: show ad for streak restoration ──
-  const showRewardedAdForRestore = useCallback(() => {
-    if (isReady && adRef.current) {
-      pendingRewardRef.current = 'restore';
-      adRef.current.show();
-    }
-  }, [isReady]);
-
-  // ── Generic: show with explicit reward kind ──
-  const showRewardedAdFor = useCallback((kind: RewardKind) => {
-    if (isReady && adRef.current) {
-      pendingRewardRef.current = kind;
-      adRef.current.show();
-    }
-  }, [isReady]);
+  const showRewardedAdForRestore = useCallback(
+    () => showRewardedAdFor('restore'),
+    [showRewardedAdFor],
+  );
 
   return {
     showRewardedAd,
     showRewardedAdForRestore,
     showRewardedAdFor,
-    isRewardedReady: isReady,
+    isRewardedReady: status === 'ready',
+    prepareRewarded,
   };
 }

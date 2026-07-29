@@ -312,10 +312,12 @@ export default function ProfileModal({ visible, onClose }: Props) {
   const coins = useCoins();
   const coinData = useCoinData();
   const referralActive = useReferralActive();
-  const { showForUnlock } = useRewardedUnlock();
+  // Rendered with visible={false} from ProfileAvatar on every screen, so the
+  // preload has to follow the prop rather than the mount.
+  const { showForUnlock } = useRewardedUnlock({ preload: visible });
   const onGetCoin = () => {
     haptic('medium');
-    showForUnlock(() => { useCoinStore.getState().addCoins(COINS_PER_REWARDED_AD, 'rewarded_ad'); useCoinStore.getState().registerRewardedWatch(); haptic('success'); });
+    showForUnlock(() => { useCoinStore.getState().addCoins(COINS_PER_REWARDED_AD, 'rewarded_ad'); useCoinStore.getState().registerRewardedWatch(); haptic('success'); }, 'profile_get_coin');
   };
   const referralLeftLabel = (() => {
     if (!referralActive || !coinData.referralPassUntil) return '';

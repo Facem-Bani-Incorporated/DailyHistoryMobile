@@ -63,11 +63,16 @@ export default function StreakRestoreModal() {
   const restoreStreakFree = useGamificationStore(s => s.restoreStreakFree);
   const dismissStreakLoss = useGamificationStore(s => s.dismissStreakLoss);
   const coins = useCoins();
-  const { showForUnlock } = useRewardedUnlock();
 
-  const [watching, setWatching] = useState(false);
   const today = new Date().toISOString().split('T')[0];
   const visible = lostStreak > 0 && lostStreakDate === today;
+
+  // Computed before the hook so the ad only loads when this sheet is actually
+  // on screen. This component is mounted for every user on every launch from
+  // _layout, so an unconditional preload here was a guaranteed wasted request.
+  const { showForUnlock } = useRewardedUnlock({ preload: visible });
+
+  const [watching, setWatching] = useState(false);
 
   if (!visible) return null;
 

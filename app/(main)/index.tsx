@@ -23,6 +23,7 @@ import { BannerAd, BannerAdSize } from 'react-native-google-mobile-ads';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 import api from '../../api';
+import * as analytics from '../../src/analytics/posthog';
 import AchievementsModal from '../../components/AchievementsModal';
 import FriendsModal from '../../components/FriendsModal';
 import AchievementToast from '../../components/AchievementToast';
@@ -858,6 +859,23 @@ export default function HomeScreen() {
   const [unlockDate, setUnlockDate] = useState(todayISO());
   const [bannerLoaded, setBannerLoaded] = useState(false);
   const [bannerError, setBannerError] = useState(false);
+  // Bumping this remounts <BannerAd> with a clean instance after a failure.
+  const [bannerKey, setBannerKey] = useState(0);
+  const bannerRetries = useRef(0);
+
+  // bannerError used to be a one-way kill switch: it unmounted the BannerAd, and
+  // onAdLoaded — the only thing that cleared it — could never fire again. A single
+  // network hiccup meant no banner for the rest of the session. Retry a few times.
+  useEffect(() => {
+    if (!bannerError || bannerRetries.current >= 3) return;
+    const t = setTimeout(() => {
+      bannerRetries.current += 1;
+      setBannerLoaded(false);
+      setBannerError(false);
+      setBannerKey(k => k + 1);
+    }, 60_000);
+    return () => clearTimeout(t);
+  }, [bannerError]);
 
   useEffect(() => {
     const today = todayISO();
@@ -1325,6 +1343,15 @@ export default function HomeScreen() {
 
   const shouldShowBanner = SHOW_BANNER_TABS.includes(tab) && !loading && !isPro;
 
+  // One request per mounted BannerAd. Pairs with ad_loaded / ad_failed above so
+  // the banner funnel is readable in PostHog without the AdMob console.
+  useEffect(() => {
+    if (!shouldShowBanner || bannerError) return;
+    analytics.capture('ad_requested', {
+      format: 'banner', placement: 'home_top', unit_id: AD_UNIT_IDS.BANNER, tab,
+    });
+  }, [shouldShowBanner, bannerError, bannerKey, tab]);
+
   return (
     <AllEventsProvider events={allEvents}>
       <View style={ms.root}>
@@ -1457,18 +1484,31 @@ export default function HomeScreen() {
             ]}
           >
             <BannerAd
+              key={bannerKey}
               unitId={AD_UNIT_IDS.BANNER}
               size={BannerAdSize.BANNER}
               onAdLoaded={() => {
                 console.log('[Ads][Banner-top] LOADED — unitId=', AD_UNIT_IDS.BANNER);
                 setBannerLoaded(true);
                 setBannerError(false);
+                bannerRetries.current = 0;
+                analytics.capture('ad_loaded', {
+                  format: 'banner', placement: 'home_top', unit_id: AD_UNIT_IDS.BANNER, tab,
+                });
               }}
               onAdFailedToLoad={(err: any) => {
                 console.warn('[Ads][Banner-top] FAILED', err?.message);
                 setBannerError(true);
+                analytics.capture('ad_failed', {
+                  format: 'banner', placement: 'home_top', unit_id: AD_UNIT_IDS.BANNER, tab,
+                  error_code: err?.code ?? 'unknown', error_message: err?.message ?? '',
+                  attempt: bannerRetries.current + 1,
+                });
               }}
-              onAdOpened={() => console.log('[Ads][Banner-top] OPENED')}
+              onAdOpened={() => {
+                console.log('[Ads][Banner-top] OPENED');
+                analytics.capture('ad_clicked', { format: 'banner', placement: 'home_top', tab });
+              }}
               onAdClosed={() => console.log('[Ads][Banner-top] CLOSED')}
             />
           </View>

@@ -117,7 +117,8 @@ export default function CoinRewardModal() {
   const visible = useCoinPopupStore(s => s.visible);
   const hideRaw = useCoinPopupStore(s => s.hide);
   const coins = useCoins();
-  const { showForUnlock } = useRewardedUnlock();
+  // Mounted globally in _layout — preload only once the pop-up is on screen.
+  const { showForUnlock } = useRewardedUnlock({ preload: visible });
   const { maybeShow: maybePaywall } = usePaywallTrigger();
   // Daily rewarded budget: past the cap the offer is withdrawn.
   const capReached = !useCoinStore.getState().canWatchRewarded();

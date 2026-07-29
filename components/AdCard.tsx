@@ -1,10 +1,13 @@
 // components/AdCard.tsx
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { BannerAd, BannerAdSize } from 'react-native-google-mobile-ads';
 import { AD_UNIT_IDS } from '../config/ads';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
+import * as analytics from '../src/analytics/posthog';
+
+const PLACEMENT = 'feed_ad_card';
 
 const T: Record<string, string> = {
   en: 'Sponsored',
@@ -19,6 +22,12 @@ export default function AdCard() {
   const { language } = useLanguage();
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(false);
+
+  useEffect(() => {
+    analytics.capture('ad_requested', {
+      format: 'banner_mrec', placement: PLACEMENT, unit_id: AD_UNIT_IDS.BANNER,
+    });
+  }, []);
 
   if (error) return null;
 
@@ -40,6 +49,9 @@ export default function AdCard() {
             onAdLoaded={() => {
               console.log('[Ads][AdCard] LOADED — unitId=', AD_UNIT_IDS.BANNER);
               setLoaded(true);
+              analytics.capture('ad_loaded', {
+                format: 'banner_mrec', placement: PLACEMENT, unit_id: AD_UNIT_IDS.BANNER,
+              });
             }}
             onAdFailedToLoad={(err: any) => {
               console.warn(
@@ -50,8 +62,15 @@ export default function AdCard() {
                 '\n  unitId :', AD_UNIT_IDS.BANNER,
               );
               setError(true);
+              analytics.capture('ad_failed', {
+                format: 'banner_mrec', placement: PLACEMENT, unit_id: AD_UNIT_IDS.BANNER,
+                error_code: err?.code ?? 'unknown', error_message: err?.message ?? '',
+              });
             }}
-            onAdOpened={() => console.log('[Ads][AdCard] OPENED')}
+            onAdOpened={() => {
+              console.log('[Ads][AdCard] OPENED');
+              analytics.capture('ad_clicked', { format: 'banner_mrec', placement: PLACEMENT });
+            }}
             onAdClosed={() => console.log('[Ads][AdCard] CLOSED')}
           />
         </View>

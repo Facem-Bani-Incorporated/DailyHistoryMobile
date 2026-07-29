@@ -1,102 +1,69 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  AdEventType,
-  RewardedAd,
-  RewardedAdEventType,
-} from 'react-native-google-mobile-ads';
-import { AD_UNIT_IDS } from '../config/ads';
+// hooks/useRewardedUnlock.ts
+// Thin subscriber over the shared singleton in rewardedAdManager.
+//
+// This hook used to own a RewardedAd per component. Five components mount it,
+// three of them unconditionally at boot, so every app open fired five requests
+// for one ad unit and at most one of them could ever be shown. The instance now
+// lives in the manager; this file only wires UI state and the reward callback.
+import { useCallback, useEffect, useState } from 'react';
 import * as analytics from '../src/analytics/posthog';
-import { usePaywallStore } from '../store/usePaywallStore';
-import { initAdsSDK, logAdErr } from './useAdsInit';
+import {
+  getRewardedStatus,
+  isRewardedPending,
+  prepareRewarded,
+  showRewarded,
+  subscribeRewarded,
+} from './rewardedAdManager';
 
-export function useRewardedUnlock() {
-  const [isReady, setIsReady] = useState(false);
-  const adRef = useRef<RewardedAd | null>(null);
-  const earnedRef = useRef(false);
-  const callbackRef = useRef<(() => void) | null>(null);
-  const retryCount = useRef(0);
-  const loadCountRef = useRef(0);
-  const placementRef = useRef<string>('unknown');
+interface Options {
+  /** Pass the surface's own `visible` flag. The ad starts loading when the
+   *  surface appears rather than at app boot, so it is warm by the time the
+   *  user taps without costing a request on every launch. */
+  preload?: boolean;
+}
 
-  const loadAd = useCallback(() => {
-    setIsReady(false);
-    earnedRef.current = false;
-    loadCountRef.current += 1;
-    const attempt = loadCountRef.current;
+export function useRewardedUnlock({ preload = false }: Options = {}) {
+  const [status, setStatus] = useState(getRewardedStatus);
+  const [waiting, setWaiting] = useState(false);
 
-    console.log(`[Ads][RewardedUnlock] Load #${attempt} — unitId=${AD_UNIT_IDS.REWARDED}`);
-
-    const ad = RewardedAd.createForAdRequest(AD_UNIT_IDS.REWARDED);
-
-    ad.addAdEventListener(RewardedAdEventType.LOADED, () => {
-      retryCount.current = 0;
-      setIsReady(true);
-      console.log(`[Ads][RewardedUnlock] LOADED (attempt #${attempt})`);
-    });
-
-    ad.addAdEventListener(RewardedAdEventType.EARNED_REWARD, (reward) => {
-      console.log('[Ads][RewardedUnlock] EARNED_REWARD:', JSON.stringify(reward));
-      earnedRef.current = true;
-    });
-
-    ad.addAdEventListener(AdEventType.OPENED, () => {
-      console.log('[Ads][RewardedUnlock] OPENED');
-      analytics.capture('rewarded_ad_started', { placement: placementRef.current });
-    });
-
-    ad.addAdEventListener(AdEventType.CLOSED, () => {
-      console.log('[Ads][RewardedUnlock] CLOSED — earned=', earnedRef.current);
-      // No EARNED_REWARD by the time the ad closes = the user skipped out early.
-      if (earnedRef.current) {
-        analytics.capture('rewarded_ad_completed', { placement: placementRef.current });
-        try { usePaywallStore.getState().registerRewardedWatched(); } catch {}
-      } else {
-        analytics.capture('rewarded_ad_abandoned', { placement: placementRef.current });
-      }
-      if (earnedRef.current && callbackRef.current) {
-        callbackRef.current();
-        callbackRef.current = null;
-      }
-      loadAd();
-    });
-
-    ad.addAdEventListener(AdEventType.ERROR, (error) => {
-      logAdErr(`RewardedUnlock attempt#${attempt}`, error);
-      setIsReady(false);
-      retryCount.current += 1;
-      const delay = Math.min(5000 * retryCount.current, 30000);
-      console.log(`[Ads][RewardedUnlock] Retrying in ${delay}ms (retry #${retryCount.current})`);
-      setTimeout(loadAd, delay);
-    });
-
-    try {
-      ad.load();
-      adRef.current = ad;
-    } catch (e) {
-      logAdErr(`RewardedUnlock .load() throw`, e);
-    }
-  }, []);
+  useEffect(() => subscribeRewarded(setStatus), []);
 
   useEffect(() => {
-    initAdsSDK().then(() => {
-      console.log('[Ads][RewardedUnlock] SDK ready — loading first ad');
-      loadAd();
-    });
-    return () => { adRef.current = null; };
-  }, [loadAd]);
+    if (preload) prepareRewarded();
+  }, [preload]);
 
-  const showForUnlock = useCallback((onUnlocked: () => void, placement: string = 'unknown') => {
-    placementRef.current = placement;
-    if (isReady && adRef.current) {
-      console.log('[Ads][RewardedUnlock] Showing ad');
-      callbackRef.current = onUnlocked;
-      adRef.current.show();
-    } else {
-      console.log('[Ads][RewardedUnlock] Not ready — fallback unlock, reloading ad');
-      onUnlocked();
-      loadAd();
-    }
-  }, [isReady, loadAd]);
+  const showForUnlock = useCallback(
+    (onUnlocked: () => void, placement: string = 'unknown') => {
+      const result = showRewarded({
+        placement,
+        onReward: () => {
+          setWaiting(false);
+          onUnlocked();
+        },
+        onUnavailable: () => {
+          setWaiting(false);
+          // The ad genuinely could not be served within the wait window. Grant
+          // the reward anyway — punishing the user for our fill problem is
+          // worse than the lost impression — but make it visible in analytics
+          // instead of silent, which is how it used to be.
+          analytics.capture('rewarded_ad_unavailable', { placement });
+          console.warn('[Ads][Rewarded] unavailable — granting unlock without ad:', placement);
+          onUnlocked();
+        },
+      });
 
-  return { showForUnlock, isUnlockReady: isReady };
+      // 'waiting' means a load is in flight and the ad will open shortly.
+      setWaiting(result === 'waiting');
+      return result;
+    },
+    [],
+  );
+
+  return {
+    showForUnlock,
+    isUnlockReady: status === 'ready',
+    /** True while a tap is queued behind an in-flight load — drive a spinner off this. */
+    isUnlockWaiting: waiting || isRewardedPending(),
+    prepareRewarded,
+  };
 }
