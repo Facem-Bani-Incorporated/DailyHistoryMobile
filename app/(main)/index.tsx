@@ -6,6 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 import { CalendarClock, Trophy, Users } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   Animated,
   Dimensions,
   Easing,
@@ -19,7 +20,7 @@ import {
   View,
   ViewToken,
 } from 'react-native';
-import { BannerAd, BannerAdSize } from 'react-native-google-mobile-ads';
+import mobileAds, { BannerAd, BannerAdSize } from 'react-native-google-mobile-ads';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 import api from '../../api';
@@ -51,14 +52,14 @@ import MonthlyRecapModal from '../../components/MonthlyRecapModal';
 import WeeklyRecapModal from '../../components/WeeklyRecapModal';
 import { AD_UNIT_IDS, ADS_CONFIG } from '../../config/ads';
 import { ENDPOINTS } from '../../config/api';
-import { COIN_COST_DAY, COIN_COST_EVENT, COIN_GOLD, COIN_GOLD_DEEP } from '../../config/coins';
+import { COIN_COST_DAY, COIN_COST_EVENT, COIN_GOLD, COIN_GOLD_DEEP, PRO_UNLOCKS_PER_DAY } from '../../config/coins';
 import { AllEventsProvider } from '../../context/AllEventsContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useRevenueCat } from '../../context/RevenueCatContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useCoinPopupStore } from '../../store/useCoinPopupStore';
-import { useCoins, useCoinStore, useIsEventUnlocked } from '../../store/useCoinStore';
+import { useCoins, useCoinStore, useIsEventUnlocked, useProUnlocksLeft } from '../../store/useCoinStore';
 import { useUnlockStore } from '../../store/useUnlockStore';
 import { useUiStore } from '../../store/useUiStore';
 import { getLevelForXP, getXPProgress, useGamificationStore } from '../../store/useGamificationStore';
@@ -81,17 +82,36 @@ const MAX_FWD = 2;
 const PAST_DAYS = 200;
 const TODAY_INDEX = PAST_DAYS;
 const AD_FREQUENCY = ADS_CONFIG.AD_CARD_DAY_FREQUENCY; // 7 days between AdCard slots
+// How many pages ahead of the user an AdCard is allowed to request its banner.
+// 0 would mean requesting only once the slot is on screen — too late, since the
+// measured banner latency (1.5–12.6s) dwarfs a swipe. Every page of slack also
+// costs requests for slots the user may turn back from, so keep this small.
+const AD_CARD_PRELOAD_PAGES = 2;
 
 // Show banner only on these tabs
 const SHOW_BANNER_TABS: Tab[] = ['today', 'discover', 'timeline', 'saved'];
 
 // ── Helpers ──
+const LOCALES: Record<string, string> = { ro: 'ro-RO', en: 'en-US', fr: 'fr-FR', de: 'de-DE', es: 'es-ES' };
 const offDate = (n: number) => { const d = new Date(); d.setDate(d.getDate() + n); return d; };
 const toISO = (d: Date) => d.toISOString().split('T')[0];
 const isoFor = (n: number) => toISO(offDate(n));
 const todayISO = () => new Date().toISOString().split('T')[0];
+// "9 August 2026" for an ISO day string, in the user's language.
+const fmtDay = (iso: string, lang: string) => {
+  const d = new Date(`${String(iso).slice(0, 10)}T00:00:00`);
+  if (isNaN(d.getTime())) return String(iso ?? '');
+  return d.toLocaleDateString(LOCALES[lang] ?? 'en-US', { day: 'numeric', month: 'long', year: 'numeric' });
+};
+// FNV-1a — turns today's date into a stable seed so the fallback story is the
+// same all day instead of reshuffling on every render.
+const hashSeed = (s: string) => {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+};
 const labelFor = (off: number, lang: string) => {
-  const loc = ({ ro: 'ro-RO', en: 'en-US', fr: 'fr-FR', de: 'de-DE', es: 'es-ES' } as Record<string, string>)[lang] || 'en-US';
+  const loc = LOCALES[lang] || 'en-US';
   const d = offDate(off);
   return {
     day: d.getDate().toString().padStart(2, '0'),
@@ -144,6 +164,45 @@ const ey = StyleSheet.create({
   i: { fontSize: 24, fontWeight: '300' },
   t: { fontSize: 18, fontWeight: '700', letterSpacing: 0.2 },
   d: { fontSize: 13, textAlign: 'center', lineHeight: 20, opacity: 0.7 },
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// PIPELINE DOWN — today's content never landed.
+// Instead of a dead end, borrow a story from a day that does have content and
+// say so plainly: the pipeline is down, a new story arrives tomorrow, and what
+// you're reading right now belongs to <date>.
+// ═════════════════════════════════════════════════════════════════════════════
+const PipelineDownCard = ({ event, allEvents, theme, gold, t, language }: {
+  event: any; allEvents: any[]; theme: any; gold: string;
+  t: (k: string) => string; language: string;
+}) => {
+  const sourceDay = event?.__day ?? event?.eventDate ?? event?.event_date ?? '';
+  return (
+    <View style={{ flex: 1 }}>
+      <View style={[pdn.notice, { borderColor: gold + '38', backgroundColor: gold + '12' }]}>
+        <View style={pdn.head}>
+          <Ionicons name="construct-outline" size={13} color={gold} />
+          <Text style={[pdn.title, { color: gold }]} numberOfLines={1}>
+            {t('pipeline_down_title')}
+          </Text>
+        </View>
+        <Text style={[pdn.body, { color: theme.subtext }]}>{t('pipeline_down_body')}</Text>
+        <Text style={[pdn.from, { color: theme.text }]}>
+          {t('pipeline_down_story_from').replace('{date}', fmtDay(sourceDay, language))}
+        </Text>
+      </View>
+      <View style={{ flex: 1 }}>
+        <HistoryCard event={event} allEvents={allEvents} />
+      </View>
+    </View>
+  );
+};
+const pdn = StyleSheet.create({
+  notice: { borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 11, marginBottom: 10, gap: 4 },
+  head: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  title: { fontSize: 10, fontWeight: '900', letterSpacing: 1.6, textTransform: 'uppercase', flexShrink: 1 },
+  body: { fontSize: 12, lineHeight: 17 },
+  from: { fontSize: 12, lineHeight: 17, fontWeight: '700' },
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -292,12 +351,40 @@ const _peek = StyleSheet.create({
 const PRO_CARD_H = Math.max(280, H * 0.5);
 const SERIF_FONT = Platform.OS === 'ios' ? 'Georgia' : 'serif';
 
-const PRO_COIN_T: Record<string, { unlock: string; goPro: string; hint: string }> = {
-  en: { unlock: 'Unlock', goPro: 'Get PRO — unlimited', hint: 'Spend a coin to unlock, or go PRO' },
-  ro: { unlock: 'Deblochează', goPro: 'Ia PRO — nelimitat', hint: 'Folosește o monedă sau ia PRO' },
-  fr: { unlock: 'Débloquer', goPro: 'Passer PRO — illimité', hint: 'Dépense une pièce ou passe PRO' },
-  de: { unlock: 'Freischalten', goPro: 'PRO holen — unbegrenzt', hint: 'Mit einer Münze freischalten oder PRO' },
-  es: { unlock: 'Desbloquear', goPro: 'Obtener PRO — ilimitado', hint: 'Usa una moneda u obtén PRO' },
+const PRO_COIN_T: Record<string, {
+  unlock: string; goPro: string; hint: string;
+  left: string; capped: string; cappedCta: string;
+}> = {
+  en: {
+    unlock: 'Unlock', goPro: 'Get PRO — unlimited', hint: 'Spend a coin to unlock, or go PRO',
+    left: '{n} of {cap} PRO stories left today',
+    capped: "That's all {cap} PRO stories for today. New ones tomorrow — or go PRO to read them all now.",
+    cappedCta: 'Get PRO',
+  },
+  ro: {
+    unlock: 'Deblochează', goPro: 'Ia PRO — nelimitat', hint: 'Folosește o monedă sau ia PRO',
+    left: 'Îți mai rămân {n} din {cap} povești PRO azi',
+    capped: 'Ai citit toate cele {cap} povești PRO de azi. Mâine apar altele — sau ia PRO și le citești pe toate acum.',
+    cappedCta: 'Ia PRO',
+  },
+  fr: {
+    unlock: 'Débloquer', goPro: 'Passer PRO — illimité', hint: 'Dépense une pièce ou passe PRO',
+    left: 'Il vous reste {n} histoires PRO sur {cap} aujourd’hui',
+    capped: 'Vous avez lu les {cap} histoires PRO du jour. D’autres demain — ou passez PRO pour tout lire maintenant.',
+    cappedCta: 'Passer PRO',
+  },
+  de: {
+    unlock: 'Freischalten', goPro: 'PRO holen — unbegrenzt', hint: 'Mit einer Münze freischalten oder PRO',
+    left: 'Noch {n} von {cap} PRO-Geschichten heute',
+    capped: 'Das waren alle {cap} PRO-Geschichten für heute. Morgen gibt es neue — oder hol dir PRO und lies sofort alle.',
+    cappedCta: 'PRO holen',
+  },
+  es: {
+    unlock: 'Desbloquear', goPro: 'Obtener PRO — ilimitado', hint: 'Usa una moneda u obtén PRO',
+    left: 'Te quedan {n} de {cap} historias PRO hoy',
+    capped: 'Esas son las {cap} historias PRO de hoy. Mañana hay nuevas — u obtén PRO para leerlas todas ahora.',
+    cappedCta: 'Obtener PRO',
+  },
 };
 
 const ProCardSection = ({ event, allEvents, gold, isPro, onPaywall, t, language }: {
@@ -331,11 +418,18 @@ const ProCardSection = ({ event, allEvents, gold, isPro, onPaywall, t, language 
   const eventId = String(event?.id ?? '');
   const coinUnlocked = useIsEventUnlocked(eventId);
   const coins = useCoins();
+  const unlocksLeft = useProUnlocksLeft();
   const unlocked = isPro || coinUnlocked;
+  const quotaSpent = unlocksLeft <= 0 && !coinUnlocked;
 
   const handleUnlockAttempt = () => {
     if (unlocked) return;
     haptic('medium');
+    // Out of daily unlocks → coins can't help today; PRO is the only way past it.
+    if (quotaSpent) {
+      onPaywall();
+      return;
+    }
     if (useCoinStore.getState().spendCoins(COIN_COST_EVENT, 'pro_story')) {
       useCoinStore.getState().unlockEvent(eventId);
       haptic('success');
@@ -345,6 +439,7 @@ const ProCardSection = ({ event, allEvents, gold, isPro, onPaywall, t, language 
     }
   };
 
+  const copy = PRO_COIN_T[language] ?? PRO_COIN_T.en;
   const title =
     event?.titleTranslations?.[language] ??
     event?.titleTranslations?.en ??
@@ -400,27 +495,51 @@ const ProCardSection = ({ event, allEvents, gold, isPro, onPaywall, t, language 
             <Text style={_proSec.peekCategory}>{category}{year ? `  ·  ${year}` : ''}</Text>
             <Text style={_proSec.peekTitle} numberOfLines={2}>{title}</Text>
 
-            {/* Lock hint */}
+            {/* Lock hint — swaps to the "come back tomorrow" line once the
+                daily coin quota is spent, so the ceiling is never a silent
+                dead tap. */}
             <Text style={_proSec.lockHint}>
-              {(PRO_COIN_T[language] ?? PRO_COIN_T.en).hint}
+              {quotaSpent
+                ? copy.capped.replace('{cap}', String(PRO_UNLOCKS_PER_DAY))
+                : copy.hint}
             </Text>
 
-            {/* Primary CTA — unlock with a coin (tapping the card does the same) */}
+            {/* Primary CTA — unlock with a coin (tapping the card does the same),
+                or straight to PRO once today's allowance is gone. */}
             <Animated.View style={{ transform: [{ scale: ctaScale }] }}>
               <View style={[_proSec.ctaBtn, { backgroundColor: gold }]}>
-                <Ionicons name="lock-open-outline" size={15} color="#0A0815" />
-                <Text style={_proSec.ctaBtnText}>
-                  {(PRO_COIN_T[language] ?? PRO_COIN_T.en).unlock} · {COIN_COST_EVENT}
-                </Text>
-                <CoinIcon size={13} style={{ marginLeft: -4 }} />
-                <Text style={[_proSec.ctaBtnText, { opacity: 0.7 }]}>({coins})</Text>
+                {quotaSpent ? (
+                  <>
+                    <Ionicons name="star" size={15} color="#0A0815" />
+                    <Text style={_proSec.ctaBtnText}>{copy.cappedCta}</Text>
+                  </>
+                ) : (
+                  <>
+                    <Ionicons name="lock-open-outline" size={15} color="#0A0815" />
+                    <Text style={_proSec.ctaBtnText}>
+                      {copy.unlock} · {COIN_COST_EVENT}
+                    </Text>
+                    <CoinIcon size={13} style={{ marginLeft: -4 }} />
+                    <Text style={[_proSec.ctaBtnText, { opacity: 0.7 }]}>({coins})</Text>
+                  </>
+                )}
               </View>
             </Animated.View>
+
+            {/* Allowance counter — makes the daily budget legible, and the
+                scarcity is the whole point of the mechanic. */}
+            {!quotaSpent && (
+              <Text style={_proSec.quotaLine}>
+                {copy.left
+                  .replace('{n}', String(unlocksLeft))
+                  .replace('{cap}', String(PRO_UNLOCKS_PER_DAY))}
+              </Text>
+            )}
 
             {/* Secondary — go PRO for unlimited (stops the coin-spend tap) */}
             <TouchableOpacity onPress={(e) => { e.stopPropagation?.(); onPaywall(); }} activeOpacity={0.7} style={_proSec.goProLink}>
               <Ionicons name="star" size={11} color={gold} />
-              <Text style={[_proSec.goProText, { color: gold }]}>{(PRO_COIN_T[language] ?? PRO_COIN_T.en).goPro}</Text>
+              <Text style={[_proSec.goProText, { color: gold }]}>{copy.goPro}</Text>
             </TouchableOpacity>
 
             {/* Glow behind CTA */}
@@ -538,6 +657,13 @@ const _proSec = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0.2,
+  },
+  quotaLine: {
+    color: 'rgba(245,236,215,0.42)',
+    fontSize: 10.5,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+    marginTop: 2,
   },
   ctaGlow: {
     position: 'absolute',
@@ -992,7 +1118,10 @@ export default function HomeScreen() {
     }
     try {
       const r = await api.get(ENDPOINTS.DAILY_CONTENT, { params: { date: iso, _t: Date.now() } });
-      const allData: any[] = r.data?.events ?? [];
+      // Tag every event with the day it was published for, so a story borrowed
+      // by the pipeline-down card can name the day it belongs to.
+      const day = r.data?.dateProcessed ?? iso;
+      const allData: any[] = (r.data?.events ?? []).map((e: any) => ({ ...e, __day: day }));
       const freeData = allData.filter((e: any) => !e.isPro);
       const proData  = allData.filter((e: any) => !!e.isPro);
       const freePg: PD = { data: freeData, empty: freeData.length === 0 };
@@ -1010,8 +1139,14 @@ export default function HomeScreen() {
         mem.current[key] = { data: stale.data, empty: stale.empty };
         return mem.current[key];
       }
-      // No network and nothing cached → remember so the UI can offer a retry.
-      netErrRef.current = true;
+      // A day the pipeline never wrote answers 404, and the PRO endpoint answers
+      // 403 for free users — the server is reachable, that day is simply empty.
+      // Only a missing response (or a 5xx) means we are actually offline.
+      // Treating a 404 as offline is what used to swap the whole pager for the
+      // retry screen on a day with no content, making past days unreachable.
+      const status = e?.response?.status;
+      const serverAnswered = typeof status === 'number' && status < 500;
+      if (!serverAnswered) netErrRef.current = true;
       return EMPTY;
     }
   }, []);
@@ -1019,8 +1154,10 @@ export default function HomeScreen() {
   const fetchAll = useCallback(async () => {
     const ps = Array.from({ length: 60 }, (_, i) => {
       const d = new Date(); d.setDate(d.getDate() - i);
-      return api.get(ENDPOINTS.DAILY_CONTENT, { params: { date: d.toISOString().split('T')[0] } })
-        .then(r => r.data?.events ?? []).catch(() => []);
+      const iso = d.toISOString().split('T')[0];
+      return api.get(ENDPOINTS.DAILY_CONTENT, { params: { date: iso } })
+        .then(r => (r.data?.events ?? []).map((e: any) => ({ ...e, __day: r.data?.dateProcessed ?? iso })))
+        .catch(() => []);
     });
     const all = (await Promise.all(ps)).flat();
     const seen = new Set<string>();
@@ -1043,7 +1180,9 @@ export default function HomeScreen() {
         setOffline(!gotData && netErrRef.current);
         setLoading(false);
         setTick(t => t + 1);
-        if (gotData) fetchAll();
+        // Always refill the archive: an empty today still needs a pool of past
+        // stories for the pipeline-down card to borrow from.
+        if (!netErrRef.current) fetchAll();
       });
   }, [fetchOne, fetchAll]);
 
@@ -1155,6 +1294,16 @@ export default function HomeScreen() {
     return (b?.impactScore ?? 0) - (a?.impactScore ?? 0);
   }, [interestSet]);
 
+  // Stand-in story for a day the pipeline never filled. Picked from the archive
+  // with a seed derived from today's date, so everyone keeps the same story for
+  // the whole day instead of it changing on every re-render.
+  const fallbackEvent = useMemo(() => {
+    const iso = todayISO();
+    const pool = allEvents.filter((e: any) => e && !e.isPro && e.__day !== iso);
+    if (!pool.length) return null;
+    return pool[hashSeed(iso) % pool.length];
+  }, [allEvents]);
+
   const renderItem = useCallback(({ item: dayOff }: { item: number }) => {
     let content: React.ReactNode = null;
 
@@ -1179,7 +1328,7 @@ export default function HomeScreen() {
     }
 
     if (!content && !isPro && dayOff < 0 && Math.abs(dayOff) % AD_FREQUENCY === 0 && tab === 'today') {
-      content = <AdCard />;
+      content = <AdCard active={Math.abs(dayOff - off) <= AD_CARD_PRELOAD_PAGES} />;
     }
 
     if (!content) {
@@ -1191,10 +1340,14 @@ export default function HomeScreen() {
       const freeMain = freeSorted[0] ?? null;
       const proMain = proSorted[0] ?? null;
       const pi = labelFor(dayOff, language);
+      // Today with nothing published → borrow a story rather than dead-end.
+      const pipelineDown = pi.isToday && freePg.empty && !!fallbackEvent;
 
       if (tab === 'today') {
         if (freePg.empty || !freeMain) {
-          content = <EmptyDay isToday={pi.isToday} theme={theme} t={t} />;
+          content = pipelineDown
+            ? <PipelineDownCard event={fallbackEvent} allEvents={allEvents} theme={theme} gold={goldColor} t={t} language={language} />
+            : <EmptyDay isToday={pi.isToday} theme={theme} t={t} />;
         } else if (proMain) {
           // ── Symmetric layout: Free card + animated arrow between + PRO card ──
           content = (
@@ -1246,7 +1399,9 @@ export default function HomeScreen() {
           ...freeSorted.slice(1), // FREE stories fill the rest of the top grid
           ...restPro,             // remaining PRO at the bottom of "More Stories"
         ].filter(Boolean);
-        content = (
+        content = pipelineDown ? (
+          <PipelineDownCard event={fallbackEvent} allEvents={allEvents} theme={theme} gold={goldColor} t={t} language={language} />
+        ) : (
           <DiscoverSection
             events={combinedSorted}
             theme={theme}
@@ -1275,7 +1430,8 @@ export default function HomeScreen() {
     day2MainUnlocked, day2DiscoverUnlocked, coins,
     handleUnlockMain, handleUnlockDiscover,
     handleUnlockDay2Main, handleUnlockDay2Discover,
-    scrollX, presentPaywall, floatingBarPad, sortByInterest,
+    scrollX, presentPaywall, floatingBarPad, sortByInterest, fallbackEvent,
+    off, // drives the AdCard preload window
   ]);
 
   const getItemLayout = useCallback((_: any, index: number) => ({
@@ -1401,6 +1557,23 @@ export default function HomeScreen() {
                         setTimeout(() => { if (getUnseenMonthlyRecap()) setRecapVis(true); }, 300);
                       }, 100);
                     }}
+                    // Long-press → Google's Ad Inspector overlay: every request,
+                    // its fill result, failure reason and latency, live on device.
+                    // Requires this device to be registered as a test device in
+                    // AdMob, otherwise the SDK refuses to open it.
+                    onLongPress={() => {
+                      haptic('medium');
+                      mobileAds().openAdInspector()
+                        .then(() => console.log('[Ads][Inspector] closed'))
+                        .catch((err: any) => {
+                          console.warn('[Ads][Inspector] failed', err);
+                          Alert.alert(
+                            'Ad Inspector',
+                            `Nu s-a putut deschide.\n\ncode: ${err?.code ?? '(none)'}\nmessage: ${err?.message ?? '(none)'}\n\nDacă scrie că device-ul nu e test device, adaugă-l în AdMob → Settings → Test devices.`,
+                          );
+                        });
+                    }}
+                    delayLongPress={600}
                     style={[ms.iconBtn, { backgroundColor: '#FF375F20', borderWidth: 1, borderColor: '#FF375F50' }]}
                   >
                     <Text style={{ fontSize: 10, fontWeight: '900', color: '#FF375F' }}>DEV</Text>
@@ -1497,7 +1670,11 @@ export default function HomeScreen() {
                 snapToAlignment="start"
                 disableIntervalMomentum
                 maxToRenderPerBatch={3}
-                windowSize={3}
+                // 5 = two pages mounted either side of the visible one. An AdCard
+                // cannot request its banner before it is mounted, so this has to
+                // be at least 2 * AD_CARD_PRELOAD_PAGES + 1 or the preload window
+                // below never opens and the ad only starts loading on arrival.
+                windowSize={2 * AD_CARD_PRELOAD_PAGES + 1}
                 removeClippedSubviews={false}
                 extraData={tick}
                 bounces={false}

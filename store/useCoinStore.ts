@@ -17,6 +17,7 @@ import {
   COIN_POPUP_COOLDOWN_MS,
   COINS_WEEKLY_RECAP,
   EVENTS_OPEN_TRIGGER,
+  PRO_UNLOCKS_PER_DAY,
   REFERRAL_PASS_MS,
   REWARDED_DAILY_CAP,
   STREAK_MILESTONES,
@@ -47,6 +48,8 @@ export interface CoinData {
   claimedRecapWeeks: string[];       // weekKeys whose recap bonus was paid
   rewardedDate: string | null;       // day the rewarded counter belongs to (local)
   rewardedCount: number;             // rewarded clips watched today (local)
+  proUnlockDate: string | null;      // day the PRO-unlock quota belongs to (local)
+  proUnlockCount: number;            // PRO stories opened with coins today (local)
 }
 
 export const EMPTY_COINS: CoinData = {
@@ -66,6 +69,8 @@ export const EMPTY_COINS: CoinData = {
   claimedRecapWeeks: [],
   rewardedDate: null,
   rewardedCount: 0,
+  proUnlockDate: null,
+  proUnlockCount: 0,
 };
 
 // Only these fields cross-device-sync via the gamification blob. Device-local
@@ -112,6 +117,9 @@ interface CoinState {
   // unlocks
   unlockEvent: (id: string) => void;
   isEventUnlocked: (id: string) => boolean;
+  // PRO-story daily quota (coins buy a taste of PRO, not the whole catalogue)
+  proUnlocksLeftToday: () => number;
+  canUnlockProToday: (id?: string) => boolean;
   unlockMapLayer: (key: string) => void;
   isMapLayerUnlocked: (key: string) => boolean;
   unlockDay: (key: string) => void;
@@ -223,9 +231,40 @@ export const useCoinStore = create<CoinState>()(
           return granted;
         },
 
+        // ── PRO-story daily quota ──────────────────────────────────────────
+        proUnlocksLeftToday: () => {
+          const d = read();
+          const used = d.proUnlockDate === todayISO() ? d.proUnlockCount : 0;
+          return Math.max(0, PRO_UNLOCKS_PER_DAY - used);
+        },
+
+        // Re-opening a story bought on an earlier day is always free — the quota
+        // only governs *new* unlocks, so pass the id when you have one.
+        canUnlockProToday: (id) => {
+          if (id != null && get().isEventUnlocked(String(id))) return true;
+          return get().proUnlocksLeftToday() > 0;
+        },
+
+        // The quota is charged here rather than at the call sites: coins, watched
+        // clips and any future unlock path all funnel through this one function,
+        // so there is a single place that can get it wrong.
         unlockEvent: (id) => {
           if (!id) return;
-          write({ unlockedEvents: uniq([...read().unlockedEvents, String(id)]) });
+          const d = read();
+          const key = String(id);
+          if (d.unlockedEvents.includes(key)) return; // already owned — free forever
+          const today = todayISO();
+          const used = d.proUnlockDate === today ? d.proUnlockCount : 0;
+          write({
+            unlockedEvents: uniq([...d.unlockedEvents, key]),
+            proUnlockDate: today,
+            proUnlockCount: used + 1,
+          });
+          analytics.capture('pro_story_unlocked', {
+            event_id: key,
+            used_today: used + 1,
+            cap: PRO_UNLOCKS_PER_DAY,
+          });
         },
         isEventUnlocked: (id) => read().unlockedEvents.includes(String(id)),
 
@@ -338,3 +377,10 @@ export const useIsEventUnlocked = (id?: string | number): boolean => {
 
 export const useIsMapLayerUnlocked = (key: string): boolean =>
   useCoinData().unlockedMapLayers.includes(key);
+
+/** PRO stories the user may still buy with coins today. */
+export const useProUnlocksLeft = (): number => {
+  const data = useCoinData();
+  const used = data.proUnlockDate === todayISO() ? data.proUnlockCount : 0;
+  return Math.max(0, PRO_UNLOCKS_PER_DAY - used);
+};

@@ -1,5 +1,5 @@
 // components/AdCard.tsx
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { BannerAd, BannerAdSize } from 'react-native-google-mobile-ads';
 import { AD_UNIT_IDS } from '../config/ads';
@@ -14,11 +14,20 @@ const T: Record<string, string> = {
   es: 'Patrocinado',
 };
 
-export default function AdCard() {
+// `active` gates the actual ad request. The card lives inside the horizontal day
+// pager, which renders neighbouring pages the user never necessarily reaches —
+// requesting an ad on mount meant paying a request for a slot that mostly never
+// hit the screen. The caller turns this on a couple of pages out, which is also
+// the preload window: measured banner latency runs 1.5–12.6s, far longer than a
+// swipe, so the request has to start before the user arrives.
+export default function AdCard({ active = true }: { active?: boolean }) {
   const { theme, isDark } = useTheme();
   const { language } = useLanguage();
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(false);
+
+  // Going inactive tears the BannerAd down; don't keep claiming we have an ad.
+  useEffect(() => { if (!active) setLoaded(false); }, [active]);
 
   if (error) return null;
 
@@ -34,7 +43,7 @@ export default function AdCard() {
 
         {/* Ad container — centered. We show a placeholder or hide if failed */}
         <View style={[styles.adWrap, !loaded && styles.adLoading]}>
-          <BannerAd
+          {active && <BannerAd
             unitId={AD_UNIT_IDS.BANNER}
             size={BannerAdSize.MEDIUM_RECTANGLE}
             onAdLoaded={() => {
@@ -53,7 +62,7 @@ export default function AdCard() {
             }}
             onAdOpened={() => console.log('[Ads][AdCard] OPENED')}
             onAdClosed={() => console.log('[Ads][AdCard] CLOSED')}
-          />
+          />}
         </View>
 
         {/* Bottom accent */}

@@ -94,6 +94,10 @@ const translations: Record<Language, Record<string, string>> = {
     story_locked: "This story is locked. Upgrade to PRO to read the full account.",
     unlock_pro_cta: "Unlock PRO",
     pro_early_access: "PRO EARLY ACCESS",
+    // PIPELINE DOWN — today's content never landed
+    pipeline_down_title: "Pipeline down today",
+    pipeline_down_body: "No new story made it in for today. Come back tomorrow for a fresh one.",
+    pipeline_down_story_from: "In the meantime, here is the story of {date}.",
   },
 
   ro: {
@@ -168,6 +172,10 @@ const translations: Record<Language, Record<string, string>> = {
     story_locked: "Această poveste este blocată. Fă upgrade la PRO pentru a citi.",
     unlock_pro_cta: "Deblochează PRO",
     pro_early_access: "ACCES TIMPURIU PRO",
+    // PIPELINE DOWN — today's content never landed
+    pipeline_down_title: "Pipeline picat azi",
+    pipeline_down_body: "Nu a intrat nicio poveste nouă pentru azi. Revino mâine pentru una proaspătă.",
+    pipeline_down_story_from: "Până atunci, iată povestea zilei de {date}.",
   },
 
   fr: {
@@ -242,6 +250,10 @@ const translations: Record<Language, Record<string, string>> = {
     story_locked: "Cette histoire est verrouillée. Passez à PRO pour tout lire.",
     unlock_pro_cta: "Débloquer PRO",
     pro_early_access: "ACCÈS ANTICIPÉ PRO",
+    // PIPELINE DOWN — today's content never landed
+    pipeline_down_title: "Pipeline en panne aujourd'hui",
+    pipeline_down_body: "Aucune nouvelle histoire n'est arrivée pour aujourd'hui. Revenez demain pour une nouvelle.",
+    pipeline_down_story_from: "En attendant, voici l'histoire du {date}.",
   },
 
   de: {
@@ -316,6 +328,10 @@ const translations: Record<Language, Record<string, string>> = {
     story_locked: "Diese Geschichte ist gesperrt. Upgrade auf PRO zum Lesen.",
     unlock_pro_cta: "PRO Freischalten",
     pro_early_access: "PRO FRÜHZUGANG",
+    // PIPELINE DOWN — today's content never landed
+    pipeline_down_title: "Pipeline heute ausgefallen",
+    pipeline_down_body: "Für heute ist keine neue Geschichte eingetroffen. Komm morgen für eine frische wieder.",
+    pipeline_down_story_from: "In der Zwischenzeit: die Geschichte vom {date}.",
   },
 
   es: {
@@ -390,6 +406,10 @@ const translations: Record<Language, Record<string, string>> = {
     story_locked: "Esta historia está bloqueada. Mejora a PRO para leerla.",
     unlock_pro_cta: "Desbloquear PRO",
     pro_early_access: "ACCESO ANTICIPADO PRO",
+    // PIPELINE DOWN — today's content never landed
+    pipeline_down_title: "Pipeline caído hoy",
+    pipeline_down_body: "Hoy no llegó ninguna historia nueva. Vuelve mañana para una fresca.",
+    pipeline_down_story_from: "Mientras tanto, aquí está la historia del {date}.",
   },
 };
 

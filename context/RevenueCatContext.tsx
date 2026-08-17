@@ -74,10 +74,19 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
   // RC entitlement is the live source of truth; backend is_pro is the durable
   // fallback — set by the RevenueCat webhook, survives app updates and reinstalls.
   // A referral pass also counts as PRO while it's active.
+  //
+  // Cancellation is immediate here, by product decision. RevenueCat keeps the
+  // entitlement in `active` until the paid period runs out and only stamps
+  // `unsubscribeDetectedAt` (auto-renew off) / `billingIssueDetectedAt`, so
+  // without this check a cancelled subscriber would keep PRO for days after the
+  // backend webhook already flipped is_pro to false. Reading either stamp drops
+  // PRO on the spot, matching the server's CANCELLATION / BILLING_ISSUES rules.
+  const proEntitlement = customerInfo?.entitlements.active[PRO_ENTITLEMENT];
+  const subscriptionRevoked =
+    !!proEntitlement?.unsubscribeDetectedAt || !!proEntitlement?.billingIssueDetectedAt;
   const isPro =
-    !!customerInfo?.entitlements.active[PRO_ENTITLEMENT] ||
-    user?.is_pro === true ||
-    referralActive;
+    referralActive ||
+    (!subscriptionRevoked && (!!proEntitlement || user?.is_pro === true));
 
   // ── Configure SDK once ──
   useEffect(() => {
@@ -219,6 +228,9 @@ export function RevenueCatProvider({ children }: { children: ReactNode }) {
       await RevenueCatUI.presentCustomerCenter();
       const info = await Purchases.getCustomerInfo();
       setCustomerInfo(info);
+      // Cancelling happens inside the customer center — pull the backend flag
+      // straight away so PRO drops without waiting for the next foreground.
+      if (useAuthStore.getState().user?.id) await refreshMe();
     } catch (e) {
       if (__DEV__) console.warn('[RC] presentCustomerCenter failed', e);
     }

@@ -32,6 +32,21 @@ export const COINS_WEEKLY_RECAP = 2;    // opening the Monday recap
 export const REWARDED_DAILY_CAP = 4;
 
 /**
+ * PRO stories a free user may open with coins in one day.
+ *
+ * Coins are meant to buy a taste of PRO, not a replacement for it: without a cap
+ * a user sitting on a pile of coins could read twenty stories in one sitting and
+ * the subscription would have nothing left to sell. Four costs 8 coins at
+ * COIN_COST_EVENT each — double what a full day of rewarded clips pays out
+ * (REWARDED_DAILY_CAP), so reaching the ceiling takes coins banked from XP,
+ * streaks or quizzes as well. It only binds the most engaged users, which is
+ * exactly who we want returning tomorrow rather than bingeing today.
+ *
+ * Already-unlocked stories stay readable forever and never count again.
+ */
+export const PRO_UNLOCKS_PER_DAY = 4;
+
+/**
  * Streak milestones and their coin bonus. Increasing rewards make the later
  * days of a streak worth protecting — which is the point of the streak.
  */

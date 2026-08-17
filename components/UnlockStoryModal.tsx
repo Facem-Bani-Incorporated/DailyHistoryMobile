@@ -26,13 +26,13 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { COIN_COST_EVENT, COIN_GOLD, COIN_GOLD_DEEP, COINS_PER_REWARDED_AD } from '../config/coins';
+import { COIN_COST_EVENT, COIN_GOLD, COIN_GOLD_DEEP, COINS_PER_REWARDED_AD, PRO_UNLOCKS_PER_DAY } from '../config/coins';
 import { useLanguage } from '../context/LanguageContext';
 import { useRevenueCat } from '../context/RevenueCatContext';
 import { useTheme } from '../context/ThemeContext';
 import CoinIcon from './CoinIcon';
 import { useRewardedUnlock } from '../hooks/useRewardedUnlock';
-import { useCoins, useCoinStore } from '../store/useCoinStore';
+import { useCoins, useCoinStore, useIsEventUnlocked, useProUnlocksLeft } from '../store/useCoinStore';
 import { getEventId } from '../store/useSavedStore';
 import { useUnlockStore } from '../store/useUnlockStore';
 import { haptic } from '../utils/haptics';
@@ -49,6 +49,8 @@ const L: Record<string, Record<string, string>> = {
     balance: 'Your coins', or: 'OR', goPro: 'Get PRO — unlimited access',
     freeHint: 'No coins? Watch one short clip and read it free.',
     haveHint: 'Spend a coin, or stock up by watching a clip.', read: 'Read the story',
+    cappedHint: 'You have opened all {cap} PRO stories for today. New ones unlock tomorrow.',
+    cappedCta: 'Get PRO — read it now', bankHint: 'You can still earn a coin for tomorrow.',
   },
   ro: {
     kicker: 'POVESTE PRO', unlockNow: 'Deblochează acum', watchUnlock: 'Vezi un clip & deblochează gratis',
@@ -56,6 +58,8 @@ const L: Record<string, Record<string, string>> = {
     balance: 'Monedele tale', or: 'SAU', goPro: 'Ia PRO — acces nelimitat',
     freeHint: 'Fără monede? Vezi un clip scurt și citește gratis.',
     haveHint: 'Folosește o monedă sau strânge mai multe văzând un clip.', read: 'Citește povestea',
+    cappedHint: 'Ai deschis toate cele {cap} povești PRO de azi. Mâine se deblochează altele.',
+    cappedCta: 'Ia PRO — citește-o acum', bankHint: 'Poți strânge o monedă pentru mâine.',
   },
   fr: {
     kicker: 'HISTOIRE PRO', unlockNow: 'Débloquer', watchUnlock: 'Regarder une pub & débloquer',
@@ -63,6 +67,8 @@ const L: Record<string, Record<string, string>> = {
     balance: 'Tes pièces', or: 'OU', goPro: 'Passer PRO — accès illimité',
     freeHint: 'Pas de pièces ? Regarde une courte pub et lis gratuitement.',
     haveHint: 'Dépense une pièce ou fais le plein en regardant une pub.', read: "Lire l'histoire",
+    cappedHint: 'Vous avez ouvert les {cap} histoires PRO du jour. De nouvelles demain.',
+    cappedCta: 'Passer PRO — lire maintenant', bankHint: 'Tu peux quand même gagner une pièce pour demain.',
   },
   de: {
     kicker: 'PRO-GESCHICHTE', unlockNow: 'Freischalten', watchUnlock: 'Clip ansehen & gratis freischalten',
@@ -70,6 +76,8 @@ const L: Record<string, Record<string, string>> = {
     balance: 'Deine Münzen', or: 'ODER', goPro: 'PRO holen — unbegrenzt',
     freeHint: 'Keine Münzen? Sieh einen kurzen Clip und lies gratis.',
     haveHint: 'Gib eine Münze aus oder sammle welche mit einem Clip.', read: 'Geschichte lesen',
+    cappedHint: 'Du hast alle {cap} PRO-Geschichten für heute geöffnet. Morgen gibt es neue.',
+    cappedCta: 'PRO holen — jetzt lesen', bankHint: 'Du kannst trotzdem eine Münze für morgen verdienen.',
   },
   es: {
     kicker: 'HISTORIA PRO', unlockNow: 'Desbloquear', watchUnlock: 'Ver un clip y desbloquear gratis',
@@ -77,6 +85,8 @@ const L: Record<string, Record<string, string>> = {
     balance: 'Tus monedas', or: 'O', goPro: 'Obtener PRO — acceso ilimitado',
     freeHint: '¿Sin monedas? Mira un clip corto y lee gratis.',
     haveHint: 'Gasta una moneda o consigue más viendo un clip.', read: 'Leer la historia',
+    cappedHint: 'Has abierto las {cap} historias PRO de hoy. Mañana se desbloquean nuevas.',
+    cappedCta: 'Obtener PRO — leer ahora', bankHint: 'Aún puedes ganar una moneda para mañana.',
   },
 };
 
@@ -121,6 +131,12 @@ export default function UnlockStoryModal() {
   const year = rawDate ? String(rawDate).slice(0, 4) : '';
 
   const hasCoins = coins >= COIN_COST_EVENT;
+  // Coins buy a few PRO stories a day, not the catalogue. Past the daily
+  // allowance only a subscription opens another one — but the clip stays on
+  // offer, because a coin banked tonight is a story opened tomorrow.
+  const unlocksLeft = useProUnlocksLeft();
+  const alreadyOwned = useIsEventUnlocked(eventId);
+  const capped = unlocksLeft <= 0 && !alreadyOwned;
 
   const doUnlock = () => {
     if (eventId) useCoinStore.getState().unlockEvent(eventId);
@@ -143,6 +159,10 @@ export default function UnlockStoryModal() {
     showForUnlock(() => {
       useCoinStore.getState().addCoins(COINS_PER_REWARDED_AD, 'rewarded_ad');
       useCoinStore.getState().registerRewardedWatch();
+      // Allowance spent → the coin is banked for tomorrow instead of opening
+      // this story now. Spending it here would hand over a story the cap says
+      // they can't have yet.
+      if (capped) { setPhase('offer'); return; }
       // The clip earned a coin — immediately spend it on this very story.
       useCoinStore.getState().spendCoins(COIN_COST_EVENT, 'pro_story');
       doUnlock();
@@ -204,7 +224,9 @@ export default function UnlockStoryModal() {
             <Text style={[s.title, { color: theme.text }]} numberOfLines={3}>{title}</Text>
 
             <Text style={[s.hint, { color: theme.subtext }]}>
-              {hasCoins ? tx('haveHint') : tx('freeHint')}
+              {capped
+                ? tx('cappedHint').replace('{cap}', String(PRO_UNLOCKS_PER_DAY))
+                : hasCoins ? tx('haveHint') : tx('freeHint')}
             </Text>
 
             {/* Balance chip */}
@@ -216,7 +238,36 @@ export default function UnlockStoryModal() {
             </View>
 
             {/* Primary CTA */}
-            {hasCoins ? (
+            {capped ? (
+              /* Daily allowance spent — PRO is the only way into this story
+                 today, but keep the clip on offer so the loop still pays. */
+              <>
+                <TouchableOpacity onPress={onGoPro} activeOpacity={0.9} style={[s.cta, { backgroundColor: GOLD }]}>
+                  <Ionicons name="star" size={17} color="#1a1208" />
+                  <Text style={s.ctaText}>{tx('cappedCta')}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity onPress={onWatch} disabled={watching} activeOpacity={0.85} style={[s.ctaGhost, { borderColor: goldText + '55' }]}>
+                  {watching ? (
+                    <>
+                      <ActivityIndicator size="small" color={goldText} />
+                      <Text style={[s.ctaGhostText, { color: goldText }]}>{tx('loading')}</Text>
+                    </>
+                  ) : (
+                    <>
+                      <Ionicons name="play-circle" size={16} color={goldText} />
+                      <Text style={[s.ctaGhostText, { color: goldText }]}>{tx('watchEarn')}</Text>
+                      <View style={[s.plusPill, { backgroundColor: goldText + '22' }]}>
+                        <Text style={[s.plusText, { color: goldText }]}>+1</Text>
+                        <CoinIcon size={11} />
+                      </View>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                <Text style={[s.hint, { color: theme.subtext, marginTop: 8 }]}>{tx('bankHint')}</Text>
+              </>
+            ) : hasCoins ? (
               <>
                 {/* Spend a coin → unlock */}
                 <TouchableOpacity onPress={onSpend} disabled={watching} activeOpacity={0.9} style={[s.cta, { backgroundColor: GOLD, opacity: watching ? 0.6 : 1 }]}>
