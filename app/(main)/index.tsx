@@ -1093,7 +1093,13 @@ export default function HomeScreen() {
           { params: { date: iso, _t: Date.now() } },
         );
       } catch (err: any) {
-        if (full && err?.response?.status === 403) {
+        // Fall back on ANY client error, not just 403. A 404 means this build is
+        // talking to a backend that predates the endpoint — which is exactly what
+        // happens during an OTA rollout, when the JS ships before the server does.
+        // Narrowing this to 403 would show every subscriber an empty app until the
+        // backend caught up.
+        const status = err?.response?.status;
+        if (full && typeof status === 'number' && status >= 400 && status < 500) {
           r = await api.get(ENDPOINTS.DAILY_CONTENT, { params: { date: iso, _t: Date.now() } });
         } else {
           throw err;
