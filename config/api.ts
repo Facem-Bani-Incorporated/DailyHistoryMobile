@@ -21,6 +21,9 @@ export const ENDPOINTS = {
 
   // Content
   DAILY_CONTENT: '/daily-content/by-date',
+  // Same day, with "The Long Read" filled in on every event. 403s for anyone the
+  // server does not see as PRO, so callers must fall back to DAILY_CONTENT.
+  FULL_DAILY_CONTENT: '/daily-content/full/by-date',
   GUEST_CONTENT: '/daily-content/guest',
 
   // Gamification

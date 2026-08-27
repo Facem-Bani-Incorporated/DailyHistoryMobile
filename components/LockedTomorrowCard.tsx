@@ -14,7 +14,6 @@ import {
 import { COIN_GOLD, COIN_GOLD_DEEP } from '../config/coins';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
-import CoinIcon from './CoinIcon';
 
 const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
 
@@ -126,9 +125,6 @@ interface LockedTomorrowCardProps {
   hintEvent?: any;
   bottomPad?: number;
   onPaywall?: () => void;
-  /** When set, the card unlocks by spending this many coins instead of a clip. */
-  coinCost?: number;
-  coins?: number;
 }
 
 export default function LockedTomorrowCard({
@@ -139,8 +135,6 @@ export default function LockedTomorrowCard({
   hintEvent,
   bottomPad = 0,
   onPaywall,
-  coinCost,
-  coins = 0,
 }: LockedTomorrowCardProps) {
   const { theme, isDark } = useTheme();
   const { language } = useLanguage();
@@ -169,14 +163,11 @@ export default function LockedTomorrowCard({
   const gold = isDark ? COIN_GOLD : COIN_GOLD_DEEP;
   const isMain = variant === 'main';
 
-  const coinMode = typeof coinCost === 'number';
+  // Back to clip-only. One clip opens both future days on both surfaces for 24h —
+  // the coin path went with the economy that made ads a substitute for the subscription.
   const dayLabel = dayOffset === 1 ? tx(language, 'tomorrow') : tx(language, 'inTwoDays');
-  const subtitle = coinMode
-    ? tx(language, 'coinSub')
-    : tx(language, isMain ? 'lockedSub' : 'discoverSub');
-  const ctaText = coinMode
-    ? `${tx(language, 'coinCta')} · ${coinCost}`
-    : (isReady ? tx(language, 'cta') : tx(language, 'ctaDisabled'));
+  const subtitle = tx(language, isMain ? 'lockedSub' : 'discoverSub');
+  const ctaText = isReady ? tx(language, 'cta') : tx(language, 'ctaDisabled');
 
   // Event teaser data
   const eventTitle: string =
@@ -290,24 +281,18 @@ export default function LockedTomorrowCard({
               },
             ]}>
               <Ionicons
-                name={coinMode ? 'lock-open' : (isReady ? 'play-circle' : 'hourglass-outline')}
+                name={isReady ? 'play-circle' : 'hourglass-outline'}
                 size={18}
                 color={isReady ? '#000' : theme.subtext}
               />
               <Text style={[styles.ctaText, { color: isReady ? '#000' : theme.subtext }]}>
                 {ctaText}
               </Text>
-              {coinMode && <CoinIcon size={13} style={{ marginLeft: -4 }} />}
-              {coinMode ? (
-                <View style={styles.durationBadge}>
-                  <Text style={styles.durationText}>{coins}</Text>
-                  <CoinIcon size={9} />
-                </View>
-              ) : isReady ? (
+              {isReady && (
                 <View style={styles.durationBadge}>
                   <Text style={styles.durationText}>{tx(language, 'duration')}</Text>
                 </View>
-              ) : null}
+              )}
             </Animated.View>
           </TouchableOpacity>
 

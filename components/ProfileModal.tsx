@@ -911,11 +911,17 @@ export default function ProfileModal({ visible, onClose }: Props) {
                   <Text style={{ color: theme.text, fontWeight: '800', fontSize: 12, marginBottom: 6 }}>Paywall policy</Text>
                   {(() => {
                     const p = usePaywallStore.getState();
+                    const fired = Object.entries(p.fireCounts)
+                      .map(([k, n]) => `${k}×${n}`)
+                      .join(', ');
                     return [
                       ['sessions', String(p.sessions)],
-                      ['failed unlocks', String(p.failedUnlocks)],
+                      ['deep dive gates', String(p.deepDiveGates)],
+                      ['pro story taps', String(p.proStoryTaps)],
+                      ['map layer taps', String(p.mapLayerTaps)],
                       ['rewarded watched', String(p.rewardedWatched)],
-                      ['already fired', p.firedTriggers.join(', ') || '—'],
+                      ['views this month', `${p.viewsThisMonth()}/5`],
+                      ['already fired', fired || '—'],
                     ].map(([k, v]) => (
                       <View key={k} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 2 }}>
                         <Text style={{ color: theme.subtext, fontSize: 11 }}>{k}</Text>

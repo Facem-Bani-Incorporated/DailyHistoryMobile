@@ -69,7 +69,7 @@ function AppContent() {
   const { isPro } = useRevenueCat();
   useEffect(() => { analytics.init(); }, []);
 
-  // ── Paywall policy: count the launch, then pitch PRO on the 2nd session ──
+  // ── Paywall policy: count the launch, then pitch PRO on the 3rd session ──
   // Deferred so the paywall never lands on top of onboarding or the first frame.
   const { maybeShow: maybePaywall, ready: rcReady } = usePaywallTrigger();
   useEffect(() => {
@@ -79,7 +79,7 @@ function AppContent() {
     // rcReady gates on RevenueCat having resolved entitlements — otherwise a
     // paying subscriber could be shown the paywall during the startup window.
     if (!isReady || !token || showOnboarding || !rcReady) return;
-    const id = setTimeout(() => { maybePaywall('second_session'); }, 2500);
+    const id = setTimeout(() => { maybePaywall('third_session'); }, 2500);
     return () => clearTimeout(id);
   }, [isReady, token, showOnboarding, rcReady, maybePaywall]);
   useEffect(() => { analytics.setSuperProps({ locale: language, is_pro: isPro }); }, [language, isPro]);

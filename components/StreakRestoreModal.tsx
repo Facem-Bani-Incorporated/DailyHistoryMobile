@@ -8,7 +8,7 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator, Modal, Platform, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
-import { COIN_COST_STREAK_RESTORE, COIN_GOLD, COIN_GOLD_DEEP } from '../config/coins';
+import { COINS_ENABLED, COIN_COST_STREAK_RESTORE, COIN_GOLD, COIN_GOLD_DEEP } from '../config/coins';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { useRewardedUnlock } from '../hooks/useRewardedUnlock';
@@ -112,28 +112,34 @@ export default function StreakRestoreModal() {
             {tx('sub').replace('{n}', String(lostStreak))}
           </Text>
 
-          <TouchableOpacity
-            onPress={onCoins}
-            disabled={!canAfford || watching}
-            activeOpacity={0.85}
-            style={[s.ctaWrap, { opacity: canAfford && !watching ? 1 : 0.45 }]}
-          >
-            <LinearGradient
-              colors={[COIN_GOLD, COIN_GOLD_DEEP]}
-              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-              style={s.cta}
-            >
-              <CoinIcon size={16} />
-              <Text style={s.ctaText}>
-                {tx('withCoins').replace('{c}', String(COIN_COST_STREAK_RESTORE))}
-              </Text>
-            </LinearGradient>
-          </TouchableOpacity>
+          {/* The coin path is gone — a clip is the only way back, which is also the
+              cleanest version of this offer: one button, no balance to check. */}
+          {COINS_ENABLED && (
+            <>
+              <TouchableOpacity
+                onPress={onCoins}
+                disabled={!canAfford || watching}
+                activeOpacity={0.85}
+                style={[s.ctaWrap, { opacity: canAfford && !watching ? 1 : 0.45 }]}
+              >
+                <LinearGradient
+                  colors={[COIN_GOLD, COIN_GOLD_DEEP]}
+                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                  style={s.cta}
+                >
+                  <CoinIcon size={16} />
+                  <Text style={s.ctaText}>
+                    {tx('withCoins').replace('{c}', String(COIN_COST_STREAK_RESTORE))}
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
 
-          {!canAfford && (
-            <Text style={[s.hint, { color: theme.subtext }]}>
-              {tx('notEnough')} · {coins}/{COIN_COST_STREAK_RESTORE}
-            </Text>
+              {!canAfford && (
+                <Text style={[s.hint, { color: theme.subtext }]}>
+                  {tx('notEnough')} · {coins}/{COIN_COST_STREAK_RESTORE}
+                </Text>
+              )}
+            </>
           )}
 
           <TouchableOpacity

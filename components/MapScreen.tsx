@@ -65,7 +65,26 @@ import { haptic } from '../utils/haptics';
 import { extractLocation } from '../utils/locationExtractor';
 import { GameIcon } from '../utils/GameIcon';
 import { StoryModal } from './StoryModal';
-import { COIN_COST_MAP_LAYER } from '../config/coins';
+// ── How the 14 map layers are tiered ─────────────────────────────────────────
+// The old `pro` / `video` badges split 6/3 but behaved identically — both were a
+// 1-coin permanent buy. The seam that matters is whether a layer TRANSFORMS the map
+// or just adds pins to it.
+//
+// PRO_LAYERS transform it: the time slider is a mode, empire borders redraw the whole
+// world, and dinosaurs and nuclear are the two highest-curiosity datasets we have —
+// the ones worth a subscription and the ones that sell a screenshot.
+// AD_LAYERS add pins: good enough to be worth thirty seconds of attention, not good
+// enough to be the reason someone pays every month.
+// Typed as string[] rather than MapLayer[]: MapLayer is declared inside the component
+// below, and these need to live at module scope.
+const FREE_LAYERS: string[] = ['heatmap', 'battles', 'ww1', 'ww2', 'religion'];
+const AD_LAYERS: string[] = ['routes', 'cities', 'trade', 'plagues', 'pirates'];
+const PRO_LAYERS: string[] = ['time', 'empires', 'dinosaurs', 'nuclear'];
+
+import * as analytics from '../src/analytics/posthog';
+import { useRewardedUnlock } from '../hooks/useRewardedUnlock';
+import { useMapLayerPasses, useMapLayerPassStore } from '../store/useMapLayerPassStore';
+import { usePaywallStore } from '../store/usePaywallStore';
 import { useCoinPopupStore } from '../store/useCoinPopupStore';
 import { useCoinData, useCoinStore } from '../store/useCoinStore';
 
@@ -1093,10 +1112,18 @@ export default function MapScreen() {
   const { language } = useLanguage();
   const tLang = language !== 'en' ? (language as 'ro' | 'fr' | 'de' | 'es') : undefined;
   const insets = useSafeAreaInsets();
-  const { isPro } = useRevenueCat();
+  const { isPro, presentPaywall } = useRevenueCat();
+  const { showForUnlock } = useRewardedUnlock();
+  const layerPasses = useMapLayerPasses();
   // Coin-based unlocks (persisted + synced). A PRO/video map layer costs a coin.
   const coinData = useCoinData();
-  const isLayerUnlocked = (l: string) => coinData.unlockedMapLayers.includes(l);
+  // A layer is open if it is free, if the user bought it with coins before the economy
+  // was retired (those stay theirs forever), or if a rewarded clip is still inside its
+  // 24h window.
+  const isLayerUnlocked = (l: string) =>
+    FREE_LAYERS.includes(l as MapLayer)
+    || coinData.unlockedMapLayers.includes(l)
+    || (layerPasses[l] ?? 0) > Date.now();
   const routesUnlocked = isLayerUnlocked('routes');
   const tradeUnlocked = isLayerUnlocked('trade');
   const citiesUnlocked = isLayerUnlocked('cities');
@@ -1414,29 +1441,39 @@ export default function MapScreen() {
   const toggleLayer = useCallback((layer: MapLayer) => {
     haptic('medium');
 
-    const freeLayers: MapLayer[] = ['heatmap', 'battles', 'ww1', 'ww2', 'religion'];
-    // Any PRO/video map layer is coin-gated: spend 1 coin to unlock it for good
-    // (isPro / referral pass already bypass this). No coins → offer the pop-up.
-    if (!isPro && !freeLayers.includes(layer) && !isLayerUnlocked(layer)) {
-      setLayersOpen(false);
-      const coin = useCoinStore.getState();
-      if (coin.spendCoins(COIN_COST_MAP_LAYER, 'map_layer')) {
-        coin.unlockMapLayer(layer);
-        haptic('success');
-        setMapLayer(layer);
-        setSelectedKeyStop(null);
-        setSelectedWarEvent(null);
-      } else {
-        useCoinPopupStore.getState().show('no_coins');
+    if (!isPro && !isLayerUnlocked(layer)) {
+      if (AD_LAYERS.includes(layer)) {
+        // Point-marker datasets: pleasant, but interchangeable. Worth a clip, not a
+        // subscription. Opens for 24h, then closes again — the recurring reason to
+        // come back to the map.
+        setLayersOpen(false);
+        showForUnlock(() => {
+          useMapLayerPassStore.getState().unlock(layer);
+          haptic('success');
+          setMapLayer(layer);
+          setSelectedKeyStop(null);
+          setSelectedWarEvent(null);
+          analytics.capture('map_layer_unlock_attempt', { layer, tier: 'ad' });
+        }, 'map_layer');
+        return;
       }
-      return;
+
+      if (PRO_LAYERS.includes(layer)) {
+        // The crown jewels. No ad path at all: these are the reason to subscribe, and
+        // an ad that opens them is an ad that argues against subscribing.
+        setLayersOpen(false);
+        analytics.capture('map_layer_unlock_attempt', { layer, tier: 'pro' });
+        usePaywallStore.getState().registerMapLayerTap();
+        presentPaywall('map_layer_pro');
+        return;
+      }
     }
 
     setMapLayer(prev => prev === layer ? 'off' : layer);
     setSelectedKeyStop(null);
     setSelectedWarEvent(null);
     setLayersOpen(false);
-  }, [isPro, coinData.unlockedMapLayers]);
+  }, [isPro, coinData.unlockedMapLayers, layerPasses, showForUnlock, presentPaywall]);
 
   const toggleEmpire = useCallback((id: string) => {
     haptic('selection');
@@ -2344,9 +2381,11 @@ export default function MapScreen() {
               { id: 'dinosaurs' as const, Icon: Globe2,      label: tm('layer_dinosaurs'), desc: `${DINOSAUR_SITES.length} ${tm('layer_dinosaurs_desc')}`,                                badge: 'pro'   as const },
             ]).map(({ id, Icon, label, desc, badge }) => {
               const active = mapLayer === id;
-              // PRO/video layers are coin-gated; once coin-unlocked they read as open.
-              const lockedPro = !isPro && badge === 'pro' && !isLayerUnlocked(id);
-              const lockedVideo = !isPro && badge === 'video' && !isLayerUnlocked(id);
+              // The `badge` field in the data above is now decorative — the real tier
+              // comes from AD_LAYERS / PRO_LAYERS, which is the split that has
+              // behaviour behind it.
+              const lockedAd = !isPro && AD_LAYERS.includes(id) && !isLayerUnlocked(id);
+              const lockedPro = !isPro && PRO_LAYERS.includes(id) && !isLayerUnlocked(id);
               return (
                 <TouchableOpacity key={id} onPress={() => toggleLayer(id)} activeOpacity={0.75}
                   style={[styles.layersPanelRow, active && { backgroundColor: accent + '12' }]}>
@@ -2363,10 +2402,13 @@ export default function MapScreen() {
                     <View style={[styles.layersPanelBadge, { backgroundColor: '#05966920' }]}>
                       <Text style={[styles.layersPanelBadgeText, { color: '#059669' }]}>FREE</Text>
                     </View>
-                  ) : (lockedVideo || lockedPro) ? (
+                  ) : lockedAd ? (
                     <View style={[styles.layersPanelBadge, { backgroundColor: '#D9770620' }]}>
-                      <CoinIcon size={9} />
-                      <Text style={[styles.layersPanelBadgeText, { color: '#D97706' }]}>{COIN_COST_MAP_LAYER}</Text>
+                      <Text style={[styles.layersPanelBadgeText, { color: '#D97706' }]}>▶ 24h</Text>
+                    </View>
+                  ) : lockedPro ? (
+                    <View style={[styles.layersPanelBadge, { backgroundColor: accent + '20' }]}>
+                      <Text style={[styles.layersPanelBadgeText, { color: accent }]}>PRO</Text>
                     </View>
                   ) : null}
                 </TouchableOpacity>

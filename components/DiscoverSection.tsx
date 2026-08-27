@@ -22,7 +22,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useCoinData, useCoinStore } from '../store/useCoinStore';
 import { useGamificationStore } from '../store/useGamificationStore';
 import { getEventId } from '../store/useSavedStore';
-import { useUnlockStore } from '../store/useUnlockStore';
+import { usePaywallStore } from '../store/usePaywallStore';
 import { haptic } from '../utils/haptics';
 import { StoryModal } from './StoryModal';
 
@@ -136,7 +136,7 @@ const ProPill = ({ compact }: { compact?: boolean }) => (
 const UnlockChip = ({ compact }: { compact?: boolean }) => (
   <View style={[st.unlockChip, compact && st.unlockChipCompact]}>
     <CoinIcon size={compact ? 9 : 10} />
-    <Text style={[st.unlockChipT, compact && st.unlockChipTCompact]}>UNLOCK</Text>
+    <Text style={[st.unlockChipT, compact && st.unlockChipTCompact]}>PRO</Text>
   </View>
 );
 
@@ -302,7 +302,7 @@ const HeroCard = ({
             <>
               <View style={[st.heroCtaLine, { backgroundColor: COIN_GOLD }]} />
               <Ionicons name="lock-open" size={11} color={COIN_GOLD} style={{ marginRight: 5 }} />
-              <Text style={[st.heroCtaTxt, { color: COIN_GOLD }]}>UNLOCK · 1</Text>
+              <Text style={[st.heroCtaTxt, { color: COIN_GOLD }]}>PRO</Text>
               <CoinIcon size={10} style={{ marginLeft: 3 }} />
             </>
           ) : (
@@ -378,7 +378,7 @@ const EditorialCard = ({
             <>
               <View style={[st.editCtaLine, { backgroundColor: COIN_GOLD }]} />
               <Ionicons name="lock-open" size={10} color={COIN_GOLD} style={{ marginRight: 4 }} />
-              <Text style={[st.editCtaTxt, { color: COIN_GOLD }]}>UNLOCK · 1</Text>
+              <Text style={[st.editCtaTxt, { color: COIN_GOLD }]}>PRO</Text>
               <CoinIcon size={9} style={{ marginLeft: 3 }} />
             </>
           ) : (
@@ -481,7 +481,7 @@ const ExtrasWideCard = ({
           locked ? (
             <View style={[ew.proTag, { gap: 3 }]}>
               <CoinIcon size={8} />
-              <Text style={ew.proTagT}>UNLOCK</Text>
+              <Text style={ew.proTagT}>PRO</Text>
             </View>
           ) : (
             <View style={ew.proTag}>
@@ -505,7 +505,7 @@ const ExtrasWideCard = ({
           {locked ? (
             <>
               <View style={[ew.ctaLine, { backgroundColor: COIN_GOLD }]} />
-              <Text style={[ew.ctaT, { color: COIN_GOLD }]}>UNLOCK · 1</Text>
+              <Text style={[ew.ctaT, { color: COIN_GOLD }]}>PRO</Text>
               <CoinIcon size={9} style={{ marginLeft: 3 }} />
             </>
           ) : (
@@ -585,7 +585,7 @@ const ExtrasTileCard = ({
           locked ? (
             <View style={[et.proTag, { gap: 2 }]}>
               <CoinIcon size={7.5} />
-              <Text style={et.proTagT}>UNLOCK</Text>
+              <Text style={et.proTagT}>PRO</Text>
             </View>
           ) : (
             <View style={et.proTag}>
@@ -603,7 +603,7 @@ const ExtrasTileCard = ({
           {locked ? (
             <>
               <View style={[et.ctaAccent, { backgroundColor: COIN_GOLD }]} />
-              <Text style={[et.ctaT, { color: COIN_GOLD }]}>UNLOCK · 1</Text>
+              <Text style={[et.ctaT, { color: COIN_GOLD }]}>PRO</Text>
               <CoinIcon size={8.5} style={{ marginLeft: 3 }} />
             </>
           ) : (
@@ -735,11 +735,13 @@ export const DiscoverSection = ({ events, theme, t, isPro = true, isDark = true,
   const issueNumber = new Date().getDate();
 
   const handleSelect = (event: any) => {
-    // Locked PRO story → open the per-event unlock sheet (coin / watch-a-clip),
-    // NOT the paywall. Already-unlocked (or subscribed) stories open the reader.
+    // Locked PRO story → the paywall. The per-event unlock sheet went with the coin
+    // economy; there is no longer a coin to spend or a clip that opens PRO content.
+    // Stories bought with coins before the change stay open forever.
     if (isProEvent(event) && !isPro && !useCoinStore.getState().isEventUnlocked(getEventId(event))) {
       haptic('medium');
-      useUnlockStore.getState().open(event);
+      usePaywallStore.getState().registerProStoryTap();
+      onPaywall?.();
       return;
     }
     haptic('light');

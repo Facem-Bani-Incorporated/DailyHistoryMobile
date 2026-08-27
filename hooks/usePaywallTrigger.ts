@@ -1,8 +1,9 @@
 // hooks/usePaywallTrigger.ts
 // Single entry point for "should we pitch PRO right now?". Call sites express
-// intent (a session started, an unlock failed) and this decides + presents.
+// intent (a session started, a pass is expiring) and this decides + presents.
 import { useCallback } from 'react';
 import { useRevenueCat } from '../context/RevenueCatContext';
+import * as analytics from '../src/analytics/posthog';
 import { usePaywallStore, type PaywallTrigger } from '../store/usePaywallStore';
 
 export function usePaywallTrigger() {
@@ -23,6 +24,13 @@ export function usePaywallTrigger() {
     // Mark before presenting: if the user kills the app mid-paywall we still
     // treat it as spent rather than showing it again on next launch.
     store.markShown(trigger);
+    // `view_index` is the whole point of the v2 policy — without it there is no way
+    // to check whether purchases really cluster on the third view, which is the
+    // assumption the shorter cooldown is built on.
+    analytics.capture('paywall_attempt', {
+      trigger,
+      view_index: usePaywallStore.getState().viewsThisMonth(),
+    });
     await presentPaywall(trigger);
     return true;
   }, [ready, isPro, presentPaywall]);

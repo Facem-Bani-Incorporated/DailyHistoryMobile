@@ -12,14 +12,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAllEvents } from '../context/AllEventsContext';
 import * as analytics from '../src/analytics/posthog';
 import { useLanguage } from '../context/LanguageContext';
+import { useRevenueCat } from '../context/RevenueCatContext';
 import { useTheme } from '../context/ThemeContext';
 import { useEventImages } from '../hooks/useEventImages';
 import { useTTS } from '../hooks/useTTS';
 import { useCoinPopupStore } from '../store/useCoinPopupStore';
 import { useCoinStore } from '../store/useCoinStore';
 import { useGamificationStore } from '../store/useGamificationStore';
+import { usePaywallStore } from '../store/usePaywallStore';
 import { getEventId, useSavedStore } from '../store/useSavedStore';
 import { noteStoryFinishedAndCheck } from '../utils/review';
+import { LongReadSection } from './LongReadSection';
 import { QuizSection } from './QuizSection';
 import RelatedEvents from './RelatedEvents';
 import ReviewPromptModal from './ReviewPromptModal';
@@ -302,6 +305,7 @@ const sy = StyleSheet.create({
 export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEventsProp, prevEvent, nextEvent, onNavigate }: StoryModalProps) => {
   const { language, t } = useLanguage();
   const { isDark } = useTheme();
+  const { isPro, presentPaywall } = useRevenueCat();
   const insets = useSafeAreaInsets();
   const contextEvents = useAllEvents();
   const allEvents = (allEventsProp && allEventsProp.length > 0) ? allEventsProp : contextEvents;
@@ -470,6 +474,22 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
 
   const handleTTS = () => speak(`${title}. ${narrative}`, language);
 
+  // Seeing the locked chapter list is the top of the conversion funnel; tapping it is
+  // the intent signal. They are tracked separately so the gap between them is visible.
+  const handleLongReadTeaserSeen = (wordCount: number) => {
+    analytics.capture('deep_dive_teaser_viewed', {
+      event_id: eventId,
+      word_count: wordCount,
+      is_pro: isPro,
+    });
+  };
+
+  const handleLongReadUnlock = () => {
+    analytics.capture('deep_dive_gate_hit', { event_id: eventId });
+    usePaywallStore.getState().registerDeepDiveGate();
+    presentPaywall('deep_dive_gate');
+  };
+
   return (
     <>
       <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={handleClose} statusBarTranslucent>
@@ -633,6 +653,17 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
 
               {/* Narrative text */}
               <Paragraphs text={narrative || t('no_story_available')} theme={theme} isDark={isDark} />
+
+              {/* The Long Read — full article for PRO, chapter list + CTA for everyone else */}
+              <LongReadSection
+                event={currentEvent}
+                language={language}
+                theme={theme}
+                isDark={isDark}
+                isPro={isPro}
+                onUnlock={handleLongReadUnlock}
+                onTeaserSeen={handleLongReadTeaserSeen}
+              />
 
               {/* Quiz */}
               <QuizSection eventId={eventId} language={language} theme={theme} isDark={isDark} />

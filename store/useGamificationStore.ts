@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import * as analytics from '../src/analytics/posthog';
-import { COIN_COST_STREAK_RESTORE } from '../config/coins';
+import { COINS_ENABLED, COIN_COST_STREAK_RESTORE } from '../config/coins';
 import { useCoinStore } from './useCoinStore';
 
 const todayISO = () => new Date().toISOString().split('T')[0];
@@ -416,11 +416,12 @@ export const useGamificationStore = create<GamificationState>()(
         setTimeout(() => { try { get().checkAchievements(); } catch {} }, 50);
       },
       /**
-       * Buy back the streak that broke. Offer is same-day only: restoring a
-       * streak from last week would make the counter meaningless.
-       * Returns false when there is nothing to restore or the coins are short.
+       * Retired with the coin economy — `restoreStreakFree` (a rewarded clip) is the
+       * only way back now. Kept as a hard `false` rather than deleted so any call site
+       * still wired to it degrades to "not available" instead of crashing.
        */
       restoreStreak: () => {
+        if (!COINS_ENABLED) return false;
         const { lostStreak, lostStreakDate } = get();
         if (!lostStreak || lostStreakDate !== todayISO()) return false;
         if (!useCoinStore.getState().spendCoins(COIN_COST_STREAK_RESTORE, 'streak_restore')) return false;
