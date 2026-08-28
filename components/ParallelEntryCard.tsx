@@ -10,7 +10,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { memo, useEffect, useMemo, useRef } from 'react';
 import { Animated, Easing, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { useParallelStore } from '../store/useParallelStore';
+import { useDiscovered } from '../store/useParallelStore';
 
 const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
 
@@ -85,7 +85,7 @@ function ParallelEntryCardInner({ event, language, theme, isDark, onOpen }: Prop
     }
   }, [event?.parallelUniverse, lang]);
 
-  const discovered = useParallelStore(s => (s.discovered[eventId] ?? []).length);
+  const discovered = useDiscovered(eventId).length;
 
   const drift = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -121,7 +121,7 @@ function ParallelEntryCardInner({ event, language, theme, isDark, onOpen }: Prop
         <Animated.View style={[s.branch, s.branch2, { backgroundColor: gold, opacity: fade, transform: [{ translateX: shiftB }, { rotate: '-24deg' }] }]} />
 
         <View style={s.headRow}>
-          <MaterialCommunityIcons name="source-branch" size={13} color={gold} />
+          <MaterialCommunityIcons name="directions-fork" size={14} color={gold} />
           <Text style={[s.kicker, { color: gold }]}>{t.kicker}</Text>
         </View>
 

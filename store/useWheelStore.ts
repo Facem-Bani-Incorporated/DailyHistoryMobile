@@ -1,15 +1,27 @@
 // store/useWheelStore.ts
 // Daily-wheel state: whether today's free spin is still available, whether the ad
-// bonus round has been used, and a short history of what was won.
+// bonus round has been used, and the unspent streak shields.
 //
-// Keyed on the local calendar date rather than a rolling 24h window. A wheel is a
-// habit anchor — "come back tomorrow" is a clearer promise than "come back in 24
-// hours", and it lines up with the streak, which already resets on calendar days.
+// Partitioned per user under `_perUser`, the same way useCoinStore and useSavedStore
+// are. Devices get shared — a spin on one account used to mark the wheel spent for
+// everyone else who logged in on that phone.
+//
+// Keyed on the local calendar date rather than a rolling 24h window. A wheel is a habit
+// anchor, and "come back tomorrow" is a clearer promise than "come back in 24 hours".
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
+import { useAuthStore } from './useAuthStore';
 
 const todayISO = () => new Date().toISOString().split('T')[0];
+
+const getUserId = (): string => {
+  try {
+    return useAuthStore.getState().user?.id ?? 'guest';
+  } catch {
+    return 'guest';
+  }
+};
 
 export interface WheelWin {
   prizeId: string;
@@ -18,15 +30,27 @@ export interface WheelWin {
   source: 'free' | 'ad';
 }
 
-interface WheelState {
-  /** Calendar date of the last free spin. */
+interface WheelData {
   lastSpinDate: string | null;
-  /** Calendar date the ad bonus round was last used. */
   lastAdSpinDate: string | null;
-  /** Most recent wins, newest first. Capped — this is a receipt, not an archive. */
   history: WheelWin[];
-  /** Unused streak shields. Consumed by the gamification store when a day is missed. */
   streakShields: number;
+}
+
+const EMPTY: WheelData = {
+  lastSpinDate: null,
+  lastAdSpinDate: null,
+  history: [],
+  streakShields: 0,
+};
+
+const MAX_HISTORY = 20;
+
+interface WheelState {
+  _perUser: Record<string, WheelData>;
+
+  /** This user's slice. Never returns undefined. */
+  getData: () => WheelData;
 
   canSpin: () => boolean;
   canSpinAd: () => boolean;
@@ -36,41 +60,72 @@ interface WheelState {
   reset: () => void;
 }
 
-const MAX_HISTORY = 20;
-
 export const useWheelStore = create<WheelState>()(
   persist(
-    (set, get) => ({
-      lastSpinDate: null,
-      lastAdSpinDate: null,
-      history: [],
-      streakShields: 0,
+    (set, get) => {
+      const read = (): WheelData => get()._perUser[getUserId()] ?? EMPTY;
+      const write = (patch: Partial<WheelData>) => {
+        const uid = getUserId();
+        set(s => ({
+          _perUser: { ...s._perUser, [uid]: { ...(s._perUser[uid] ?? EMPTY), ...patch } },
+        }));
+      };
 
-      canSpin: () => get().lastSpinDate !== todayISO(),
+      return {
+        _perUser: {},
 
-      // The bonus round is only offered once the free spin is spent, so it reads as a
-      // continuation of the moment rather than a competing offer.
-      canSpinAd: () => get().lastSpinDate === todayISO() && get().lastAdSpinDate !== todayISO(),
+        getData: read,
 
-      recordSpin: (prizeId, source) => set(s => ({
-        lastSpinDate: source === 'free' ? todayISO() : s.lastSpinDate,
-        lastAdSpinDate: source === 'ad' ? todayISO() : s.lastAdSpinDate,
-        history: [{ prizeId, date: todayISO(), source }, ...s.history].slice(0, MAX_HISTORY),
-      })),
+        canSpin: () => read().lastSpinDate !== todayISO(),
 
-      addShield: () => set(s => ({ streakShields: s.streakShields + 1 })),
+        // The bonus round is only offered once the free spin is spent, so it reads as a
+        // continuation of the moment rather than a competing offer.
+        canSpinAd: () => {
+          const d = read();
+          return d.lastSpinDate === todayISO() && d.lastAdSpinDate !== todayISO();
+        },
 
-      consumeShield: () => {
-        if (get().streakShields <= 0) return false;
-        set(s => ({ streakShields: s.streakShields - 1 }));
-        return true;
-      },
+        recordSpin: (prizeId, source) => {
+          const d = read();
+          write({
+            lastSpinDate: source === 'free' ? todayISO() : d.lastSpinDate,
+            lastAdSpinDate: source === 'ad' ? todayISO() : d.lastAdSpinDate,
+            history: [{ prizeId, date: todayISO(), source }, ...d.history].slice(0, MAX_HISTORY),
+          });
+        },
 
-      reset: () => set({ lastSpinDate: null, lastAdSpinDate: null, history: [], streakShields: 0 }),
-    }),
+        addShield: () => write({ streakShields: read().streakShields + 1 }),
+
+        consumeShield: () => {
+          const n = read().streakShields;
+          if (n <= 0) return false;
+          write({ streakShields: n - 1 });
+          return true;
+        },
+
+        reset: () => write({ ...EMPTY }),
+      };
+    },
     {
-      name: 'daily_wheel_v1',
+      // v2: state moved under `_perUser`. A new name rather than a migration — the only
+      // thing worth carrying was a day-scoped counter and a shield or two, and starting
+      // those fresh is harmless next to the risk of a bad migration on a live app.
+      name: 'daily_wheel_v2',
       storage: createJSONStorage(() => AsyncStorage),
+      partialize: (s) => ({ _perUser: s._perUser }),
     },
   ),
 );
+
+/** Reactive "is today's spin still available" for the current user. */
+export function useWheelReady(): boolean {
+  const perUser = useWheelStore(s => s._perUser);
+  return (perUser[getUserId()] ?? EMPTY).lastSpinDate !== todayISO();
+}
+
+/** Reactive "is the ad bonus round available" for the current user. */
+export function useWheelAdReady(): boolean {
+  const perUser = useWheelStore(s => s._perUser);
+  const d = perUser[getUserId()] ?? EMPTY;
+  return d.lastSpinDate === todayISO() && d.lastAdSpinDate !== todayISO();
+}

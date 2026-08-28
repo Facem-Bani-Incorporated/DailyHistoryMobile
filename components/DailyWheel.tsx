@@ -31,7 +31,7 @@ import { useCoinStore } from '../store/useCoinStore';
 import { useFutureDaysStore } from '../store/useFutureDaysStore';
 import { useGamificationStore } from '../store/useGamificationStore';
 import { useMapLayerPassStore } from '../store/useMapLayerPassStore';
-import { useWheelStore } from '../store/useWheelStore';
+import { useWheelAdReady, useWheelReady, useWheelStore } from '../store/useWheelStore';
 import { haptic } from '../utils/haptics';
 
 const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
@@ -188,8 +188,8 @@ export default function DailyWheel({ visible, onClose }: Props) {
   const lang = (['en', 'ro', 'fr', 'de', 'es'].includes(language) ? language : 'en') as Lang;
   const t = L[lang];
 
-  const canSpin = useWheelStore(s => s.lastSpinDate !== new Date().toISOString().split('T')[0]);
-  const canSpinAd = useWheelStore(s => s.canSpinAd());
+  const canSpin = useWheelReady();
+  const canSpinAd = useWheelAdReady();
 
   const [phase, setPhase] = useState<'idle' | 'spinning' | 'won'>('idle');
   const [prize, setPrize] = useState<WheelPrize | null>(null);

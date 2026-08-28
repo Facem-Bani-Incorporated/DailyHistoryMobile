@@ -28,7 +28,7 @@ import { useRevenueCat } from '../context/RevenueCatContext';
 import { useTheme } from '../context/ThemeContext';
 import * as analytics from '../src/analytics/posthog';
 import { usePaywallStore } from '../store/usePaywallStore';
-import { useParallelStore } from '../store/useParallelStore';
+import { useDiscovered, useParallelStore, useRunsLeft } from '../store/useParallelStore';
 import { haptic } from '../utils/haptics';
 
 const { width: W } = Dimensions.get('window');
@@ -147,14 +147,6 @@ function pickUniverse(raw: string | null | undefined, lang: string): Universe | 
 }
 
 const clamp = (n: number) => Math.max(0, Math.min(100, n));
-
-/** Shared empty array for the collection selector.
- *
- *  Zustand compares selector results with Object.is, so `s.discovered[id] ?? []` returns
- *  a brand-new array on every call for an event with no discoveries yet — a different
- *  reference each render, which re-renders forever. Selecting the raw value (stable:
- *  either undefined or the same array) and defaulting outside the selector is the fix. */
-const NO_ENDINGS: string[] = [];
 
 // ═════════════════════════════════════════════════════════════════════════════
 // WORLD METERS — four bars that trade against each other
@@ -485,8 +477,8 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
     [universe],
   );
 
-  const discovered = useParallelStore(s => s.discovered[eventId]) ?? NO_ENDINGS;
-  const runsLeft = useParallelStore(s => s.runsLeft(isPro));
+  const discovered = useDiscovered(eventId);
+  const runsLeft = useRunsLeft(isPro);
 
   const [phase, setPhase] = useState<'intro' | 'play' | 'end'>('intro');
   const [nodeId, setNodeId] = useState<string>('');
@@ -610,7 +602,7 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
                 <Pressable onPress={begin} accessibilityRole="button"
                   style={({ pressed }) => [g.cta, { opacity: pressed ? 0.86 : 1 }]}>
                   <LinearGradient colors={[gold, '#A9791F']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={g.ctaBg}>
-                    <MaterialCommunityIcons name="source-branch" size={18} color="#1A1408" />
+                    <MaterialCommunityIcons name="directions-fork" size={19} color="#1A1408" />
                     <Text style={g.ctaText}>{t.begin}</Text>
                   </LinearGradient>
                 </Pressable>

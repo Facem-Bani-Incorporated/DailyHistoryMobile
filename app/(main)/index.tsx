@@ -63,8 +63,9 @@ import { useAuthStore } from '../../store/useAuthStore';
 import { useCoinPopupStore } from '../../store/useCoinPopupStore';
 import { useCoins, useIsEventUnlocked } from '../../store/useCoinStore';
 import { useFutureDaysStore, useFutureDaysUnlocked } from '../../store/useFutureDaysStore';
-import { useWheelStore } from '../../store/useWheelStore';
+import { useWheelReady } from '../../store/useWheelStore';
 import DailyWheel from '../../components/DailyWheel';
+import ParallelPromoStrip from '../../components/ParallelPromoStrip';
 import { usePaywallStore } from '../../store/usePaywallStore';
 import { useRewardedUnlock } from '../../hooks/useRewardedUnlock';
 import * as analytics from '../../src/analytics/posthog';
@@ -959,7 +960,7 @@ export default function HomeScreen() {
   const [bannerError, setBannerError] = useState(false);
 
   const [wheelOpen, setWheelOpen] = useState(false);
-  const wheelReady = useWheelStore(s => s.lastSpinDate !== todayISO());
+  const wheelReady = useWheelReady();
 
 
   // One clip opens days +1 and +2 on both surfaces for 24h. Four separate flags for
@@ -1630,6 +1631,18 @@ export default function HomeScreen() {
 
             <View style={[ms.sep, { backgroundColor: isPremium ? '#D4A84315' : theme.border }]} />
           </View>
+        )}
+
+        {/* Parallel Universes — directly under the header, where the `today` banner used
+            to sit. The in-story card was below a 600-word narrative and a long read, so
+            almost nobody scrolled to it. Renders nothing on a day with no game. */}
+        {tab === 'today' && (
+          <ParallelPromoStrip
+            events={mem.current[mk('free', isoFor(off))]?.data ?? []}
+            language={language}
+            theme={theme}
+            isDark={isDark}
+          />
         )}
 
         {/* ═════════════════ TOP BANNER AD (between calendar header and today's event) ═════════════════ */}
