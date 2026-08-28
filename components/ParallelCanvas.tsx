@@ -25,7 +25,7 @@ import { memo, useMemo } from 'react';
 import { StyleSheet } from 'react-native';
 import {
   Easing, interpolate, interpolateColor, useDerivedValue, useSharedValue,
-  withRepeat, withSequence, withTiming, type SharedValue,
+  withDelay, withRepeat, withSequence, withTiming, type SharedValue,
 } from 'react-native-reanimated';
 
 // ─── Palette ─────────────────────────────────────────────────────────────────
@@ -475,6 +475,241 @@ export const WorldRadar = memo(function WorldRadar({
     </Canvas>
   );
 });
+
+// ═════════════════════════════════════════════════════════════════════════════
+// CROWD OPINION — what the people actually think of you
+// ═════════════════════════════════════════════════════════════════════════════
+/**
+ * Every voice the run produced, drawn as a person.
+ *
+ * The mood bar says where the room landed on average; an average is exactly the thing
+ * that hides a country split down the middle. Here each quote the player was shown
+ * becomes one figure, coloured by its mood, and the crowd arrives mood by mood — the
+ * relieved settle, then the furious, then the grieving. The proportion IS the opinion,
+ * and you read it without reading anything.
+ *
+ * One path per mood rather than one node per figure: ten animated groups instead of
+ * sixty, which is the difference between a smooth arrival and a stutter.
+ */
+export const CrowdOpinion = memo(function CrowdOpinion({
+  width, tally, order, isDark,
+}: {
+  width: number;
+  /** mood -> how many voices felt it, across the whole run. */
+  tally: Record<string, number>;
+  /** Moods best-to-worst, so the crowd assembles in a stable, meaningful order. */
+  order: string[];
+  isDark: boolean;
+}) {
+  const R = 5.5;
+  const GAP = 5;
+  const perRow = Math.max(6, Math.floor((width + GAP) / (R * 2 + GAP)));
+  const present = order.filter(mo => (tally[mo] ?? 0) > 0);
+  const total = present.reduce((n, mo) => n + tally[mo], 0);
+  const rows = Math.max(1, Math.ceil(total / perRow));
+  const H = rows * (R * 2 + GAP) + 6;
+
+  const progress = useSharedValue(0);
+  useMemo(() => {
+    progress.value = 0;
+    progress.value = withTiming(1, { duration: 260 + present.length * 190, easing: Easing.out(Easing.cubic) });
+  }, [progress, total, present.length]);
+
+  // Figures are laid out in reading order across the whole crowd, then split by mood, so
+  // each colour occupies a contiguous run and the block sizes are the proportions.
+  const groups = useMemo(() => {
+    let i = 0;
+    return present.map(mo => {
+      const path = Skia.Path.Make();
+      for (let n = 0; n < tally[mo]; n++, i++) {
+        const col = i % perRow;
+        const row = Math.floor(i / perRow);
+        // A little jitter per row so it reads as a crowd rather than a spreadsheet.
+        const jitter = ((row * 7 + col * 3) % 5) - 2;
+        path.addCircle(R + col * (R * 2 + GAP), R + 3 + row * (R * 2 + GAP) + jitter * 0.35, R);
+      }
+      return { mood: mo, path };
+    });
+  }, [present, tally, perRow]);
+
+  return (
+    <Canvas style={{ width, height: H }}>
+      {groups.map((g, gi) => {
+        const from = gi / Math.max(1, groups.length);
+        const to = (gi + 1) / Math.max(1, groups.length);
+        return <CrowdGroup key={g.mood} group={g} progress={progress} from={from} to={to} isDark={isDark} />;
+      })}
+    </Canvas>
+  );
+});
+
+function CrowdGroup({ group, progress, from, to, isDark }: {
+  group: { mood: string; path: any }; progress: SharedValue<number>;
+  from: number; to: number; isDark: boolean;
+}) {
+  const meta = MOOD_PAINT[group.mood] ?? { color: '#8A7E6B' };
+  const opacity = useDerivedValue(() =>
+    interpolate(progress.value, [from, to], [0, 1], 'clamp'));
+  const scale = useDerivedValue(() =>
+    interpolate(progress.value, [from, to], [0.4, 1], 'clamp'));
+
+  return (
+    <Group opacity={opacity} transform={useDerivedValue(() => [{ scale: scale.value }])}>
+      <Path path={group.path} color={meta.color} opacity={isDark ? 0.9 : 0.85}>
+        <BlurMask blur={3} style="normal" />
+      </Path>
+      <Path path={group.path} color={meta.color} />
+    </Group>
+  );
+}
+
+/** Mirrors MOOD_META in ParallelUniverse.tsx — only the colour, which is all the canvas needs. */
+export const MOOD_PAINT: Record<string, { color: string }> = {
+  elated: { color: '#3FA97A' }, hopeful: { color: '#5CB88C' },
+  relieved: { color: '#6FA8C9' }, defiant: { color: '#C99A3C' },
+  uneasy: { color: '#B08A5A' }, resigned: { color: '#8A8A96' },
+  afraid: { color: '#9B7BD4' }, angry: { color: '#D9603F' },
+  betrayed: { color: '#C7433F' }, grieving: { color: '#7A6E86' },
+};
+
+// ═════════════════════════════════════════════════════════════════════════════
+// VERDICT SEAL — how good were you
+// ═════════════════════════════════════════════════════════════════════════════
+/**
+ * One grade for the whole run, struck like a seal into wax.
+ *
+ * The ring sweeps to the score, the letter drops in behind it, and a ripple goes out on
+ * landing. It answers the question the four meters never quite do — was I any good at
+ * this? — and it is the thing a player screenshots.
+ *
+ * The letter itself is drawn by the hosting screen in real <Text>; this is the seal it
+ * sits inside.
+ */
+export const VerdictSeal = memo(function VerdictSeal({
+  size, score, tone,
+}: { size: number; score: number; tone: string }) {
+  const sweep = useSharedValue(0);
+  const strike = useSharedValue(0);
+
+  useMemo(() => {
+    sweep.value = 0;
+    strike.value = 0;
+    sweep.value = withTiming(1, { duration: 1150, easing: Easing.out(Easing.cubic) });
+    strike.value = withDelay(1000, withSequence(
+      withTiming(1, { duration: 260, easing: Easing.out(Easing.quad) }),
+      withTiming(0, { duration: 700, easing: Easing.in(Easing.quad) }),
+    ));
+  }, [sweep, strike, score]);
+
+  const cx = size / 2;
+  const cy = size / 2;
+  const R = size / 2 - 10;
+
+  const ring = useMemo(() => {
+    const p = Skia.Path.Make();
+    p.addArc({ x: cx - R, y: cy - R, width: R * 2, height: R * 2 }, -90, 360);
+    return p;
+  }, [size]);
+
+  const end = useDerivedValue(() => sweep.value * score);
+  const rippleR = useDerivedValue(() => interpolate(strike.value, [0, 1], [R, R * 1.5]));
+  const rippleOpacity = useDerivedValue(() => strike.value * 0.6);
+
+  return (
+    <Canvas style={{ width: size, height: size }} pointerEvents="none">
+      {/* The track: what a perfect run would have filled. */}
+      <Path path={ring} style="stroke" strokeWidth={7} strokeCap="round"
+        color={`${tone}22`} />
+
+      <Path path={ring} style="stroke" strokeWidth={9} strokeCap="round"
+        color={tone} start={0} end={end} opacity={0.55}>
+        <BlurMask blur={12} style="normal" />
+      </Path>
+      <Path path={ring} style="stroke" strokeWidth={5} strokeCap="round"
+        color={tone} start={0} end={end} />
+
+      <Circle cx={cx} cy={cy} r={rippleR} style="stroke" strokeWidth={2}
+        color={tone} opacity={rippleOpacity}>
+        <BlurMask blur={7} style="normal" />
+      </Circle>
+    </Canvas>
+  );
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SOCIETY IMPACT — how much did you actually help
+// ═════════════════════════════════════════════════════════════════════════════
+/**
+ * Two towers: the world that happened, and the one you made. Each is built of the four
+ * meters stacked, growing from the ground up, and the difference in height is the answer
+ * to "did I help?" — asked and answered without a sentence.
+ *
+ * Reality's tower is always the same height, which is what makes yours mean anything.
+ */
+export const SocietyImpact = memo(function SocietyImpact({
+  width, values, baseline, isDark,
+}: { width: number; values: number[]; baseline: number; isDark: boolean }) {
+  const H = 128;
+  const FLOOR = H - 16;
+  const grow = useSharedValue(0);
+
+  useMemo(() => {
+    grow.value = 0;
+    grow.value = withTiming(1, { duration: 1000, easing: Easing.out(Easing.cubic) });
+  }, [grow, values]);
+
+  const colW = Math.min(58, width * 0.28);
+  const gap = width * 0.18;
+  const leftX = width / 2 - gap / 2 - colW;
+  const rightX = width / 2 + gap / 2;
+
+  // Each meter contributes its share of the tower; reality is four equal blocks.
+  const unit = (FLOOR - 12) / (baseline * 4);
+  const real = [baseline, baseline, baseline, baseline];
+
+  const tower = (xs: number, vals: number[], dim: boolean) => {
+    let acc = 0;
+    return vals.map((v, i) => {
+      const h = v * unit;
+      const y = FLOOR - acc - h;
+      acc += h;
+      return (
+        <TowerBlock key={i} x={xs} y={y} w={colW} h={h} grow={grow}
+          floor={FLOOR} hue={METER_HUES[i]} dim={dim} />
+      );
+    });
+  };
+
+  return (
+    <Canvas style={{ width, height: H }}>
+      <Rect x={0} y={FLOOR} width={width} height={1}
+        color={isDark ? 'rgba(245,236,215,0.18)' : 'rgba(0,0,0,0.14)'} />
+      {tower(leftX, real, true)}
+      {tower(rightX, values, false)}
+    </Canvas>
+  );
+});
+
+function TowerBlock({ x, y, w, h, grow, floor, hue, dim }: {
+  x: number; y: number; w: number; h: number; grow: SharedValue<number>;
+  floor: number; hue: string; dim: boolean;
+}) {
+  // Everything rises out of the ground together rather than each block sliding in.
+  const ry = useDerivedValue(() => floor - (floor - y) * grow.value);
+  const rh = useDerivedValue(() => Math.max(0, h * grow.value));
+
+  return (
+    <>
+      {!dim && (
+        <RoundedRect x={x} y={ry} width={w} height={rh} r={3} color={hue} opacity={0.4}>
+          <BlurMask blur={8} style="normal" />
+        </RoundedRect>
+      )}
+      <RoundedRect x={x} y={ry} width={w} height={rh} r={3}
+        color={hue} opacity={dim ? 0.24 : 0.95} />
+    </>
+  );
+}
 
 // ═════════════════════════════════════════════════════════════════════════════
 // RARITY AURA — the badge behind a world you have just found

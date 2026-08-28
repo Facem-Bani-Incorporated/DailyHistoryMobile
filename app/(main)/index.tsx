@@ -67,6 +67,7 @@ import { useWheelReady } from '../../store/useWheelStore';
 import DailyWheel from '../../components/DailyWheel';
 import ParallelPromoStrip from '../../components/ParallelPromoStrip';
 import UniversesHub from '../../components/UniversesHub';
+import { AmbientBackdrop } from '../../components/AmbientCanvas';
 import { usePaywallStore } from '../../store/usePaywallStore';
 import { useRewardedUnlock } from '../../hooks/useRewardedUnlock';
 import * as analytics from '../../src/analytics/posthog';
@@ -1516,6 +1517,9 @@ export default function HomeScreen() {
   return (
     <AllEventsProvider events={allEvents}>
       <View style={ms.root}>
+        {/* The room the feed stands in. Behind everything, never in front of a headline,
+            and quieter on the light theme where the same ribbons would read as dirt. */}
+        <AmbientBackdrop width={W} height={H} isDark={isDark} isPremium={isPremium} />
         <StatusBar style={isDark ? 'light' : 'dark'} />
         <AchievementToast />
         <CelebrationOverlay />

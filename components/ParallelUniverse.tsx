@@ -39,9 +39,9 @@ import {
 } from 'react-native-reanimated';
 
 import {
-  BranchMap, ConsequenceBloom, DivergenceField, ForkMark, MoodTide,
-  RarityAura, SkiaMeter, TrajectoryCurve, WorldRadar,
-  METER_WIDTH, MOOD_TIDE_HEIGHT,
+  BranchMap, ConsequenceBloom, CrowdOpinion, DivergenceField, ForkMark, MoodTide,
+  RarityAura, SkiaMeter, SocietyImpact, TrajectoryCurve, VerdictSeal, WorldRadar,
+  METER_WIDTH,
 } from './ParallelCanvas';
 import { useLanguage } from '../context/LanguageContext';
 import { useRevenueCat } from '../context/RevenueCatContext';
@@ -56,6 +56,8 @@ const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
 
 /** Diameter of the halo behind an ending's rarity badge. */
 const AURA = 150;
+/** Diameter of the verdict seal at the end of a run. */
+const SEAL = 132;
 
 // ─── Shape of the JSON the pipeline produces ─────────────────────────────────
 interface Effects { stability: number; lives: number; progress: number; freedom: number }
@@ -139,6 +141,12 @@ const MOOD_META: Record<Mood, {
   grieving: { valence: -3, color: '#7A6E86', icon: 'candle' },
 };
 
+/** Best to worst. The crowd assembles in this order, and the legend reads down it. */
+const MOOD_ORDER: Mood[] = [
+  'elated', 'hopeful', 'relieved', 'defiant',
+  'uneasy', 'resigned', 'afraid', 'angry', 'betrayed', 'grieving',
+];
+
 const isMood = (m: string): m is Mood => m in MOOD_META;
 const moodMeta = (m: string) => MOOD_META[isMood(m) ? m : 'uneasy'];
 
@@ -179,6 +187,30 @@ function moodUnrest(reactions: Reaction[] | undefined): number {
   return Math.min(1, (Math.max(...vals) - Math.min(...vals)) / 6);
 }
 
+/**
+ * One number for the whole run, 0-1.
+ *
+ * Half of it is the world you left behind, a little over a third is what the people in
+ * it think of you, and the rest is a nod to having found something hard. Weighted that
+ * way on purpose: a ruler who fixed the country and is hated for it should not score the
+ * same as one who did both, and neither should score like one who did neither.
+ */
+function runScore(meters: Record<MeterKey, number>, mood: number, rarity: string): number {
+  const world = (wellbeing(meters) + 200) / 400;
+  const people = mood / 100;
+  const rare = rarity === 'rare' ? 0.12 : rarity === 'uncommon' ? 0.06 : 0;
+  return Math.max(0, Math.min(1, world * 0.5 + people * 0.38 + rare));
+}
+
+const GRADES: { min: number; key: string; letter: string; tone: string }[] = [
+  { min: 0.84, key: 'gradeS', letter: 'S', tone: '#D4A843' },
+  { min: 0.70, key: 'gradeA', letter: 'A', tone: '#3FA97A' },
+  { min: 0.55, key: 'gradeB', letter: 'B', tone: '#5CB88C' },
+  { min: 0.38, key: 'gradeC', letter: 'C', tone: '#C17B2A' },
+  { min: -1, key: 'gradeD', letter: 'D', tone: '#D9603F' },
+];
+const gradeFor = (score: number) => GRADES.find(g => score >= g.min) ?? GRADES[GRADES.length - 1];
+
 /** The average feeling in the room, as a signed swing. */
 function moodSwing(reactions: Reaction[] | undefined): number {
   if (!reactions?.length) return 0;
@@ -206,6 +238,10 @@ const L: Record<Lang, Record<string, string>> = {
     worldNow: 'The world you made', noVoices: 'The news has not travelled yet',
     bandRuin: 'In ruins', bandWorse: 'Worse than history', bandSame: 'Much as it was',
     bandBetter: 'Better than history', bandGolden: 'A golden age',
+    yourVerdict: 'How you ruled', society: 'What it cost society',
+    opinion: 'What people made of you', record: 'The record',
+    realWorld2: 'History', yourWorld2: 'You', voicesCount: 'voices',
+    gradeS: 'Masterful', gradeA: 'Wise', gradeB: 'Competent', gradeC: 'Costly', gradeD: 'Ruinous',
     elated: 'Elated', hopeful: 'Hopeful', relieved: 'Relieved', defiant: 'Defiant', uneasy: 'Uneasy',
     resigned: 'Resigned', afraid: 'Afraid', angry: 'Angry', betrayed: 'Betrayed', grieving: 'Grieving',
   },
@@ -226,6 +262,10 @@ const L: Record<Lang, Record<string, string>> = {
     worldNow: 'Lumea pe care ai făcut-o', noVoices: 'Vestea nu a ajuns încă departe',
     bandRuin: 'În ruină', bandWorse: 'Mai rău decât în realitate', bandSame: 'Cam ca înainte',
     bandBetter: 'Mai bine decât în realitate', bandGolden: 'O epocă de aur',
+    yourVerdict: 'Cum ai condus', society: 'Cât a costat societatea',
+    opinion: 'Ce cred oamenii despre tine', record: 'Bilanțul',
+    realWorld2: 'Istoria', yourWorld2: 'Tu', voicesCount: 'voci',
+    gradeS: 'Magistral', gradeA: 'Înțelept', gradeB: 'Competent', gradeC: 'Costisitor', gradeD: 'Dezastruos',
     elated: 'Exaltați', hopeful: 'Plini de speranță', relieved: 'Ușurați', defiant: 'Sfidători', uneasy: 'Neliniștiți',
     resigned: 'Resemnați', afraid: 'Înspăimântați', angry: 'Furioși', betrayed: 'Trădați', grieving: 'Îndoliați',
   },
@@ -246,6 +286,10 @@ const L: Record<Lang, Record<string, string>> = {
     worldNow: 'Le monde que vous avez fait', noVoices: 'La nouvelle n\'a pas encore voyagé',
     bandRuin: 'En ruines', bandWorse: 'Pire que l\'histoire', bandSame: 'À peu près pareil',
     bandBetter: 'Mieux que l\'histoire', bandGolden: 'Un âge d\'or',
+    yourVerdict: 'Votre règne', society: 'Ce que la société a payé',
+    opinion: 'Ce qu\'on pense de vous', record: 'Le bilan',
+    realWorld2: 'L\'histoire', yourWorld2: 'Vous', voicesCount: 'voix',
+    gradeS: 'Magistral', gradeA: 'Avisé', gradeB: 'Compétent', gradeC: 'Coûteux', gradeD: 'Désastreux',
     elated: 'Exaltés', hopeful: 'Pleins d\'espoir', relieved: 'Soulagés', defiant: 'Défiants', uneasy: 'Inquiets',
     resigned: 'Résignés', afraid: 'Effrayés', angry: 'En colère', betrayed: 'Trahis', grieving: 'En deuil',
   },
@@ -266,6 +310,10 @@ const L: Record<Lang, Record<string, string>> = {
     worldNow: 'Die Welt, die du gemacht hast', noVoices: 'Die Nachricht ist noch nicht weit gekommen',
     bandRuin: 'In Trümmern', bandWorse: 'Schlimmer als die Geschichte', bandSame: 'Fast wie zuvor',
     bandBetter: 'Besser als die Geschichte', bandGolden: 'Ein goldenes Zeitalter',
+    yourVerdict: 'Wie du regiert hast', society: 'Was es die Gesellschaft kostete',
+    opinion: 'Was man von dir hält', record: 'Die Bilanz',
+    realWorld2: 'Geschichte', yourWorld2: 'Du', voicesCount: 'Stimmen',
+    gradeS: 'Meisterhaft', gradeA: 'Weise', gradeB: 'Solide', gradeC: 'Teuer', gradeD: 'Verheerend',
     elated: 'Begeistert', hopeful: 'Hoffnungsvoll', relieved: 'Erleichtert', defiant: 'Trotzig', uneasy: 'Beunruhigt',
     resigned: 'Resigniert', afraid: 'Verängstigt', angry: 'Wütend', betrayed: 'Verraten', grieving: 'Trauernd',
   },
@@ -286,6 +334,10 @@ const L: Record<Lang, Record<string, string>> = {
     worldNow: 'El mundo que hiciste', noVoices: 'La noticia aún no ha viajado',
     bandRuin: 'En ruinas', bandWorse: 'Peor que la historia', bandSame: 'Casi igual',
     bandBetter: 'Mejor que la historia', bandGolden: 'Una edad de oro',
+    yourVerdict: 'Cómo gobernaste', society: 'Lo que le costó a la sociedad',
+    opinion: 'Lo que piensan de ti', record: 'El balance',
+    realWorld2: 'La historia', yourWorld2: 'Tú', voicesCount: 'voces',
+    gradeS: 'Magistral', gradeA: 'Sabio', gradeB: 'Competente', gradeC: 'Costoso', gradeD: 'Ruinoso',
     elated: 'Eufóricos', hopeful: 'Esperanzados', relieved: 'Aliviados', defiant: 'Desafiantes', uneasy: 'Inquietos',
     resigned: 'Resignados', afraid: 'Asustados', angry: 'Furiosos', betrayed: 'Traicionados', grieving: 'De luto',
   },
@@ -457,6 +509,14 @@ function YearMark({ year, gold }: { year: string; gold: string }) {
 // ═════════════════════════════════════════════════════════════════════════════
 // STAT ROW — reality struck out, your world landing on top of it
 // ═════════════════════════════════════════════════════════════════════════════
+/**
+ * One comparison, stacked rather than columned.
+ *
+ * This was three columns with the two value cells pinned to 72pt, which meant every
+ * answer longer than two words ended in an ellipsis — "Fewer, but strong p…" told the
+ * player nothing. The values now get the full width and wrap, and the comparison is
+ * carried by the strike-through and the arrow instead of by alignment.
+ */
 function StatRow({ stat, index, gold, theme, isDark }: {
   stat: Stat; index: number; gold: string; theme: any; isDark: boolean;
 }) {
@@ -475,11 +535,6 @@ function StatRow({ stat, index, gold, theme, isDark }: {
     ]).start();
   }, [enter, land, index]);
 
-  const rowOpacity = enter;
-  const rowSlide = enter.interpolate({ inputRange: [0, 1], outputRange: [14, 0] });
-  const altScale = land.interpolate({ inputRange: [0, 1], outputRange: [1.5, 1] });
-  const altOpacity = land;
-
   return (
     <Animated.View
       style={[
@@ -488,26 +543,35 @@ function StatRow({ stat, index, gold, theme, isDark }: {
           borderTopWidth: StyleSheet.hairlineWidth,
           borderTopColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)',
         },
-        { opacity: rowOpacity, transform: [{ translateY: rowSlide }] },
+        {
+          opacity: enter,
+          transform: [{ translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }],
+        },
       ]}
     >
-      <Text style={[st_.label, { color: theme.text }]} numberOfLines={2}>{stat.label}</Text>
-      <Text style={[st_.real, { color: theme.subtext }]} numberOfLines={2}>{stat.real}</Text>
-      <Animated.Text
-        style={[st_.alt, { color: gold, opacity: altOpacity, transform: [{ scale: altScale }] }]}
-        numberOfLines={2}
+      <Text style={[st_.label, { color: theme.subtext }]}>{stat.label}</Text>
+      <Text style={[st_.real, { color: theme.subtext }]}>{stat.real}</Text>
+      <Animated.View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'flex-start',
+          opacity: land,
+          transform: [{ translateX: land.interpolate({ inputRange: [0, 1], outputRange: [-10, 0] }) }],
+        }}
       >
-        {stat.alt}
-      </Animated.Text>
+        <Text style={[st_.arrow, { color: gold }]}>→ </Text>
+        <Text style={[st_.alt, { color: gold }]}>{stat.alt}</Text>
+      </Animated.View>
     </Animated.View>
   );
 }
 
 const st_ = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9 },
-  label: { flex: 1, fontSize: 12, fontWeight: '600', lineHeight: 16 },
-  real: { width: 72, textAlign: 'right', fontSize: 11.5, lineHeight: 15, textDecorationLine: 'line-through' },
-  alt: { width: 72, textAlign: 'right', fontSize: 12.5, fontWeight: '800', lineHeight: 16 },
+  row: { paddingVertical: 11 },
+  label: { fontSize: 10, fontWeight: '800', letterSpacing: 0.7, textTransform: 'uppercase', marginBottom: 5 },
+  real: { fontSize: 13, lineHeight: 18, textDecorationLine: 'line-through', marginBottom: 3 },
+  arrow: { fontSize: 14, fontWeight: '800', lineHeight: 20 },
+  alt: { flex: 1, fontSize: 14.5, fontWeight: '800', lineHeight: 20 },
 });
 
 function ChoiceCard({ choice, onPick, disabled, exiting, chosen, showEffects, gold, theme, isDark, delay, riskLabel }: {
@@ -971,6 +1035,10 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
   ]);
   // `nonce` and not a boolean: two bad choices running must flash twice.
   const [flash, setFlash] = useState({ net: 0, nonce: 0 });
+  // Every voice the run has shown, counted by mood. The crowd at the end is built from
+  // these exact quotes rather than from the averaged bar — an average is the one thing
+  // that hides a country split down the middle.
+  const [moodTally, setMoodTally] = useState<Record<string, number>>({});
 
   const bodyFade = useRef(new Animated.Value(1)).current;
 
@@ -1018,6 +1086,7 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
     setPublicMood(MOOD_BASELINE); setMoodDelta(0);
     setHistory([{ world: 0, mood: MOOD_BASELINE }]);
     setFlash({ net: 0, nonce: 0 });
+    setMoodTally({});
     for (const k of METERS) meterSV[k].value = BASELINE;
     moodSV.value = MOOD_BASELINE;
     unrestSV.value = 0;
@@ -1077,6 +1146,11 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
       setStanding(nextStanding); setActorDeltas(ad);
       setPublicMood(nextMood); setMoodDelta(swing);
       unrestSV.value = withTiming(unrest, { duration: 900, easing: REasing.out(REasing.cubic) });
+      setMoodTally(prev => {
+        const next = { ...prev };
+        for (const v of choice.reactions ?? []) next[v.mood] = (next[v.mood] ?? 0) + 1;
+        return next;
+      });
       setFlash(f => ({ net, nonce: f.nonce + 1 }));
       setHistory(h => [...h, { world: wellbeing(next), mood: nextMood }]);
       // A second, quieter haptic under the flash: the screen and the hand agree on
@@ -1125,6 +1199,9 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
   const divergence = Math.round(
     (METERS.reduce((s, k) => s + Math.abs(meters[k] - BASELINE), 0) / (METERS.length * BASELINE)) * 100,
   );
+  const score = runScore(meters, publicMood, node?.rarity ?? '');
+  const grade = gradeFor(score);
+
   const rarityLabel = (r: string) => t[r] ?? t.common;
   const rarityColor = (r: string) =>
     r === 'rare' ? gold : r === 'uncommon' ? '#9B7BD4' : theme.subtext;
@@ -1279,6 +1356,9 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
           )}
 
           {/* ── ENDING ──────────────────────────────────────────────── */}
+          {/* Three acts: the world you left, the verdict on you, and what the people in
+              it think. The old ending stacked eleven blocks of prose and numbers and
+              asked the player to assemble the meaning themselves. */}
           {phase === 'end' && node && (
             <Animated.View style={{ opacity: bodyFade }}>
               <RarityBadge rarity={node.rarity} label={rarityLabel(node.rarity)}
@@ -1287,58 +1367,75 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
               <Text style={[g.year, { color: gold, textAlign: 'center' }]}>{node.year}</Text>
               <Text style={[g.endTitle, { color: theme.text }]}>{node.title}</Text>
               <Text style={[g.nodeText, { color: theme.text, textAlign: 'center' }]}>{node.text}</Text>
+              <Text style={[g.epitaph, { color: theme.text }]}>“{node.epitaph}”</Text>
 
-              <View style={[g.verdictBox, { borderColor: gold + '3A', backgroundColor: gold + '10' }]}>
-                <Text style={[g.verdict, { color: theme.text }]}>{node.verdict}</Text>
+              {/* ── ACT ONE: how good were you ─────────────────────────── */}
+              <Text style={[g.actLabel, { color: theme.subtext }]}>{t.yourVerdict}</Text>
+              <View style={g.sealWrap}>
+                <VerdictSeal size={SEAL} score={score} tone={grade.tone} />
+                <View style={g.sealInner} pointerEvents="none">
+                  <Text style={[g.sealLetter, { color: grade.tone }]}>{grade.letter}</Text>
+                </View>
+              </View>
+              <Text style={[g.gradeWord, { color: grade.tone }]}>{t[grade.key]}</Text>
+              <Text style={[g.verdict, { color: theme.subtext }]}>{node.verdict}</Text>
+
+              {/* ── ACT TWO: what it cost society ──────────────────────── */}
+              <Text style={[g.actLabel, { color: theme.subtext }]}>{t.society}</Text>
+              <SocietyImpact
+                width={W - 44}
+                values={METERS.map(k => meters[k])}
+                baseline={BASELINE}
+                isDark={isDark}
+              />
+              <View style={g.towerLegend}>
+                <Text style={[g.towerName, { color: theme.subtext }]}>{t.realWorld2}</Text>
+                <Text style={[g.towerDelta, { color: bandFor(wellbeing(meters)).color }]}>
+                  {wellbeing(meters) > 0 ? `+${wellbeing(meters)}` : wellbeing(meters)}
+                </Text>
+                <Text style={[g.towerName, { color: gold, textAlign: 'right' }]}>{t.yourWorld2}</Text>
+              </View>
+              <Text style={[g.bandWord, { color: bandFor(wellbeing(meters)).color }]}>
+                {t[bandFor(wellbeing(meters)).key]}
+              </Text>
+
+              {/* ── ACT THREE: what people made of you ─────────────────── */}
+              <Text style={[g.actLabel, { color: theme.subtext }]}>{t.opinion}</Text>
+              <CrowdOpinion
+                width={W - 44}
+                tally={moodTally}
+                order={MOOD_ORDER}
+                isDark={isDark}
+              />
+              <View style={g.crowdKey}>
+                {MOOD_ORDER.filter(mo => moodTally[mo]).map(mo => (
+                  <View key={mo} style={g.crowdKeyItem}>
+                    <View style={[g.crowdDot, { backgroundColor: MOOD_META[mo as Mood].color }]} />
+                    <Text style={[g.crowdKeyText, { color: theme.subtext }]}>
+                      {t[mo]} {moodTally[mo]}
+                    </Text>
+                  </View>
+                ))}
               </View>
 
-              {/* The two readings the player actually came for: how the world ended up,
-                  and how the people in it feel about it. */}
-              <WorldBand meters={meters} label={t.worldNow} t={t} theme={theme} isDark={isDark} />
-              <MoodBar
-                value={moodSV} unrest={unrestSV} delta={null} label={t.mood}
-                moodLabel={t[moodAt(publicMood)]}
-                moodColor={moodMeta(moodAt(publicMood)).color}
-                width={W - 44 - 22}
-                theme={theme} isDark={isDark}
+              <LegacyVoices
+                voices={(node.legacy ?? []).slice(0, 2)} label={t.legacyTitle}
+                t={t} gold={gold} theme={theme} isDark={isDark}
               />
+
+              {/* ── The record ─────────────────────────────────────────── */}
+              <Text style={[g.actLabel, { color: theme.subtext }]}>{t.record}</Text>
 
               {!!node.stats?.length && (
                 <View style={[g.statsTable, { borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.09)' }]}>
-                  <View style={[g.statsHead, { borderBottomColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)' }]}>
-                    <View style={{ flex: 1 }} />
-                    <Text style={[g.statsCol, { color: theme.subtext }]}>{t.realWorld}</Text>
-                    <Text style={[g.statsCol, { color: gold }]}>{t.yourWorld}</Text>
-                  </View>
                   {node.stats.map((st, i) => (
                     <StatRow key={i} stat={st} index={i} gold={gold} theme={theme} isDark={isDark} />
                   ))}
                 </View>
               )}
 
-              <LegacyVoices
-                voices={node.legacy ?? []} label={t.legacyTitle}
-                t={t} gold={gold} theme={theme} isDark={isDark}
-              />
-
-              <Text style={[g.sectionLabel, { color: theme.subtext }]}>{t.yourWorld}</Text>
-              <View style={{ alignItems: 'center' }}>
-                <WorldRadar size={Math.min(W - 70, 260)} values={METERS.map(k => meters[k])} isDark={isDark} />
-              </View>
-
-              <View style={g.statRow}>
-                {METERS.map(k => {
-                  const d = meters[k] - BASELINE;
-                  return (
-                    <View key={k} style={g.statCell}>
-                      <Text style={[g.statVal, { color: METER_COLOR[k] }]}>{meters[k]}</Text>
-                      <Text style={[g.statDelta, { color: d >= 0 ? METER_COLOR[k] : '#D9603F' }]}>
-                        {d > 0 ? `+${d}` : d}
-                      </Text>
-                      <Text style={[g.statLabel, { color: theme.subtext }]}>{t[k]}</Text>
-                    </View>
-                  );
-                })}
+              <View style={{ alignItems: 'center', marginBottom: 8 }}>
+                <WorldRadar size={Math.min(W - 90, 240)} values={METERS.map(k => meters[k])} isDark={isDark} />
               </View>
 
               <View style={[g.trajectoryBox, { borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.09)' }]}>
@@ -1356,16 +1453,6 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
                 </View>
               </View>
 
-              <View style={[g.divergeBox, { borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.09)' }]}>
-                <Text style={[g.divergeLabel, { color: theme.subtext }]}>{t.divergence}</Text>
-                <Text style={[g.divergeVal, { color: gold }]}>{divergence}%</Text>
-                <View style={[g.divergeTrack, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]}>
-                  <View style={[g.divergeFill, { width: `${Math.min(100, divergence)}%`, backgroundColor: gold }]} />
-                </View>
-              </View>
-
-              <Text style={[g.epitaph, { color: theme.text }]}>“{node.epitaph}”</Text>
-
               <CollectionGrid endings={endings} discovered={discovered} gold={gold}
                 theme={theme} isDark={isDark} t={t} highlight={node.id} />
 
@@ -1379,6 +1466,7 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
                   setPublicMood(MOOD_BASELINE); setMoodDelta(0);
                   setHistory([{ world: 0, mood: MOOD_BASELINE }]);
                   setFlash({ net: 0, nonce: 0 });
+                  setMoodTally({});
                   unrestSV.value = 0;
                 }} accessibilityRole="button"
                   style={({ pressed }) => [g.againBtn, { borderColor: gold + '55', opacity: pressed ? 0.8 : 1 }]}>
@@ -1539,6 +1627,26 @@ const g = StyleSheet.create({
   divergeFill: { height: 6, borderRadius: 3 },
 
   epitaph: { fontSize: 18, fontFamily: SERIF, fontStyle: 'italic', lineHeight: 27, textAlign: 'center', marginBottom: 28 },
+
+  actLabel: {
+    fontSize: 9.5, fontWeight: '800', letterSpacing: 1.6, textTransform: 'uppercase',
+    textAlign: 'center', marginTop: 30, marginBottom: 14,
+  },
+
+  sealWrap: { alignItems: 'center', justifyContent: 'center' },
+  sealInner: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+  sealLetter: { fontSize: 52, fontWeight: '900', fontFamily: SERIF, letterSpacing: -1 },
+  gradeWord: { fontSize: 21, fontWeight: '800', textAlign: 'center', marginTop: 10, letterSpacing: -0.3 },
+
+  towerLegend: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
+  towerName: { flex: 1, fontSize: 10.5, fontWeight: '800', letterSpacing: 0.8, textTransform: 'uppercase' },
+  towerDelta: { fontSize: 17, fontWeight: '900', fontVariant: ['tabular-nums'] },
+  bandWord: { fontSize: 15, fontWeight: '700', textAlign: 'center', marginTop: 10 },
+
+  crowdKey: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center', marginTop: 12, marginBottom: 22 },
+  crowdKeyItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  crowdDot: { width: 7, height: 7, borderRadius: 4 },
+  crowdKeyText: { fontSize: 11 },
 
   collection: { alignItems: 'center', marginBottom: 24 },
   collectionCount: { fontSize: 12.5, marginBottom: 10 },
