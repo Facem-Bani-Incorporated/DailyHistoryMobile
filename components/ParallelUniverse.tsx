@@ -39,7 +39,7 @@ import {
 } from 'react-native-reanimated';
 
 import {
-  BranchMap, ConsequenceBloom, CrowdOpinion, DivergenceField, ForkMark, MoodTide,
+  BranchMap, ConsequenceBloom, CrowdOpinion, DivergenceField, ForkMark, PeasantMarch,
   RarityAura, SkiaMeter, SocietyImpact, TrajectoryCurve, VerdictSeal, WorldRadar,
   METER_WIDTH,
 } from './ParallelCanvas';
@@ -48,6 +48,7 @@ import { useRevenueCat } from '../context/RevenueCatContext';
 import { useTheme } from '../context/ThemeContext';
 import * as analytics from '../src/analytics/posthog';
 import { usePaywallStore } from '../store/usePaywallStore';
+import { iconForEnding } from './parallelIcons';
 import { useDiscovered, useParallelStore, useRunsLeft } from '../store/useParallelStore';
 import { haptic } from '../utils/haptics';
 
@@ -355,6 +356,27 @@ function pickUniverse(raw: string | null | undefined, lang: string): Universe | 
     return u && Array.isArray(u.nodes) && u.nodes.length ? (u as Universe) : null;
   } catch {
     return null;
+  }
+}
+
+/**
+ * Each ending's English title and verdict, keyed by id.
+ *
+ * Only the icon picker reads this. Matching keywords against the language the player is
+ * reading would mean writing the word list five times and still missing the fifth; the
+ * English tree is always in the payload, so the symbols agree across every language.
+ */
+function englishIndex(raw: string | null | undefined): Record<string, string> {
+  if (!raw) return {};
+  try {
+    const en = JSON.parse(raw)?.en;
+    const out: Record<string, string> = {};
+    for (const n of en?.nodes ?? []) {
+      if (n?.id) out[String(n.id)] = `${n.title ?? ''} ${n.verdict ?? ''} ${n.epitaph ?? ''}`;
+    }
+    return out;
+  } catch {
+    return {};
   }
 }
 
@@ -917,7 +939,7 @@ function MoodBar({ value, unrest, delta, label, moodLabel, moodColor, width, the
           )}
         </View>
       </View>
-      <MoodTide width={width} mood={value} unrest={unrest} isDark={isDark} />
+      <PeasantMarch width={width} mood={value} unrest={unrest} isDark={isDark} />
     </View>
   );
 }
@@ -1099,6 +1121,7 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
     () => (universe?.nodes ?? []).filter(n => !n.choices?.length),
     [universe],
   );
+  const enIndex = useMemo(() => englishIndex(event?.parallelUniverse), [event?.parallelUniverse]);
 
   // How many decisions a run takes, walked off the tree rather than assumed. The shape
   // has changed twice — 2-wide, then 3/2, now 3/3/2 — and a screen reading "Decision 3
@@ -1347,6 +1370,7 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
               <CollectionGrid
                 endings={endings} discovered={discovered} gold={gold}
                 theme={theme} isDark={isDark} t={t}
+                eventId={eventId} enIndex={enIndex}
               />
 
               {(isPro || runsLeft > 0) ? (
@@ -1398,21 +1422,6 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
                 theme={theme}
                 isDark={isDark}
               />
-
-              {!!universe.actors?.length && (
-                <View style={[g.actorBox, { borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.09)' }]}>
-                  {universe.actors.map(act => (
-                    <ActorRow
-                      key={act.id}
-                      actor={act}
-                      value={standing[act.id] ?? act.start}
-                      delta={actorDeltas[act.id] ?? 0}
-                      isDark={isDark}
-                      gold={gold}
-                    />
-                  ))}
-                </View>
-              )}
 
               <Text style={[g.stepLabel, { color: theme.subtext }]}>
                 {t.decision} {Math.min(step + 1, depth)} {t.of} {depth}
@@ -1560,7 +1569,8 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
               </View>
 
               <CollectionGrid endings={endings} discovered={discovered} gold={gold}
-                theme={theme} isDark={isDark} t={t} highlight={node.id} />
+                theme={theme} isDark={isDark} t={t} highlight={node.id}
+                eventId={eventId} enIndex={enIndex} />
 
               {(isPro || runsLeft > 0) ? (
                 <Pressable onPress={() => {
@@ -1633,41 +1643,91 @@ function RarityBadge({ rarity, label, color, isNew, newLabel }: {
 }
 
 // ─── Collection grid ─────────────────────────────────────────────────────────
-function CollectionGrid({ endings, discovered, gold, theme, isDark, t, highlight }: {
+/**
+ * The worlds you have found, and the ones still out there.
+ *
+ * Every slot carries its own icon rather than a "?" — a wall of question marks tells the
+ * player nothing about what is missing and looks identical on every event. Found slots
+ * are lit gold and raised; the rest sit back, dim and slightly sunk, so the grid reads as
+ * a shelf with gaps in it.
+ */
+function CollectionGrid({ endings, discovered, gold, theme, isDark, highlight, eventId, enIndex }: {
   endings: Node[]; discovered: string[]; gold: string; theme: any; isDark: boolean;
   t: Record<string, string>; highlight?: string;
+  eventId: string; enIndex: Record<string, string>;
 }) {
   return (
     <View style={g.collection}>
-      <Text style={[g.collectionCount, { color: theme.subtext }]}>
-        <Text style={{ color: gold, fontWeight: '900' }}>{discovered.length}</Text>
-        {` / ${endings.length} ${t.discovered}`}
-      </Text>
       <View style={g.slots}>
-        {endings.map(e => {
-          const found = discovered.includes(e.id);
-          const isHere = highlight === e.id;
-          return (
-            <View
-              key={e.id}
-              style={[
-                g.slot,
-                {
-                  borderColor: isHere ? gold : found ? gold + '55' : (isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)'),
-                  backgroundColor: isHere ? gold + '22' : found ? gold + '10' : 'transparent',
-                },
-              ]}
-            >
-              <MaterialCommunityIcons
-                name={found ? (e.rarity === 'rare' ? 'diamond-stone' : 'check') : 'help'}
-                size={13}
-                color={found ? gold : (isDark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.2)')}
-              />
-            </View>
-          );
-        })}
+        {endings.map((e, i) => (
+          <CollectionSlot
+            key={e.id}
+            icon={iconForEnding(eventId, e.id, enIndex[e.id] ?? '')}
+            found={discovered.includes(e.id)}
+            here={highlight === e.id}
+            rare={e.rarity === 'rare'}
+            index={i}
+            gold={gold}
+            isDark={isDark}
+          />
+        ))}
       </View>
     </View>
+  );
+}
+
+/** One tile. Found ones lift toward the reader and hold a little light. */
+function CollectionSlot({ icon, found, here, rare, index, gold, isDark }: {
+  icon: any; found: boolean; here: boolean; rare: boolean;
+  index: number; gold: string; isDark: boolean;
+}) {
+  const enter = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.spring(enter, {
+      toValue: 1, tension: 120, friction: 11, delay: 40 + index * 32, useNativeDriver: true,
+    }).start();
+  }, [enter, index]);
+
+  const lit = found || here;
+
+  return (
+    <Animated.View
+      style={{
+        opacity: enter,
+        transform: [
+          { scale: enter.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1] }) },
+          // Found tiles sit a touch proud of the row; empty ones sit back in it.
+          { translateY: lit ? -2 : 1 },
+        ],
+      }}
+    >
+      <View
+        style={[
+          g.slot,
+          {
+            borderColor: here ? gold : lit ? gold + '66' : (isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'),
+            backgroundColor: here ? gold + '26' : lit ? gold + '14' : (isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'),
+            shadowColor: lit ? gold : '#000',
+            shadowOpacity: lit ? 0.5 : (isDark ? 0.4 : 0.14),
+            shadowRadius: lit ? 9 : 5,
+            shadowOffset: { width: 0, height: lit ? 4 : 2 },
+          },
+        ]}
+      >
+        <MaterialCommunityIcons
+          name={icon}
+          size={17}
+          color={
+            here || rare
+              ? gold
+              : found
+                ? gold + 'DD'
+                : (isDark ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.14)')
+          }
+        />
+      </View>
+    </Animated.View>
   );
 }
 
@@ -1756,8 +1816,8 @@ const g = StyleSheet.create({
 
   collection: { alignItems: 'center', marginBottom: 24 },
   collectionCount: { fontSize: 12.5, marginBottom: 10 },
-  slots: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' },
-  slot: { width: 32, height: 32, borderRadius: 9, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  slots: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center' },
+  slot: { width: 42, height: 42, borderRadius: 13, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
 
   cta: { borderRadius: 16, overflow: 'hidden', marginTop: 6 },
   ctaBg: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, paddingVertical: 16 },

@@ -17,6 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { BranchingPulse } from './ParallelCanvas';
 import { useDiscovered } from '../store/useParallelStore';
 import { haptic } from '../utils/haptics';
 import ParallelUniverse from './ParallelUniverse';
@@ -95,39 +96,8 @@ function ParallelPromoStripInner({ events, language, theme, isDark }: Props) {
   const eventId = String(found?.event?.id ?? '');
   const discovered = useDiscovered(eventId).length;
 
-  const sweep = useRef(new Animated.Value(0)).current;   // light crossing the card
-  const draw = useRef(new Animated.Value(0)).current;    // the fork drawing itself
-  const breathe = useRef(new Animated.Value(0)).current; // the glow behind the icon
-
-  useEffect(() => {
-    if (!found) return;
-    const loops = [
-      Animated.loop(Animated.sequence([
-        Animated.delay(1200),
-        Animated.timing(sweep, { toValue: 1, duration: 1400, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-        Animated.timing(sweep, { toValue: 0, duration: 0, useNativeDriver: true }),
-      ])),
-      Animated.loop(Animated.sequence([
-        Animated.timing(draw, { toValue: 1, duration: 1800, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-        Animated.delay(2600),
-        Animated.timing(draw, { toValue: 0, duration: 600, easing: Easing.in(Easing.quad), useNativeDriver: true }),
-      ])),
-      Animated.loop(Animated.sequence([
-        Animated.timing(breathe, { toValue: 1, duration: 1600, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(breathe, { toValue: 0, duration: 1600, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-      ])),
-    ];
-    loops.forEach(l => l.start());
-    return () => loops.forEach(l => l.stop());
-  }, [found, sweep, draw, breathe]);
-
   // Nothing to promote on a day with no game — a dead strip is worse than no strip.
   if (!found) return null;
-
-  const sweepX = sweep.interpolate({ inputRange: [0, 1], outputRange: [-160, 460] });
-  const sweepFade = sweep.interpolate({ inputRange: [0, 0.15, 0.85, 1], outputRange: [0, 0.5, 0.5, 0] });
-  const glow = breathe.interpolate({ inputRange: [0, 1], outputRange: [0.2, 0.55] });
-  const glowScale = breathe.interpolate({ inputRange: [0, 1], outputRange: [0.88, 1.1] });
 
   return (
     <>
@@ -135,124 +105,73 @@ function ParallelPromoStripInner({ events, language, theme, isDark }: Props) {
         onPress={() => { haptic('medium'); setOpen(true); }}
         accessibilityRole="button"
         accessibilityLabel={t.title}
-        style={({ pressed }) => [s.wrap, { transform: [{ scale: pressed ? 0.988 : 1 }] }]}
+        style={({ pressed }) => [s.wrap, { transform: [{ scale: pressed ? 0.99 : 1 }] }]}
       >
         <LinearGradient
-          colors={isDark ? ['#1D1636', '#120E20', '#0C0A14'] : ['#F0E9FF', '#FBF6FF', '#FFFCF5']}
+          colors={isDark ? ['#1A142E', '#100D1C', '#0B0912'] : ['#F4EEFF', '#FCF8FF', '#FFFDF7']}
           start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-          style={[s.card, { borderColor: gold + '55' }]}
+          style={[s.card, { borderColor: gold + '3A' }]}
         >
-          {/* Light crossing the card. Clipped by the card's overflow, so it reads as a
-              sheen on the surface rather than a rectangle sliding past. */}
-          <Animated.View
-            pointerEvents="none"
-            style={[s.sheen, { opacity: sweepFade, transform: [{ translateX: sweepX }, { rotate: '18deg' }] }]}
-          >
-            <LinearGradient
-              colors={['transparent', gold + '55', 'transparent']}
-              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-              style={StyleSheet.absoluteFill}
-            />
-          </Animated.View>
-
-          {/* The fork, drawing and resetting. One path stays gold — the one you take. */}
-          <View style={s.forkWrap} pointerEvents="none">
-            <Animated.View style={[s.forkStem, {
-              backgroundColor: gold,
-              opacity: draw.interpolate({ inputRange: [0, 0.3, 1], outputRange: [0, 0.75, 0.75] }),
-              transform: [{ scaleY: draw.interpolate({ inputRange: [0, 0.35, 1], outputRange: [0, 1, 1] }) }],
-            }]} />
-            {[-1, 0, 1].map(i => (
-              <Animated.View
-                key={i}
-                style={[s.forkArm, {
-                  backgroundColor: gold,
-                  opacity: draw.interpolate({
-                    inputRange: [0, 0.4, 1],
-                    outputRange: [0, i === 0 ? 0.8 : 0.3, i === 0 ? 0.8 : 0.3],
-                  }),
-                  transform: [
-                    { scaleY: draw.interpolate({ inputRange: [0, 0.4, 1], outputRange: [0, 0, 1] }) },
-                    { translateY: 13 },
-                    { rotate: `${i * 26}deg` },
-                  ],
-                }]}
-              />
-            ))}
-          </View>
-
-          <View style={s.iconWrap}>
-            <Animated.View style={[s.iconGlow, { backgroundColor: gold, opacity: glow, transform: [{ scale: glowScale }] }]} />
-            <MaterialCommunityIcons name="directions-fork" size={27} color={gold} />
+          {/* The drawing is the pitch. It sits behind the words at the left, where a
+              play button used to be — a triangle in a circle said "video", which is the
+              one thing this is not. */}
+          <View style={s.art} pointerEvents="none">
+            <BranchingPulse width={ART_W} height={ART_H} isDark={isDark} />
           </View>
 
           <View style={s.body}>
-            <View style={s.row}>
+            <View style={s.topRow}>
               <View style={[s.badge, { backgroundColor: gold }]}>
                 <Text style={s.badgeText}>{t.badge}</Text>
               </View>
-              <Text style={[s.meta, { color: theme.subtext }]} numberOfLines={1}>
-                {/* Read off the tree rather than hardcoded: the generator's shape has
-                    changed twice, and a strip promising twelve endings when there are
-                    eighteen is the kind of lie a player notices on their second run. */}
-                {t.meta.replace('{n}', String(found.endings))}
-              </Text>
+              {discovered > 0 && (
+                <Text style={[s.found, { color: theme.subtext }]}>
+                  {discovered} {t.found}
+                </Text>
+              )}
             </View>
-            <Text style={[s.title, { color: theme.text }]} numberOfLines={2}>{t.title}</Text>
-            <View style={s.progressRow}>
-              <View style={[s.track, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)' }]}>
-                <View style={[s.fill, {
-                  width: `${Math.max(3, (discovered / Math.max(1, found.endings)) * 100)}%`,
-                  backgroundColor: gold,
-                }]} />
-              </View>
-              <Text style={[s.count, { color: gold }]}>
-                {discovered}/{found.endings} {t.found}
-              </Text>
-            </View>
-          </View>
 
-          <View style={[s.play, { borderColor: gold + '66', backgroundColor: gold + '18' }]}>
-            <MaterialCommunityIcons name="play" size={16} color={gold} />
+            <Text style={[s.title, { color: theme.text }]} numberOfLines={2}>
+              {t.title}
+            </Text>
           </View>
         </LinearGradient>
       </Pressable>
 
-      <ParallelUniverse visible={open} onClose={() => setOpen(false)} event={found.event} />
+      <ParallelUniverse
+        visible={open}
+        onClose={() => setOpen(false)}
+        event={found.event}
+      />
     </>
   );
 }
 
-export default memo(ParallelPromoStripInner);
+const ART_W = 104;
+const ART_H = 74;
 
 const s = StyleSheet.create({
-  wrap: { marginHorizontal: 16, marginBottom: 12 },
+  wrap: { marginHorizontal: 16, marginBottom: 14 },
   card: {
-    flexDirection: 'row', alignItems: 'center', gap: 13,
-    borderWidth: 1, borderRadius: 18, paddingVertical: 14, paddingHorizontal: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingVertical: 16,
+    paddingRight: 18,
     overflow: 'hidden',
   },
-  sheen: { position: 'absolute', top: -40, bottom: -40, width: 70 },
+  art: { width: ART_W, height: ART_H, marginLeft: 4, justifyContent: 'center' },
+  body: { flex: 1, justifyContent: 'center' },
 
-  forkWrap: { position: 'absolute', right: 54, top: 8, alignItems: 'center', opacity: 0.9 },
-  forkStem: { width: 1.5, height: 15, borderRadius: 1 },
-  forkArm: { position: 'absolute', top: 12, width: 1.5, height: 26, borderRadius: 1 },
+  topRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 7 },
+  badge: { borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2.5 },
+  badgeText: { fontSize: 9, fontWeight: '900', letterSpacing: 1.1, color: '#1A1408' },
+  found: { fontSize: 11 },
 
-  iconWrap: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  iconGlow: { position: 'absolute', width: 44, height: 44, borderRadius: 22 },
-
-  body: { flex: 1 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
-  badge: { borderRadius: 5, paddingHorizontal: 6, paddingVertical: 2 },
-  badgeText: { color: '#1A1408', fontSize: 8.5, fontWeight: '900', letterSpacing: 0.9 },
-  meta: { flex: 1, fontSize: 10.5, fontWeight: '700', letterSpacing: 0.3 },
-
-  title: { fontSize: 15, fontFamily: SERIF, fontWeight: '700', lineHeight: 20, letterSpacing: -0.2 },
-
-  progressRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 7 },
-  track: { flex: 1, height: 3, borderRadius: 2, overflow: 'hidden' },
-  fill: { height: 3, borderRadius: 2 },
-  count: { fontSize: 9.5, fontWeight: '800', fontVariant: ['tabular-nums'] },
-
-  play: { width: 34, height: 34, borderRadius: 17, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  title: { fontSize: 18, fontFamily: SERIF, fontWeight: '700', lineHeight: 24, letterSpacing: -0.35 },
 });
+
+/** Memoised: it sits above the day feed and re-renders on every scroll otherwise. */
+const ParallelPromoStrip = memo(ParallelPromoStripInner);
+export default ParallelPromoStrip;

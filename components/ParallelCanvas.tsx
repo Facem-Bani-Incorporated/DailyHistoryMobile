@@ -322,6 +322,155 @@ export const MoodTide = memo(function MoodTide({
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
+// THE MARCH — public mood, as the people themselves
+// ═════════════════════════════════════════════════════════════════════════════
+/**
+ * A crowd crossing the screen, and the way it moves is the reading.
+ *
+ * Content: they stroll, upright, warm-lit, well spaced.
+ * Uneasy: the pace picks up, the light goes amber, the gaps close.
+ * Furious: they run, pitchforks up, and the ground turns red under them.
+ *
+ * This replaced a coloured band with a wave on it. A bar can carry a number; it cannot
+ * carry the difference between a country walking home and a country coming for you, and
+ * that difference is the only thing this meter was ever trying to say.
+ *
+ * The whole crowd is one path rebuilt each frame — twelve figures at twelve transforms
+ * would be twelve draw calls for something that sits under a scrolling screen.
+ */
+export const PeasantMarch = memo(function PeasantMarch({
+  width, mood, unrest, isDark,
+}: {
+  width: number; mood: SharedValue<number>; unrest: SharedValue<number>; isDark: boolean;
+}) {
+  const H = 92;
+  const GROUND = H - 22;
+  const COUNT = 11;
+  const clock = useSharedValue(0);
+
+  useMemo(() => {
+    clock.value = withRepeat(withTiming(1, { duration: 6000, easing: Easing.linear }), -1, false);
+  }, [clock]);
+
+  // Each walker gets its own lane, phase and gait so the crowd never marches in step.
+  const seeds = useMemo(
+    () => Array.from({ length: COUNT }, (_, i) => ({
+      phase: (i * 0.173 + (i % 3) * 0.06) % 1,
+      lane: ((i * 7) % 5) - 2,          // -2..2, slight depth
+      gait: 0.9 + ((i * 11) % 7) / 10,
+      scale: 0.86 + ((i * 5) % 4) / 10,
+    })),
+    [],
+  );
+
+  const crowd = useDerivedValue(() => {
+    'worklet';
+    const m = mood.value;
+    // Below fifty they are hurrying; by twenty they are running.
+    const haste = interpolate(m, [0, 30, 60, 100], [2.6, 1.7, 1.0, 0.75], 'clamp');
+    const angry = interpolate(m, [45, 15], [0, 1], 'clamp');   // 1 = pitchforks up
+    const stride = interpolate(m, [0, 100], [7, 3.4], 'clamp');
+
+    const p = Skia.Path.Make();
+
+    for (let i = 0; i < COUNT; i++) {
+      const sd = seeds[i];
+      const t = (clock.value * haste * sd.gait + sd.phase) % 1;
+      const x = -24 + t * (width + 48);
+      const sc = sd.scale;
+      const baseY = GROUND + sd.lane * 2.2;
+
+      // A running figure bobs harder and leans into it.
+      const step = Math.sin((clock.value * haste * sd.gait * 18 + sd.phase * 6) * Math.PI * 2);
+      const bob = Math.abs(step) * (1 + angry * 1.6) * sc;
+      const y = baseY - bob;
+      const lean = angry * 3 * sc;
+
+      const headR = 3.4 * sc;
+      const shoulder = y - 15 * sc;
+      const hip = y - 6 * sc;
+
+      // Head
+      p.addCircle(x + lean, shoulder - headR - 1.5 * sc, headR);
+      // Spine, leaning forward as they run
+      p.moveTo(x + lean, shoulder);
+      p.lineTo(x, hip);
+      // Legs, swinging out of phase
+      const sw = step * stride * 0.5 * sc;
+      p.moveTo(x, hip);
+      p.lineTo(x - sw, y);
+      p.moveTo(x, hip);
+      p.lineTo(x + sw, y);
+      // Trailing arm
+      p.moveTo(x + lean * 0.8, shoulder - 1 * sc);
+      p.lineTo(x - 4 * sc - sw * 0.4, shoulder + 5 * sc);
+
+      // Raised arm and pitchfork, only once they are angry enough to carry one.
+      if (angry > 0.05) {
+        const armX = x + lean + 5 * sc;
+        const armY = shoulder - 2 * sc - angry * 5 * sc;
+        p.moveTo(x + lean, shoulder - 1 * sc);
+        p.lineTo(armX, armY);
+        const shaftTop = armY - 13 * sc * angry;
+        p.moveTo(armX, armY + 3 * sc);
+        p.lineTo(shaftTop === armY ? armX : armX + 1.5 * sc, shaftTop);
+        // Three tines
+        for (const d of [-2.4, 0, 2.4]) {
+          p.moveTo(armX + 1.5 * sc + d * sc, shaftTop);
+          p.lineTo(armX + 1.5 * sc + d * sc, shaftTop - 4.5 * sc * angry);
+        }
+      }
+    }
+    return p;
+  });
+
+  const tint = useDerivedValue(() =>
+    interpolateColor(mood.value, [0, 22, 50, 78, 100],
+      ['#E0483A', '#D9603F', '#C79A54', '#5CB88C', '#3FA97A']));
+
+  // The ground goes red under a mob. It is the first thing you notice and it is doing the
+  // same job as the colour of the figures, one beat earlier.
+  const heat = useDerivedValue(() => interpolate(mood.value, [40, 8], [0, 1], 'clamp'));
+  const groundOpacity = useDerivedValue(() => 0.1 + heat.value * 0.4);
+  const glowOpacity = useDerivedValue(() => 0.34 + unrest.value * 0.3 + heat.value * 0.25);
+
+  const clip = useMemo(
+    () => Skia.RRectXY(Skia.XYWHRect(0, 0, width, H), 12, 12),
+    [width],
+  );
+
+  return (
+    <Canvas style={{ width, height: H }}>
+      <RoundedRect x={0} y={0} width={width} height={H} r={12}
+        color={isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.022)'} />
+
+      <Group clip={clip}>
+        {/* Heat haze on the ground. */}
+        <Rect x={0} y={GROUND - 26} width={width} height={52} opacity={groundOpacity}>
+          <LinearGradient
+            start={vec(0, GROUND - 26)} end={vec(0, GROUND + 26)}
+            colors={['#E0483A00', '#E0483A80', '#E0483A00']}
+          />
+        </Rect>
+
+        {/* The road they are on. */}
+        <Rect x={0} y={GROUND + 1} width={width} height={1}
+          color={isDark ? 'rgba(245,236,215,0.22)' : 'rgba(0,0,0,0.16)'} />
+
+        {/* Glow first, figures on top — the gloss is a blurred copy underneath, which is
+            cheaper than a shadow and keeps the silhouettes crisp. */}
+        <Path path={crowd} style="stroke" strokeWidth={4.5} strokeCap="round" strokeJoin="round"
+          color={tint} opacity={glowOpacity}>
+          <BlurMask blur={7} style="normal" />
+        </Path>
+        <Path path={crowd} style="stroke" strokeWidth={1.9} strokeCap="round" strokeJoin="round"
+          color={tint} />
+      </Group>
+    </Canvas>
+  );
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
 // BRANCH MAP — the shape of the run
 // ═════════════════════════════════════════════════════════════════════════════
 /**
@@ -507,6 +656,77 @@ export const WorldRadar = memo(function WorldRadar({
         const { x, y } = pointAt(i, R + 11);
         return <Circle key={`d${i}`} cx={x} cy={y} r={3} color={METER_HUES[i]} />;
       })}
+    </Canvas>
+  );
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// BRANCHING PULSE — the home strip's whole idea in one drawing
+// ═════════════════════════════════════════════════════════════════════════════
+/**
+ * A light runs in from the left, hits the fork, and takes all three roads at once —
+ * one bright, two dim — then the whole thing dissolves and does it again.
+ *
+ * Replaces a play button and a row of statistics. The strip has about a second to say
+ * "a decision splits into worlds"; a triangle in a circle says "video" and the numbers
+ * said nothing anyone had asked yet.
+ */
+export const BranchingPulse = memo(function BranchingPulse({
+  width, height, isDark,
+}: { width: number; height: number; isDark: boolean }) {
+  const run = useSharedValue(0);
+
+  useMemo(() => {
+    run.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 2100, easing: Easing.inOut(Easing.cubic) }),
+        withTiming(1, { duration: 900 }),
+        withTiming(0, { duration: 600, easing: Easing.in(Easing.quad) }),
+      ), -1, false,
+    );
+  }, [run]);
+
+  const midY = height / 2;
+  const forkX = width * 0.36;
+
+  const { stem, arms } = useMemo(() => {
+    const stemPath = Skia.Path.Make();
+    stemPath.moveTo(width * 0.06, midY);
+    stemPath.lineTo(forkX, midY);
+
+    const armPaths = [-1, 0, 1].map(dir => {
+      const p = Skia.Path.Make();
+      const endY = midY + dir * height * 0.3;
+      p.moveTo(forkX, midY);
+      p.cubicTo(forkX + width * 0.16, midY, width * 0.78, endY, width * 0.94, endY);
+      return p;
+    });
+    return { stem: stemPath, arms: armPaths };
+  }, [width, height]);
+
+  // The stem draws first, then the arms — one gesture, not four.
+  const stemEnd = useDerivedValue(() => interpolate(run.value, [0, 0.42], [0, 1], 'clamp'));
+  const armEnd = useDerivedValue(() => interpolate(run.value, [0.38, 1], [0, 1], 'clamp'));
+  const nodeR = useDerivedValue(() => interpolate(run.value, [0.34, 0.5, 0.62], [0, 5.5, 3.6], 'clamp'));
+  const nodeGlow = useDerivedValue(() => interpolate(run.value, [0.34, 0.5, 0.8], [0, 1, 0.35], 'clamp'));
+
+  const dim = isDark ? 'rgba(245,236,215,0.28)' : 'rgba(60,50,35,0.3)';
+
+  return (
+    <Canvas style={{ width, height }} pointerEvents="none">
+      <Path path={stem} style="stroke" strokeWidth={2.2} strokeCap="round"
+        color={GOLD} start={0} end={stemEnd} />
+
+      {arms.map((a, i) => (
+        <Path key={i} path={a} style="stroke" strokeWidth={i === 1 ? 2.4 : 1.4} strokeCap="round"
+          color={i === 1 ? GOLD : dim} start={0} end={armEnd} />
+      ))}
+
+      {/* The moment of the split, lit. */}
+      <Circle cx={forkX} cy={midY} r={nodeR} color={GOLD} opacity={nodeGlow} />
+      <Circle cx={forkX} cy={midY} r={10} color={GOLD} opacity={useDerivedValue(() => nodeGlow.value * 0.5)}>
+        <BlurMask blur={10} style="normal" />
+      </Circle>
     </Canvas>
   );
 });
