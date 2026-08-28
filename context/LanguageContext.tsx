@@ -23,6 +23,7 @@ const LanguageContext = createContext<LanguageContextType>({
 
 const translations: Record<Language, Record<string, string>> = {
   en: {
+    daily_wheel: 'Daily wheel',
     Daily: "Daily", History: "History", today: "Today", tomorrow: "Tomorrow",
     history: "History", discover: "Discover", timeline: "Timeline", map: "Map",
     saved: "Saved", retry: "Retry", no_content: "Nothing here",
@@ -101,6 +102,7 @@ const translations: Record<Language, Record<string, string>> = {
   },
 
   ro: {
+    daily_wheel: 'Roata zilei',
     Daily: "Daily", History: "History", today: "Astăzi", tomorrow: "Mâine",
     history: "Istorie", discover: "Descoperă", timeline: "Cronologie", map: "Hartă",
     saved: "Salvate", retry: "Reîncearcă", no_content: "Nimic aici",
@@ -179,6 +181,7 @@ const translations: Record<Language, Record<string, string>> = {
   },
 
   fr: {
+    daily_wheel: 'Le tour du jour',
     Daily: "Daily", History: "History", today: "Aujourd'hui", tomorrow: "Demain",
     history: "Histoire", discover: "Découvrir", timeline: "Chronologie", map: "Carte",
     saved: "Sauvegardés", retry: "Réessayer", no_content: "Rien ici",
@@ -257,6 +260,7 @@ const translations: Record<Language, Record<string, string>> = {
   },
 
   de: {
+    daily_wheel: 'Tagesrad',
     Daily: "Daily", History: "History", today: "Heute", tomorrow: "Morgen",
     history: "Geschichte", discover: "Entdecken", timeline: "Zeitleiste", map: "Karte",
     saved: "Gespeichert", retry: "Erneut versuchen", no_content: "Nichts hier",
@@ -335,6 +339,7 @@ const translations: Record<Language, Record<string, string>> = {
   },
 
   es: {
+    daily_wheel: 'Ruleta diaria',
     Daily: "Daily", History: "History", today: "Hoy", tomorrow: "Mañana",
     history: "Historia", discover: "Descubrir", timeline: "Cronología", map: "Mapa",
     saved: "Guardados", retry: "Reintentar", no_content: "Nada aquí",

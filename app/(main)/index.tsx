@@ -3,7 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
-import { CalendarClock, Trophy, Users } from 'lucide-react-native';
+import { CalendarClock, Sparkles, Trophy, Users } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
@@ -62,6 +62,8 @@ import { useAuthStore } from '../../store/useAuthStore';
 import { useCoinPopupStore } from '../../store/useCoinPopupStore';
 import { useCoins, useIsEventUnlocked } from '../../store/useCoinStore';
 import { useFutureDaysStore, useFutureDaysUnlocked } from '../../store/useFutureDaysStore';
+import { useWheelStore } from '../../store/useWheelStore';
+import DailyWheel from '../../components/DailyWheel';
 import { usePaywallStore } from '../../store/usePaywallStore';
 import { useRewardedUnlock } from '../../hooks/useRewardedUnlock';
 import * as analytics from '../../src/analytics/posthog';
@@ -955,6 +957,9 @@ export default function HomeScreen() {
   const [bannerLoaded, setBannerLoaded] = useState(false);
   const [bannerError, setBannerError] = useState(false);
 
+  const [wheelOpen, setWheelOpen] = useState(false);
+  const wheelReady = useWheelStore(s => s.lastSpinDate !== todayISO());
+
   // One clip opens days +1 and +2 on both surfaces for 24h. Four separate flags for
   // what the user calls "tomorrow" was friction that cost conversion, and four clips
   // for two days was exactly the request volume that drew the AdMob fill throttle.
@@ -1471,6 +1476,8 @@ export default function HomeScreen() {
         <StatusBar style={isDark ? 'light' : 'dark'} />
         <AchievementToast />
         <CelebrationOverlay />
+
+        <DailyWheel visible={wheelOpen} onClose={() => setWheelOpen(false)} />
         <XPFloatToast />
 
         {/* ═════════════════ CHROME (header) ═════════════════ */}
@@ -1576,6 +1583,23 @@ export default function HomeScreen() {
                     tree rather than deleted so the component can come back if we ever
                     want a balance surface for something else. */}
                 {COINS_ENABLED && !isPro && <CoinButton isDark={isDark} />}
+
+                {/* Daily wheel. The dot is the whole mechanic: an unspent turn is
+                    visible from the home screen, so the reason to open the app is on
+                    screen before the user has decided anything. */}
+                <TouchableOpacity onPress={() => { haptic('light'); setWheelOpen(true); }}
+                  activeOpacity={0.6}
+                  hitSlop={HEADER_HIT}
+                  accessibilityRole="button" accessibilityLabel={t('daily_wheel')}
+                  style={ms.iconBtn}>
+                  <Sparkles size={18} color={wheelReady ? goldColor : theme.subtext} strokeWidth={1.8} />
+                  {wheelReady && (
+                    <View style={{
+                      position: 'absolute', top: 2, right: 2, width: 7, height: 7,
+                      borderRadius: 4, backgroundColor: goldColor,
+                    }} />
+                  )}
+                </TouchableOpacity>
 
                 <TouchableOpacity onPress={() => { haptic('light'); uiShow('friends'); }}
                   activeOpacity={0.6}
