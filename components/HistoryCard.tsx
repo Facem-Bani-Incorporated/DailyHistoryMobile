@@ -15,6 +15,7 @@ import {
   View,
 } from 'react-native';
 
+import { CardLift, CardRim } from './AmbientCanvas';
 import { useLanguage } from '../context/LanguageContext';
 import { SharePickerModal } from './SharePickerModal';
 import { useTheme } from '../context/ThemeContext';
@@ -26,6 +27,9 @@ import { StoryModal } from './StoryModal';
 
 const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
 const SANS = Platform.OS === 'ios' ? 'System' : 'sans-serif';
+
+/** Shared by the card, its lift and its rim — three places that must agree. */
+const CARD_RADIUS = 28;
 
 const extractYear = (event: any): string => {
   if (!event) return '';
@@ -62,18 +66,12 @@ const HistoryCardComponent = ({ event, allEvents = [] }: { event: any; allEvents
   const markEventRead = useGamificationStore(s => s.markEventRead);
   const readEventIds  = useGamificationStore(s => s.readEventIds);
 
+  // The lift is drawn in Skia and has to know the card's real box, which only layout
+  // can tell us.
+  const [box, setBox] = useState({ w: 0, h: 0 });
+
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
-  const borderGlow = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (isPremium) {
-      Animated.loop(Animated.sequence([
-        Animated.timing(borderGlow, { toValue: 1, duration: 2800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(borderGlow, { toValue: 0, duration: 3200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-      ])).start();
-    }
-  }, [isPremium]);
 
   if (!event) return null;
 
@@ -110,46 +108,34 @@ const HistoryCardComponent = ({ event, allEvents = [] }: { event: any; allEvents
   };
 
   const glowOpacity = glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 0.12] });
-  const premiumBorderOpacity = borderGlow.interpolate({ inputRange: [0, 1], outputRange: [0.55, 0.92] });
   const gold = isPremium ? '#D4A843' : '#E8B84D';
   const titleColor = isPremium ? '#F5ECD7' : '#FFFFFF';
 
   return (
     <>
       <TouchableWithoutFeedback onPressIn={onPressIn} onPressOut={onPressOut} onPress={onPress}>
-        <Animated.View style={[
-          styles.card,
-          {
-            shadowColor: isPremium ? '#D4A843' : isDark ? '#000' : '#444',
-            shadowOpacity: isPremium ? 0.35 : 0.5,
-            transform: [{ scale: scaleAnim }],
-          },
-        ]}>
-          {/* PRO event — static visible gold border */}
-          {isPro && !isPremium && (
-            <View
-              style={[StyleSheet.absoluteFill, { borderRadius: 28, borderWidth: 2, borderColor: '#D4A843' }]}
-              pointerEvents="none"
+        <Animated.View
+          style={[styles.card, { transform: [{ scale: scaleAnim }] }]}
+          onLayout={(e) => {
+            const { width, height } = e.nativeEvent.layout;
+            setBox(b => (b.w === width && b.h === height ? b : { w: width, h: height }));
+          }}
+        >
+          {/* Depth, drawn rather than declared. Replaces the RN shadow, which could only
+              manage one soft smudge — the contact shadow under the lower edge is what
+              actually lifts the card off the page, and it needs a second pass. */}
+          {box.w > 0 && (
+            <CardLift
+              width={box.w}
+              height={box.h}
+              radius={CARD_RADIUS}
+              isDark={isDark}
+              tinted={isPremium || (isPro && !isPremium)}
+              tone="#D4A843"
             />
           )}
 
-          {/* Premium user — animated glowing gold border */}
-          {isPremium && (
-            <Animated.View
-              style={[
-                StyleSheet.absoluteFill,
-                {
-                  borderRadius: 28,
-                  borderWidth: 2,
-                  borderColor: '#D4A843',
-                  opacity: premiumBorderOpacity,
-                },
-              ]}
-              pointerEvents="none"
-            />
-          )}
-
-          <View style={[styles.inner, { borderColor: isPremium ? '#D4A84325' : 'rgba(255,255,255,0.08)' }]}>
+          <View style={styles.inner}>
             {/* Already Read badge */}
             {isRead && (
               <View style={styles.readBadge} pointerEvents="none">
@@ -270,6 +256,18 @@ const HistoryCardComponent = ({ event, allEvents = [] }: { event: any; allEvents
               pointerEvents="none"
             />
           </View>
+
+          {/* The light on the top edge. Without it the card's upper border dissolves into
+              whatever is behind it and the lift underneath stops reading. */}
+          {box.w > 0 && (
+            <CardRim
+              width={box.w}
+              height={box.h}
+              radius={CARD_RADIUS}
+              isDark={isDark}
+              tone={isPremium || isPro ? '#D4A843' : undefined}
+            />
+          )}
         </Animated.View>
       </TouchableWithoutFeedback>
 
@@ -306,16 +304,12 @@ const styles = StyleSheet.create({
   card: {
     width: '100%',
     height: '100%',
-    borderRadius: 28,
-    elevation: 14,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 12 },
+    borderRadius: CARD_RADIUS,
   },
   inner: {
     flex: 1,
-    borderRadius: 28,
+    borderRadius: CARD_RADIUS,
     overflow: 'hidden',
-    borderWidth: 1,
   },
   image: { ...StyleSheet.absoluteFillObject },
   gradient: { ...StyleSheet.absoluteFillObject },

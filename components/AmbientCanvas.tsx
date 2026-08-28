@@ -16,10 +16,12 @@
 //    dirt. Every layer therefore has two amplitudes, not one colour swap.
 import {
   BlurMask, Canvas, Circle, Group, LinearGradient, Path, RadialGradient,
-  Rect, Skia, vec,
+  Rect, RoundedRect, Skia, vec,
 } from '@shopify/react-native-skia';
-import { memo, useMemo } from 'react';
-import { StyleSheet } from 'react-native';
+import { memo, useMemo, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
+
+import { useTheme } from '../context/ThemeContext';
 import {
   Easing, interpolate, useDerivedValue, useSharedValue,
   withRepeat, withTiming, type SharedValue,
@@ -195,6 +197,150 @@ function FloorGlow({ width, y, isDark, amount }: {
     </Group>
   );
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+// CARD LIFT — what makes a rectangle read as an object
+// ═════════════════════════════════════════════════════════════════════════════
+/**
+ * The shadow stack under a card, drawn behind it and spilling past its bounds.
+ *
+ * A single blurred rectangle is what `shadowRadius` already gave us and it reads as a
+ * smudge. Depth needs two shadows doing different jobs: a wide, soft ambient one that
+ * says "there is space behind this", and a tight, darker contact shadow just under the
+ * lower edge that says "and it is resting above the surface, not printed on it". The
+ * contact shadow is the one that sells it, and it is the one RN's shadow API cannot
+ * express on its own.
+ *
+ * Deliberately no border: the lift is the whole treatment, so the card can stay flat and
+ * quiet and still sit forward of the page.
+ */
+export const CardLift = memo(function CardLift({
+  width, height, radius, isDark, tone = GOLD, tinted = false,
+}: {
+  width: number; height: number; radius: number;
+  isDark: boolean; tone?: string; tinted?: boolean;
+}) {
+  const SPILL = 44;   // room for the blur to leave the card's own box
+
+  // Premium tints the shadow gold rather than black — a gold card casting a grey shadow
+  // is the tell that it was composited rather than lit.
+  const shade = tinted ? tone : (isDark ? '#000000' : '#2A2318');
+  // Light mode needs MORE, not less. A shadow that is subtle on near-black disappears
+  // entirely on ivory, and a card with no shadow on a pale page reads as printed on it.
+  const ambient = isDark ? (tinted ? 0.42 : 0.55) : (tinted ? 0.34 : 0.38);
+  const contact = isDark ? 0.5 : 0.42;
+
+  return (
+    <Canvas
+      style={{
+        position: 'absolute',
+        left: -SPILL, right: -SPILL, top: -SPILL, bottom: -SPILL,
+        width: width + SPILL * 2, height: height + SPILL * 2,
+      }}
+      pointerEvents="none"
+    >
+      <Group transform={[{ translateX: SPILL, translateY: SPILL }]}>
+        {/* Ambient: broad, far, soft. The room behind the card. */}
+        <RoundedRect
+          x={10} y={26} width={width - 20} height={height} r={radius}
+          color={shade} opacity={ambient}
+        >
+          <BlurMask blur={26} style="normal" />
+        </RoundedRect>
+
+        {/* Contact: narrow, near, dark, and tight to the lower edge. This is the one that
+            says the card is resting above the page rather than printed on it. */}
+        <RoundedRect
+          x={width * 0.08} y={height - 14} width={width * 0.84} height={22} r={11}
+          color={shade} opacity={contact}
+        >
+          <BlurMask blur={9} style="normal" />
+        </RoundedRect>
+      </Group>
+    </Canvas>
+  );
+});
+
+/**
+ * The light catching the card's top edge, drawn over it.
+ *
+ * One hairline, brightest along the top and fading down each side — the same trick a
+ * photographer uses to separate a subject from its background. Without it the card's
+ * upper edge dissolves into whatever is behind it and the lift underneath stops reading.
+ */
+export const CardRim = memo(function CardRim({
+  width, height, radius, isDark, tone,
+}: { width: number; height: number; radius: number; isDark: boolean; tone?: string }) {
+  const rrect = useMemo(
+    () => Skia.RRectXY(Skia.XYWHRect(0.75, 0.75, width - 1.5, height - 1.5), radius, radius),
+    [width, height, radius],
+  );
+  const path = useMemo(() => {
+    const p = Skia.Path.Make();
+    p.addRRect(rrect);
+    return p;
+  }, [rrect]);
+
+  return (
+    <Canvas
+      style={{ position: 'absolute', left: 0, top: 0, width, height }}
+      pointerEvents="none"
+    >
+      <Path path={path} style="stroke" strokeWidth={1.25}>
+        <LinearGradient
+          start={vec(0, 0)}
+          end={vec(0, height * 0.62)}
+          colors={
+            tone
+              ? [`${tone}CC`, `${tone}33`, `${tone}00`]
+              : isDark
+                ? ['rgba(255,255,255,0.5)', 'rgba(255,255,255,0.1)', 'rgba(255,255,255,0)']
+                : ['rgba(255,255,255,0.95)', 'rgba(255,255,255,0.35)', 'rgba(255,255,255,0)']
+          }
+        />
+      </Path>
+    </Canvas>
+  );
+});
+
+/**
+ * Wraps a card in the lift treatment without the card having to know about it.
+ *
+ * Measures its child, draws the shadow stack behind and the rim light in front. Exists
+ * because the discover feed has four different card shapes and none of them should each
+ * grow their own copy of this.
+ */
+export const Lifted = memo(function Lifted({
+  radius, tone, tinted, style, children, isDark: isDarkProp,
+}: {
+  radius: number; tone?: string; tinted?: boolean;
+  style?: any; children: React.ReactNode;
+  /** Only for callers outside the themed tree; otherwise it reads the theme itself. */
+  isDark?: boolean;
+}) {
+  const theme = useTheme();
+  const isDark = isDarkProp ?? theme.isDark;
+  const [box, setBox] = useState({ w: 0, h: 0 });
+
+  return (
+    <View
+      style={style}
+      onLayout={(e) => {
+        const { width, height } = e.nativeEvent.layout;
+        setBox(b => (b.w === width && b.h === height ? b : { w: width, h: height }));
+      }}
+    >
+      {box.w > 0 && (
+        <CardLift width={box.w} height={box.h} radius={radius}
+          isDark={isDark} tone={tone} tinted={tinted} />
+      )}
+      {children}
+      {box.w > 0 && (
+        <CardRim width={box.w} height={box.h} radius={radius} isDark={isDark} tone={tone} />
+      )}
+    </View>
+  );
+});
 
 /**
  * A soft halo behind a card. Draws the eye to the day's lead story without a border,

@@ -18,6 +18,7 @@ import {
 
 import CoinIcon from './CoinIcon';
 import { COIN_GOLD } from '../config/coins';
+import { Lifted } from './AmbientCanvas';
 import { useLanguage } from '../context/LanguageContext';
 import { useCoinData, useCoinStore } from '../store/useCoinStore';
 import { useGamificationStore } from '../store/useGamificationStore';
@@ -27,6 +28,9 @@ import { haptic } from '../utils/haptics';
 import { StoryModal } from './StoryModal';
 
 const GAP = 8;
+/** The gold a PRO card's lift and rim are tinted with. */
+const GOLD_TONE = '#D4A843';
+
 const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
 const SANS = Platform.OS === 'ios' ? 'System' : 'sans-serif';
 
@@ -249,72 +253,74 @@ const HeroCard = ({
   const locked = pro && !subscribed && !unlocked;
 
   return (
-    <TouchableOpacity activeOpacity={0.94} onPress={onPress} style={[st.heroCard, { height }, pro && st.cardProBorder]}>
-      <EventImage event={event} style={StyleSheet.absoluteFill} showLoader={false} />
+    <Lifted radius={18} tinted={!!pro} tone={pro ? GOLD_TONE : undefined}>
+  <TouchableOpacity activeOpacity={0.94} onPress={onPress} style={[st.heroCard, { height }, pro && st.cardProBorder]}>
+        <EventImage event={event} style={StyleSheet.absoluteFill} showLoader={false} />
 
-      <LinearGradient
-        colors={['rgba(0,0,0,0.45)', 'transparent', 'rgba(0,0,0,0.82)', 'rgba(0,0,0,0.98)']}
-        locations={[0, 0.3, 0.74, 1]}
-        style={StyleSheet.absoluteFill}
-      />
+        <LinearGradient
+          colors={['rgba(0,0,0,0.45)', 'transparent', 'rgba(0,0,0,0.82)', 'rgba(0,0,0,0.98)']}
+          locations={[0, 0.3, 0.74, 1]}
+          style={StyleSheet.absoluteFill}
+        />
 
-      {/* Inner hairline frame — a touch of editorial polish */}
-      <View style={st.heroInnerFrame} pointerEvents="none" />
+        {/* Inner hairline frame — a touch of editorial polish */}
+        <View style={st.heroInnerFrame} pointerEvents="none" />
 
-      {isRead && <ReadBadge />}
+        {isRead && <ReadBadge />}
 
-      {/* Top bar */}
-      <View style={st.heroTopBar}>
-        <View style={st.heroFeatureChip}>
-          <View style={[st.heroFeatureDot, { backgroundColor: accent }]} />
-          <Text style={st.heroFeatureTxt}>FEATURE</Text>
+        {/* Top bar */}
+        <View style={st.heroTopBar}>
+          <View style={st.heroFeatureChip}>
+            <View style={[st.heroFeatureDot, { backgroundColor: accent }]} />
+            <Text style={st.heroFeatureTxt}>FEATURE</Text>
+          </View>
+          <View style={st.heroTopRight}>
+            {pro && <ProBadge locked={locked} compact />}
+            <Text style={[st.heroNumRoman, { marginLeft: pro ? 8 : 0 }]}>
+              {toRoman(number)}
+            </Text>
+          </View>
         </View>
-        <View style={st.heroTopRight}>
-          {pro && <ProBadge locked={locked} compact />}
-          <Text style={[st.heroNumRoman, { marginLeft: pro ? 8 : 0 }]}>
-            {toRoman(number)}
-          </Text>
-        </View>
-      </View>
 
-      {/* Body */}
-      <View style={st.heroBody}>
-        <View style={st.heroMetaRow}>
-          <Text style={[st.heroCat, { color: accent }]}>{category}</Text>
-          {year !== '' && (
-            <>
-              <View style={[st.heroMetaBar, { backgroundColor: accent + '70' }]} />
-              <Text style={st.heroMetaYear}>{year}</Text>
-              <View style={[st.heroMetaBar, { backgroundColor: accent + '40' }]} />
-              <Text style={st.heroMetaEra}>{eraLabel(yearNum, lang)}</Text>
-            </>
+        {/* Body */}
+        <View style={st.heroBody}>
+          <View style={st.heroMetaRow}>
+            <Text style={[st.heroCat, { color: accent }]}>{category}</Text>
+            {year !== '' && (
+              <>
+                <View style={[st.heroMetaBar, { backgroundColor: accent + '70' }]} />
+                <Text style={st.heroMetaYear}>{year}</Text>
+                <View style={[st.heroMetaBar, { backgroundColor: accent + '40' }]} />
+                <Text style={st.heroMetaEra}>{eraLabel(yearNum, lang)}</Text>
+              </>
+            )}
+          </View>
+
+          <Text style={st.heroTitle} numberOfLines={2}>{title}</Text>
+
+          {narrative !== '' && (
+            <Text style={st.heroLead} numberOfLines={2}>{narrative}</Text>
           )}
+
+          <View style={st.heroCtaRow}>
+            {locked ? (
+              <>
+                <View style={[st.heroCtaLine, { backgroundColor: COIN_GOLD }]} />
+                <Ionicons name="lock-open" size={11} color={COIN_GOLD} style={{ marginRight: 5 }} />
+                <Text style={[st.heroCtaTxt, { color: COIN_GOLD }]}>PRO</Text>
+                <CoinIcon size={10} style={{ marginLeft: 3 }} />
+              </>
+            ) : (
+              <>
+                <View style={[st.heroCtaLine, { backgroundColor: accent + '70' }]} />
+                <Text style={st.heroCtaTxt}>READ STORY</Text>
+                <Ionicons name="arrow-forward" size={11} color="rgba(255,255,255,0.8)" style={{ marginLeft: 6 }} />
+              </>
+            )}
+          </View>
         </View>
-
-        <Text style={st.heroTitle} numberOfLines={2}>{title}</Text>
-
-        {narrative !== '' && (
-          <Text style={st.heroLead} numberOfLines={2}>{narrative}</Text>
-        )}
-
-        <View style={st.heroCtaRow}>
-          {locked ? (
-            <>
-              <View style={[st.heroCtaLine, { backgroundColor: COIN_GOLD }]} />
-              <Ionicons name="lock-open" size={11} color={COIN_GOLD} style={{ marginRight: 5 }} />
-              <Text style={[st.heroCtaTxt, { color: COIN_GOLD }]}>PRO</Text>
-              <CoinIcon size={10} style={{ marginLeft: 3 }} />
-            </>
-          ) : (
-            <>
-              <View style={[st.heroCtaLine, { backgroundColor: accent + '70' }]} />
-              <Text style={st.heroCtaTxt}>READ STORY</Text>
-              <Ionicons name="arrow-forward" size={11} color="rgba(255,255,255,0.8)" style={{ marginLeft: 6 }} />
-            </>
-          )}
-        </View>
-      </View>
-    </TouchableOpacity>
+      </TouchableOpacity>
+</Lifted>
   );
 };
 
@@ -336,61 +342,63 @@ const EditorialCard = ({
   const locked = pro && !subscribed && !unlocked;
 
   return (
-    <TouchableOpacity activeOpacity={0.94} onPress={onPress} style={[st.editCard, { height }, pro && st.cardProBorder]}>
-      {/* Left image panel */}
-      <View style={st.editThumb}>
-        <EventImage event={event} style={StyleSheet.absoluteFill} showLoader={false} />
-        <LinearGradient
-          colors={['rgba(0,0,0,0.15)', 'rgba(0,0,0,0.5)', 'rgba(0,0,0,0.92)']}
-          locations={[0, 0.5, 1]}
-          style={StyleSheet.absoluteFill}
-        />
-        {year !== '' && (
-          <View style={st.editYearPanel}>
-            <Text style={st.editYearMain}>{year}</Text>
-            <View style={[st.editYearRule, { backgroundColor: accent }]} />
-            <Text style={st.editYearEra}>{eraLabel(yearNum, lang)}</Text>
-          </View>
-        )}
-      </View>
-
-      {isRead && <ReadBadge />}
-
-      {/* Right editorial body */}
-      <View style={st.editBody}>
-        <View style={st.editTopRow}>
-          <View style={st.editCatRow}>
-            <View style={[st.editCatDot, { backgroundColor: accent }]} />
-            <Text style={[st.editCatT, { color: accent }]}>{category}</Text>
-          </View>
-          <View style={st.editNumWrap}>
-            {pro && <ProBadge locked={locked} compact />}
-            <Text style={[st.editNumRoman, pro && { marginLeft: 6 }]}>
-              {toRoman(number)}
-            </Text>
-          </View>
-        </View>
-
-        <Text style={st.editTitle} numberOfLines={3}>{title}</Text>
-
-        <View style={st.editCtaRow}>
-          {locked ? (
-            <>
-              <View style={[st.editCtaLine, { backgroundColor: COIN_GOLD }]} />
-              <Ionicons name="lock-open" size={10} color={COIN_GOLD} style={{ marginRight: 4 }} />
-              <Text style={[st.editCtaTxt, { color: COIN_GOLD }]}>PRO</Text>
-              <CoinIcon size={9} style={{ marginLeft: 3 }} />
-            </>
-          ) : (
-            <>
-              <View style={[st.editCtaLine, { backgroundColor: accent + '55' }]} />
-              <Text style={st.editCtaTxt}>CONTINUE</Text>
-              <Ionicons name="arrow-forward" size={10} color="rgba(255,255,255,0.55)" style={{ marginLeft: 5 }} />
-            </>
+    <Lifted radius={16} tinted={!!pro} tone={pro ? GOLD_TONE : undefined}>
+  <TouchableOpacity activeOpacity={0.94} onPress={onPress} style={[st.editCard, { height }, pro && st.cardProBorder]}>
+        {/* Left image panel */}
+        <View style={st.editThumb}>
+          <EventImage event={event} style={StyleSheet.absoluteFill} showLoader={false} />
+          <LinearGradient
+            colors={['rgba(0,0,0,0.15)', 'rgba(0,0,0,0.5)', 'rgba(0,0,0,0.92)']}
+            locations={[0, 0.5, 1]}
+            style={StyleSheet.absoluteFill}
+          />
+          {year !== '' && (
+            <View style={st.editYearPanel}>
+              <Text style={st.editYearMain}>{year}</Text>
+              <View style={[st.editYearRule, { backgroundColor: accent }]} />
+              <Text style={st.editYearEra}>{eraLabel(yearNum, lang)}</Text>
+            </View>
           )}
         </View>
-      </View>
-    </TouchableOpacity>
+
+        {isRead && <ReadBadge />}
+
+        {/* Right editorial body */}
+        <View style={st.editBody}>
+          <View style={st.editTopRow}>
+            <View style={st.editCatRow}>
+              <View style={[st.editCatDot, { backgroundColor: accent }]} />
+              <Text style={[st.editCatT, { color: accent }]}>{category}</Text>
+            </View>
+            <View style={st.editNumWrap}>
+              {pro && <ProBadge locked={locked} compact />}
+              <Text style={[st.editNumRoman, pro && { marginLeft: 6 }]}>
+                {toRoman(number)}
+              </Text>
+            </View>
+          </View>
+
+          <Text style={st.editTitle} numberOfLines={3}>{title}</Text>
+
+          <View style={st.editCtaRow}>
+            {locked ? (
+              <>
+                <View style={[st.editCtaLine, { backgroundColor: COIN_GOLD }]} />
+                <Ionicons name="lock-open" size={10} color={COIN_GOLD} style={{ marginRight: 4 }} />
+                <Text style={[st.editCtaTxt, { color: COIN_GOLD }]}>PRO</Text>
+                <CoinIcon size={9} style={{ marginLeft: 3 }} />
+              </>
+            ) : (
+              <>
+                <View style={[st.editCtaLine, { backgroundColor: accent + '55' }]} />
+                <Text style={st.editCtaTxt}>CONTINUE</Text>
+                <Ionicons name="arrow-forward" size={10} color="rgba(255,255,255,0.55)" style={{ marginLeft: 5 }} />
+              </>
+            )}
+          </View>
+        </View>
+      </TouchableOpacity>
+</Lifted>
   );
 };
 
@@ -410,41 +418,43 @@ const CuratedCard = ({
   const locked = pro && !subscribed && !unlocked;
 
   return (
-    <TouchableOpacity activeOpacity={0.94} onPress={onPress} style={[st.curCard, { width, height }, pro && st.cardProBorder]}>
-      <EventImage event={event} style={StyleSheet.absoluteFill} showLoader={false} />
+    <Lifted radius={14} tinted={!!pro} tone={pro ? GOLD_TONE : undefined}>
+  <TouchableOpacity activeOpacity={0.94} onPress={onPress} style={[st.curCard, { width, height }, pro && st.cardProBorder]}>
+        <EventImage event={event} style={StyleSheet.absoluteFill} showLoader={false} />
 
-      <LinearGradient
-        colors={['rgba(0,0,0,0.3)', 'transparent', 'rgba(0,0,0,0.95)']}
-        locations={[0, 0.28, 1]}
-        style={StyleSheet.absoluteFill}
-      />
+        <LinearGradient
+          colors={['rgba(0,0,0,0.3)', 'transparent', 'rgba(0,0,0,0.95)']}
+          locations={[0, 0.28, 1]}
+          style={StyleSheet.absoluteFill}
+        />
 
-      {/* Top-left: big Roman number with accent rule */}
-      <View style={st.curNumBox}>
-        <Text style={st.curNum}>{toRoman(number)}</Text>
-        <View style={[st.curNumRule, { backgroundColor: accent }]} />
-      </View>
-
-      {pro && (
-        <View style={{ position: 'absolute', top: 10, right: 10, zIndex: 3 }}>
-          <ProBadge locked={locked} compact />
+        {/* Top-left: big Roman number with accent rule */}
+        <View style={st.curNumBox}>
+          <Text style={st.curNum}>{toRoman(number)}</Text>
+          <View style={[st.curNumRule, { backgroundColor: accent }]} />
         </View>
-      )}
 
-      {isRead && <ReadBadge />}
-
-      {/* Bottom */}
-      <View style={st.curBot}>
-        <Text style={[st.curCat, { color: accent }]}>{category}</Text>
-        <Text style={st.curTitle} numberOfLines={2}>{title}</Text>
-        {year !== '' && (
-          <View style={st.curYearRow}>
-            <View style={[st.curYearDot, { backgroundColor: accent }]} />
-            <Text style={st.curYear}>{year}</Text>
+        {pro && (
+          <View style={{ position: 'absolute', top: 10, right: 10, zIndex: 3 }}>
+            <ProBadge locked={locked} compact />
           </View>
         )}
-      </View>
-    </TouchableOpacity>
+
+        {isRead && <ReadBadge />}
+
+        {/* Bottom */}
+        <View style={st.curBot}>
+          <Text style={[st.curCat, { color: accent }]}>{category}</Text>
+          <Text style={st.curTitle} numberOfLines={2}>{title}</Text>
+          {year !== '' && (
+            <View style={st.curYearRow}>
+              <View style={[st.curYearDot, { backgroundColor: accent }]} />
+              <Text style={st.curYear}>{year}</Text>
+            </View>
+          )}
+        </View>
+      </TouchableOpacity>
+</Lifted>
   );
 };
 
