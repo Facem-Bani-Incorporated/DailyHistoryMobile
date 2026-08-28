@@ -33,29 +33,6 @@ const PURPLE = '#7B5EA7';
 
 const TAU = Math.PI * 2;
 
-/**
- * One aurora ribbon at time `t`. A module function marked as a worklet so both ribbons
- * share it without either of them owning a hook.
- */
-function auroraPath(
-  clock: number, speed: number, phase: number,
-  baseY: number, amp: number, width: number, height: number,
-) {
-  'worklet';
-  const t = (clock * speed + phase) % 1;
-  const y = baseY + Math.sin(t * TAU) * height * 0.045;
-  const p = Skia.Path.Make();
-  p.moveTo(-width * 0.2, y);
-  const steps = 6;
-  for (let i = 1; i <= steps; i++) {
-    const x = -width * 0.2 + (width * 1.4 * i) / steps;
-    const prevX = -width * 0.2 + (width * 1.4 * (i - 1)) / steps;
-    const wob = Math.sin(t * TAU + i * 1.1) * amp;
-    p.cubicTo(prevX + width * 0.12, y + wob, x - width * 0.12, y - wob, x, y);
-  }
-  return p;
-}
-
 interface Props {
   width: number;
   height: number;
@@ -82,31 +59,27 @@ export const AmbientBackdrop = memo(function AmbientBackdrop({
     clock.value = withRepeat(withTiming(1, { duration: 26000, easing: Easing.linear }), -1, false);
   }, [clock]);
 
-  // Light mode runs at about half: the same ribbon that reads as atmosphere on
-  // near-black reads as a smudge on ivory. A third turned out to be invisible on a
-  // real screen, which is worse than absent — it costs a canvas and gives nothing.
-  const A = isDark ? (isPremium ? 1 : 0.72) : 0.55;
+  // Light mode runs at about half: the same light that reads as atmosphere on near-black
+  // reads as a smudge on ivory.
+  const A = isDark ? (isPremium ? 1 : 0.75) : 0.5;
 
   const ground = isDark
-    ? (isPremium ? ['#0B0817', '#07060E', '#05040A'] : ['#141821', '#0E1117', '#0B0E14'])
+    ? (isPremium ? ['#0C0819', '#08060F', '#040309'] : ['#151A24', '#0F131A', '#0A0D12'])
     : ['#FFFDF7', '#FAF7EE', '#F3EFE4'];
 
-  // Written out twice rather than through a helper: a hook called inside a closure is a
-  // rule-of-hooks violation that happens to work here, and the next person to add a third
-  // ribbon behind an `if` would find out the hard way.
-  const r1 = useDerivedValue(() => {
-    'worklet';
-    return auroraPath(clock.value, 1, 0, height * 0.26, height * 0.06, width, height);
-  });
-  const r2 = useDerivedValue(() => {
-    'worklet';
-    return auroraPath(clock.value, 0.68, 0.5, height * 0.62, height * 0.045, width, height);
-  });
+  // Two lights and some dust, and nothing else.
+  //
+  // This used to draw a pair of aurora ribbons — 90px strokes under a 70px blur, sweeping
+  // the whole screen. At that scale a blurred stroke is not a ribbon, it is a smear, and
+  // on a dark ground it read as dirt on the glass. Gradients and soft radial light do the
+  // same job without ever resolving into a shape you can catch.
+  const crownY = height * 0.14;
+  const crownR = width * 1.05;
 
   // The floor light tracks the scroll, so pushing the feed up warms the bottom of the
   // screen. Subtle, but it is what stops the background feeling painted on.
   const floorY = useDerivedValue(() =>
-    scroll ? height * 0.94 - Math.min(160, Math.max(0, scroll.value)) * 0.25 : height * 0.94);
+    scroll ? height * 0.98 - Math.min(160, Math.max(0, scroll.value)) * 0.25 : height * 0.98);
 
   return (
     <Canvas style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -114,14 +87,19 @@ export const AmbientBackdrop = memo(function AmbientBackdrop({
         <LinearGradient start={vec(0, 0)} end={vec(0, height)} colors={ground} />
       </Rect>
 
-      <Group opacity={0.5 * A}>
-        <Path path={r1} style="stroke" strokeWidth={height * 0.1} color={isDark ? PURPLE : GOLD}>
-          <BlurMask blur={70} style="normal" />
-        </Path>
-        <Path path={r2} style="stroke" strokeWidth={height * 0.08} color={isDark ? AMBER : AMBER}>
-          <BlurMask blur={80} style="normal" />
-        </Path>
-      </Group>
+      {/* The crown: a wide, low light above the fold, as if the page were lit from over
+          the reader's shoulder. Purple on premium, plain warm elsewhere. */}
+      <Rect x={0} y={0} width={width} height={height * 0.62} opacity={A * (isDark ? 0.55 : 0.3)}>
+        <RadialGradient
+          c={vec(width * 0.5, crownY)}
+          r={crownR}
+          colors={
+            isDark
+              ? [isPremium ? `${PURPLE}3A` : `${GOLD}22`, isPremium ? `${PURPLE}12` : `${GOLD}0A`, '#00000000']
+              : [`${GOLD}26`, `${GOLD}0C`, '#00000000']
+          }
+        />
+      </Rect>
 
       <Dust width={width} height={height} clock={clock} amount={A} isDark={isDark} />
 
@@ -220,41 +198,49 @@ export const CardLift = memo(function CardLift({
   width: number; height: number; radius: number;
   isDark: boolean; tone?: string; tinted?: boolean;
 }) {
-  const SPILL = 44;   // room for the blur to leave the card's own box
+  // ── Geometry ────────────────────────────────────────────────────────────
+  // Every one of these feeds SPILL. Skia clips a blur at the canvas edge, so a canvas
+  // that is not bigger than (offset + blur + feather) cuts the soft falloff off square —
+  // which is exactly what a "blurred" shadow with a hard straight edge looks like, and
+  // it showed up worst along the bottom where the shadow is strongest.
+  const AMBIENT_DY = 24;
+  const AMBIENT_BLUR = 28;
+  const CONTACT_BLUR = 10;
+  const FEATHER = 3;                       // BlurMask reaches a little past its radius
+  const SPILL = Math.ceil(AMBIENT_DY + AMBIENT_BLUR * 2 + FEATHER);
 
-  // Premium tints the shadow gold rather than black — a gold card casting a grey shadow
-  // is the tell that it was composited rather than lit.
   const shade = tinted ? tone : (isDark ? '#000000' : '#2A2318');
   // Light mode needs MORE, not less. A shadow that is subtle on near-black disappears
   // entirely on ivory, and a card with no shadow on a pale page reads as printed on it.
-  const ambient = isDark ? (tinted ? 0.42 : 0.55) : (tinted ? 0.34 : 0.38);
-  const contact = isDark ? 0.5 : 0.42;
+  const ambient = isDark ? (tinted ? 0.4 : 0.5) : (tinted ? 0.34 : 0.38);
+  const contact = isDark ? 0.46 : 0.42;
 
   return (
     <Canvas
       style={{
         position: 'absolute',
-        left: -SPILL, right: -SPILL, top: -SPILL, bottom: -SPILL,
+        left: -SPILL, top: -SPILL,
         width: width + SPILL * 2, height: height + SPILL * 2,
       }}
       pointerEvents="none"
     >
       <Group transform={[{ translateX: SPILL, translateY: SPILL }]}>
-        {/* Ambient: broad, far, soft. The room behind the card. */}
+        {/* Ambient: broad, far, soft. The room behind the card. Inset horizontally so the
+            falloff is widest where the eye looks for it — under the lower corners. */}
         <RoundedRect
-          x={10} y={26} width={width - 20} height={height} r={radius}
+          x={10} y={AMBIENT_DY} width={width - 20} height={height - 8} r={radius}
           color={shade} opacity={ambient}
         >
-          <BlurMask blur={26} style="normal" />
+          <BlurMask blur={AMBIENT_BLUR} style="normal" />
         </RoundedRect>
 
-        {/* Contact: narrow, near, dark, and tight to the lower edge. This is the one that
-            says the card is resting above the page rather than printed on it. */}
+        {/* Contact: narrow, near, dark, tight to the lower edge. This is the one that says
+            the card is resting above the page rather than printed on it. */}
         <RoundedRect
-          x={width * 0.08} y={height - 14} width={width * 0.84} height={22} r={11}
+          x={width * 0.1} y={height - 12} width={width * 0.8} height={18} r={9}
           color={shade} opacity={contact}
         >
-          <BlurMask blur={9} style="normal" />
+          <BlurMask blur={CONTACT_BLUR} style="normal" />
         </RoundedRect>
       </Group>
     </Canvas>

@@ -516,30 +516,106 @@ function YearMark({ year, gold }: { year: string; gold: string }) {
 // STAT ROW — reality struck out, your world landing on top of it
 // ═════════════════════════════════════════════════════════════════════════════
 /**
- * One comparison, stacked rather than columned.
+ * Pulls the first number out of a value so it can be counted rather than just printed.
  *
- * This was three columns with the two value cells pinned to 72pt, which meant every
- * answer longer than two words ended in an ellipsis — "Fewer, but strong p…" told the
- * player nothing. The values now get the full width and wrap, and the comparison is
- * carried by the strike-through and the arrow instead of by alignment.
+ * The stats arrive as prose with a figure in them — "8 million", "Approx. 100,000",
+ * "1806", "under 1 million". Everything around the number is kept verbatim and only the
+ * digits are animated, so "under 1 million" counts to a million and still says "under".
+ * A value with no number in it (`"never"`, `"Rapid and uniform"`) returns null and is
+ * simply revealed.
+ */
+function parseFigure(text: string):
+  { before: string; value: number; after: string; decimals: number; grouped: boolean } | null {
+  // Grouped form first and only when the separators are real — "1,200,000". The looser
+  // pattern used to win on "1806" and match "180", leaving a stray 6 behind it.
+  const m = /(-?\d{1,3}(?:[.,\s]\d{3})+|-?\d+(?:[.,]\d+)?)/.exec(text);
+  if (!m) return null;
+  const raw = m[1];
+  const grouped = /^-?\d{1,3}(?:[.,\s]\d{3})+$/.test(raw);
+  const normalised = grouped ? raw.replace(/[.,\s]/g, '') : raw.replace(',', '.');
+  const value = Number(normalised);
+  if (!Number.isFinite(value)) return null;
+  const dot = normalised.indexOf('.');
+  return {
+    before: text.slice(0, m.index),
+    value,
+    after: text.slice(m.index + raw.length),
+    decimals: dot === -1 ? 0 : normalised.length - dot - 1,
+    grouped,
+  };
+}
+
+/** Only group what was grouped to begin with, or a figure big enough to need it —
+ *  otherwise a year counts up as "1,806". */
+const groupDigits = (n: string, on: boolean) =>
+  on ? n.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : n;
+
+/**
+ * Counts a figure from where history left it to where the player's world does.
+ *
+ * Driven by requestAnimationFrame rather than Reanimated: the value has to become a
+ * formatted string, and the only ways to do that on the UI thread need a font-measuring
+ * text node this screen does not otherwise want. It runs for under a second, on at most
+ * six rows, once — and the number moving is the whole point of the table.
+ */
+function useCountUp(from: number, to: number, decimals: number, delay: number, run: boolean, grouped: boolean) {
+  const [n, setN] = useState(from);
+  useEffect(() => {
+    if (!run) return;
+    let raf = 0;
+    let start = 0;
+    const DURATION = 900;
+    const tick = (t: number) => {
+      if (!start) start = t;
+      const p = Math.min(1, (t - start) / DURATION);
+      // Ease out so it arrives rather than stops.
+      const eased = 1 - Math.pow(1 - p, 3);
+      setN(from + (to - from) * eased);
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    const id = setTimeout(() => { raf = requestAnimationFrame(tick); }, delay);
+    return () => { clearTimeout(id); cancelAnimationFrame(raf); };
+  }, [from, to, delay, run]);
+
+  return groupDigits(n.toFixed(decimals), grouped || Math.abs(to) >= 10000);
+}
+
+/**
+ * One comparison: what history recorded, struck out, and what your world recorded
+ * counting up into its place.
+ *
+ * This was three columns with the two value cells pinned to 72pt, which ellipsed every
+ * answer longer than two words. Then it was static text, which read as a generated list.
+ * The figure moving is what makes it land as a result rather than as copy.
  */
 function StatRow({ stat, index, gold, theme, isDark }: {
   stat: Stat; index: number; gold: string; theme: any; isDark: boolean;
 }) {
   const enter = useRef(new Animated.Value(0)).current;
-  const land = useRef(new Animated.Value(0)).current;
+  const [landed, setLanded] = useState(false);
+  const delay = 90 + index * 130;
+
+  const real = useMemo(() => parseFigure(stat.real), [stat.real]);
+  const alt = useMemo(() => parseFigure(stat.alt), [stat.alt]);
+  // Both sides have to be numbers for a count to mean anything — counting from zero to a
+  // figure is a slot machine, counting from history to yours is a comparison.
+  const countable = !!real && !!alt;
+
+  const counted = useCountUp(
+    countable ? real!.value : 0,
+    countable ? alt!.value : 0,
+    countable ? alt!.decimals : 0,
+    delay + 160,
+    countable,
+    countable ? alt!.grouped : false,
+  );
 
   useEffect(() => {
-    // The row arrives, then your figure lands on it a beat later. Staggered down the
-    // table so the comparison reads one line at a time instead of all at once.
-    Animated.sequence([
-      Animated.timing(enter, {
-        toValue: 1, duration: 300, delay: 90 + index * 110,
-        easing: Easing.out(Easing.cubic), useNativeDriver: true,
-      }),
-      Animated.spring(land, { toValue: 1, tension: 90, friction: 7, useNativeDriver: true }),
-    ]).start();
-  }, [enter, land, index]);
+    Animated.timing(enter, {
+      toValue: 1, duration: 320, delay,
+      easing: Easing.out(Easing.cubic), useNativeDriver: true,
+    }).start(() => setLanded(true));
+  }, [enter, delay]);
 
   return (
     <Animated.View
@@ -557,18 +633,41 @@ function StatRow({ stat, index, gold, theme, isDark }: {
     >
       <Text style={[st_.label, { color: theme.subtext }]}>{stat.label}</Text>
       <Text style={[st_.real, { color: theme.subtext }]}>{stat.real}</Text>
-      <Animated.View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'flex-start',
-          opacity: land,
-          transform: [{ translateX: land.interpolate({ inputRange: [0, 1], outputRange: [-10, 0] }) }],
-        }}
-      >
+      <View style={st_.altRow}>
         <Text style={[st_.arrow, { color: gold }]}>→ </Text>
-        <Text style={[st_.alt, { color: gold }]}>{stat.alt}</Text>
-      </Animated.View>
+        <Text style={[st_.alt, { color: gold }]}>
+          {countable
+            ? `${alt!.before}${counted}${alt!.after}`
+            : stat.alt}
+        </Text>
+      </View>
+      {/* A hairline that draws itself under the row as the figure settles — the table
+          builds downward instead of appearing all at once. */}
+      {landed && <RowSpark gold={gold} />}
     </Animated.View>
+  );
+}
+
+/** The gold underline that sweeps out beneath a landed row. */
+function RowSpark({ gold }: { gold: string }) {
+  const grow = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(grow, {
+      toValue: 1, duration: 700, easing: Easing.out(Easing.cubic), useNativeDriver: false,
+    }).start();
+  }, [grow]);
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{
+        height: 1.5,
+        marginTop: 8,
+        borderRadius: 1,
+        backgroundColor: gold,
+        opacity: grow.interpolate({ inputRange: [0, 0.4, 1], outputRange: [0, 0.55, 0.18] }),
+        width: grow.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }),
+      }}
+    />
   );
 }
 
@@ -576,8 +675,9 @@ const st_ = StyleSheet.create({
   row: { paddingVertical: 11 },
   label: { fontSize: 10, fontWeight: '800', letterSpacing: 0.7, textTransform: 'uppercase', marginBottom: 5 },
   real: { fontSize: 13, lineHeight: 18, textDecorationLine: 'line-through', marginBottom: 3 },
+  altRow: { flexDirection: 'row', alignItems: 'flex-start' },
   arrow: { fontSize: 14, fontWeight: '800', lineHeight: 20 },
-  alt: { flex: 1, fontSize: 14.5, fontWeight: '800', lineHeight: 20 },
+  alt: { flex: 1, fontSize: 14.5, fontWeight: '800', lineHeight: 20, fontVariant: ['tabular-nums'] },
 });
 
 function ChoiceCard({ choice, onPick, disabled, exiting, chosen, showEffects, gold, theme, isDark, delay, riskLabel }: {
