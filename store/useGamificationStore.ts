@@ -6,6 +6,18 @@ import * as analytics from '../src/analytics/posthog';
 import { COINS_ENABLED, COIN_COST_STREAK_RESTORE } from '../config/coins';
 import { useCoinStore } from './useCoinStore';
 
+/** Spend a wheel-won streak shield, if the user has one.
+ *
+ *  Required lazily: useWheelStore reaches useAuthStore, which lazily reaches back into
+ *  this store on logout. A top-level import would close that loop at module load. */
+function consumeWheelShield(): boolean {
+  try {
+    return require('./useWheelStore').useWheelStore.getState().consumeShield();
+  } catch {
+    return false;
+  }
+}
+
 const todayISO = () => new Date().toISOString().split('T')[0];
 const yesterdayISO = () => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().split('T')[0]; };
 const getMonthKey = (date?: Date) => { const d = date ?? new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
@@ -388,6 +400,12 @@ export const useGamificationStore = create<GamificationState>()(
           // Streak shield: absorb one missed day once per week
           newStreak = currentStreak > 0 ? currentStreak : 1;
           set({ streakShieldUsedWeek: currentWeek });
+        } else if (lastActiveDate && currentStreak > 0 && consumeWheelShield()) {
+          // A shield won on the daily wheel, spent only once the built-in weekly one is
+          // already gone. Without this the wheel's second-most-common prize did nothing
+          // at all — it was awarded, stored, and never read by anything.
+          newStreak = currentStreak;
+          analytics.capture('streak_shield_used', { streak_length: currentStreak, source: 'wheel' });
         } else {
           // Gap too large and the weekly shield is spent — the streak is gone.
           // (A falsy lastActiveDate is a first-ever visit, not a loss.)
