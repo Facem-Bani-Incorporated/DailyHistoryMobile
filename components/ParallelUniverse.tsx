@@ -1,14 +1,16 @@
 // components/ParallelUniverse.tsx
 // "Parallel Universes" — a branching what-if game built on a real event.
 //
-// Three decisions, four world meters that trade against each other, one of eight
-// endings. The pipeline generates the tree (engine/parallel.py); this runs it.
+// Three decisions, one of twelve endings. Four world meters and four named factions
+// move against each other the whole way. The pipeline generates the tree
+// (engine/parallel.py); this runs it.
 //
-// The design principle throughout: show consequence, never state it. The meters move
-// visibly on every choice, the timeline you are building draws itself down the left
-// edge, and the ending compares your world to the real one on a radar rather than
-// telling you it went badly. A line of text saying "freedom decreased" is worth less
-// than a bar that visibly falls.
+// The design principle throughout: show consequence, never state it. A line of text
+// saying "freedom decreased" is worth less than a bar that visibly falls. So every
+// screen carries hard numbers rather than prose — the facts you are deciding under,
+// what each choice commits and how likely it is to backfire, which faction you just
+// made an enemy of, and at the end a table setting your world's figures against the
+// real ones.
 //
 // Everything on the native driver except the radar reveal, which is a one-off rAF
 // sweep — SVG polygon points cannot be driven natively, and animating it through
@@ -36,13 +38,27 @@ const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
 
 // ─── Shape of the JSON the pipeline produces ─────────────────────────────────
 interface Effects { stability: number; lives: number; progress: number; freedom: number }
-interface Choice { id: string; label: string; detail: string; effects: Effects; next: string }
+interface Actor { id: string; name: string; start: number }
+interface Fact { label: string; value: string }
+interface Outcome { label: string; value: string }
+interface Stat { label: string; real: string; alt: string }
+interface Choice {
+  id: string; label: string; detail: string; effects: Effects; next: string;
+  actorEffects?: Record<string, number>;
+  risk?: number;
+  outcome?: Outcome | null;
+}
 interface Node {
   id: string; year: string; title: string; text: string;
-  choices: Choice[]; verdict: string; epitaph: string; rarity: string;
+  facts?: Fact[];
+  choices: Choice[];
+  verdict: string; epitaph: string; rarity: string;
+  stats?: Stat[];
 }
 interface Universe {
-  pivotYear: string; pivotTitle: string; premise: string; root: string; nodes: Node[];
+  pivotYear: string; pivotTitle: string; premise: string; root: string;
+  actors?: Actor[];
+  nodes: Node[];
 }
 
 type MeterKey = keyof Effects;
@@ -78,7 +94,7 @@ const L: Record<Lang, Record<string, string>> = {
     noRuns: 'You have used today\'s run', proUnlimited: 'PRO plays as often as it likes',
     getPro: 'Unlock unlimited runs', locked: 'Come back tomorrow',
     preview: 'PRO sees the cost before choosing', already: 'Found before',
-    firstTime: 'New timeline',
+    firstTime: 'New timeline', risk: 'Risk',
   },
   ro: {
     kicker: 'UNIVERSURI PARALELE', reality: 'Ce s-a întâmplat cu adevărat',
@@ -91,7 +107,7 @@ const L: Record<Lang, Record<string, string>> = {
     noRuns: 'Ți-ai folosit rularea de azi', proUnlimited: 'PRO joacă oricât vrea',
     getPro: 'Deblochează rulări nelimitate', locked: 'Revino mâine',
     preview: 'PRO vede costul înainte să aleagă', already: 'Găsită deja',
-    firstTime: 'Cronologie nouă',
+    firstTime: 'Cronologie nouă', risk: 'Risc',
   },
   fr: {
     kicker: 'UNIVERS PARALLÈLES', reality: 'Ce qui est vraiment arrivé',
@@ -104,7 +120,7 @@ const L: Record<Lang, Record<string, string>> = {
     noRuns: 'Vous avez utilisé votre tour du jour', proUnlimited: 'PRO joue autant qu\'il veut',
     getPro: 'Débloquer les parties illimitées', locked: 'Revenez demain',
     preview: 'PRO voit le coût avant de choisir', already: 'Déjà trouvée',
-    firstTime: 'Nouvelle chronologie',
+    firstTime: 'Nouvelle chronologie', risk: 'Risque',
   },
   de: {
     kicker: 'PARALLELE WELTEN', reality: 'Was wirklich geschah',
@@ -117,7 +133,7 @@ const L: Record<Lang, Record<string, string>> = {
     noRuns: 'Dein heutiger Durchgang ist verbraucht', proUnlimited: 'PRO spielt so oft es will',
     getPro: 'Unbegrenzte Durchgänge freischalten', locked: 'Komm morgen wieder',
     preview: 'PRO sieht die Kosten vor der Wahl', already: 'Schon gefunden',
-    firstTime: 'Neue Zeitlinie',
+    firstTime: 'Neue Zeitlinie', risk: 'Risiko',
   },
   es: {
     kicker: 'UNIVERSOS PARALELOS', reality: 'Lo que realmente pasó',
@@ -130,7 +146,7 @@ const L: Record<Lang, Record<string, string>> = {
     noRuns: 'Ya usaste tu partida de hoy', proUnlimited: 'PRO juega cuantas veces quiera',
     getPro: 'Desbloquear partidas ilimitadas', locked: 'Vuelve mañana',
     preview: 'PRO ve el coste antes de elegir', already: 'Ya encontrada',
-    firstTime: 'Cronología nueva',
+    firstTime: 'Cronología nueva', risk: 'Riesgo',
   },
 };
 
@@ -215,6 +231,77 @@ function Meter({ k, value, delta, label, isDark }: {
     </View>
   );
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+// FACTIONS — the political board, not four abstract meters
+// ═════════════════════════════════════════════════════════════════════════════
+function ActorRow({ actor, value, delta, isDark, gold }: {
+  actor: Actor; value: number; delta: number; isDark: boolean; gold: string;
+}) {
+  const fill = useRef(new Animated.Value(value / 100)).current;
+  useEffect(() => {
+    Animated.spring(fill, { toValue: value / 100, tension: 48, friction: 9, useNativeDriver: true }).start();
+  }, [value, fill]);
+
+  const W_BAR = 92;
+  const scaleX = fill;
+  const shift = fill.interpolate({ inputRange: [0, 1], outputRange: [-W_BAR / 2, 0] });
+  // Colour by where they stand, not by which way they just moved — a faction at 12 is
+  // your enemy whether it rose or fell this turn.
+  const tone = value >= 66 ? '#3FA97A' : value >= 33 ? gold : '#D9603F';
+
+  return (
+    <View style={a_.row}>
+      <Text style={[a_.name, { color: isDark ? 'rgba(255,255,255,0.72)' : 'rgba(0,0,0,0.62)' }]} numberOfLines={1}>
+        {actor.name}
+      </Text>
+      <View style={[a_.track, { backgroundColor: isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)', width: W_BAR }]}>
+        <Animated.View style={[a_.fill, { backgroundColor: tone, width: W_BAR, transform: [{ translateX: shift }, { scaleX }] }]} />
+      </View>
+      <Text style={[a_.val, { color: tone }]}>{value}</Text>
+      {delta !== 0 && (
+        <Text style={[a_.delta, { color: delta > 0 ? '#3FA97A' : '#D9603F' }]}>
+          {delta > 0 ? `+${delta}` : delta}
+        </Text>
+      )}
+    </View>
+  );
+}
+
+const a_ = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
+  name: { flex: 1, fontSize: 11.5, fontWeight: '600' },
+  track: { height: 5, borderRadius: 3, overflow: 'hidden' },
+  fill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 3 },
+  val: { width: 22, textAlign: 'right', fontSize: 11, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  delta: { width: 26, textAlign: 'right', fontSize: 10.5, fontWeight: '800', fontVariant: ['tabular-nums'] },
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// FACTS — the constraints you are deciding under
+// ═════════════════════════════════════════════════════════════════════════════
+function FactStrip({ facts, isDark, gold }: { facts: Fact[]; isDark: boolean; gold: string }) {
+  if (!facts?.length) return null;
+  return (
+    <View style={[f_.wrap, { borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.09)' }]}>
+      {facts.map((f, i) => (
+        <View key={i} style={[f_.cell, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]}>
+          <Text style={[f_.label, { color: isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.42)' }]} numberOfLines={1}>
+            {f.label}
+          </Text>
+          <Text style={[f_.value, { color: gold }]} numberOfLines={1}>{f.value}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+const f_ = StyleSheet.create({
+  wrap: { borderWidth: 1, borderRadius: 11, paddingHorizontal: 13, paddingVertical: 4, marginBottom: 18 },
+  cell: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingVertical: 7 },
+  label: { flex: 1, fontSize: 10.5, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase' },
+  value: { fontSize: 12.5, fontWeight: '800', fontVariant: ['tabular-nums'] },
+});
 
 const m = StyleSheet.create({
   wrap: { alignItems: 'center', width: BAR_W + 8 },
@@ -372,9 +459,10 @@ const r_ = StyleSheet.create({
 // ═════════════════════════════════════════════════════════════════════════════
 // CHOICE CARD
 // ═════════════════════════════════════════════════════════════════════════════
-function ChoiceCard({ choice, onPick, disabled, exiting, chosen, showEffects, gold, theme, isDark, delay }: {
+function ChoiceCard({ choice, onPick, disabled, exiting, chosen, showEffects, gold, theme, isDark, delay, riskLabel }: {
   choice: Choice; onPick: () => void; disabled: boolean; exiting: boolean; chosen: boolean;
   showEffects: boolean; gold: string; theme: any; isDark: boolean; delay: number;
+  riskLabel: string;
 }) {
   const enter = useRef(new Animated.Value(0)).current;
   const exit = useRef(new Animated.Value(0)).current;
@@ -423,6 +511,34 @@ function ChoiceCard({ choice, onPick, disabled, exiting, chosen, showEffects, go
         <Text style={[cc.label, { color: theme.text }]}>{choice.label}</Text>
         <Text style={[cc.detail, { color: theme.subtext }]}>{choice.detail}</Text>
 
+        {/* What this commits, and how likely it is to go wrong. Shown to everyone —
+            it is the tension of the decision, not a spoiler of the meter maths. */}
+        {(!!choice.outcome?.value || typeof choice.risk === 'number') && (
+          <View style={[cc.footer, { borderTopColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]}>
+            {!!choice.outcome?.value && (
+              <View style={cc.outcome}>
+                <Text style={[cc.outLabel, { color: theme.subtext }]} numberOfLines={1}>
+                  {choice.outcome.label}
+                </Text>
+                <Text style={[cc.outValue, { color: theme.text }]} numberOfLines={1}>
+                  {choice.outcome.value}
+                </Text>
+              </View>
+            )}
+            {typeof choice.risk === 'number' && (
+              <View style={cc.risk}>
+                <Text style={[cc.riskLabel, { color: theme.subtext }]}>{riskLabel}</Text>
+                <View style={[cc.riskTrack, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)' }]}>
+                  <View style={[cc.riskFill, {
+                    width: `${Math.max(4, Math.min(100, choice.risk))}%`,
+                    backgroundColor: choice.risk >= 66 ? '#D9603F' : choice.risk >= 33 ? gold : '#3FA97A',
+                  }]} />
+                </View>
+              </View>
+            )}
+          </View>
+        )}
+
         {showEffects && (
           <View style={cc.chips}>
             {METERS.filter(k => choice.effects[k] !== 0).map(k => (
@@ -444,6 +560,15 @@ const cc = StyleSheet.create({
   card: { borderWidth: 1, borderRadius: 15, padding: 15, marginBottom: 11 },
   label: { fontSize: 16.5, fontWeight: '700', letterSpacing: -0.25, marginBottom: 4 },
   detail: { fontSize: 13, lineHeight: 18.5 },
+  footer: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 12, paddingTop: 11, borderTopWidth: StyleSheet.hairlineWidth },
+  outcome: { flex: 1 },
+  outLabel: { fontSize: 9, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase' },
+  outValue: { fontSize: 13.5, fontWeight: '800', marginTop: 2, fontVariant: ['tabular-nums'] },
+  risk: { width: 78 },
+  riskLabel: { fontSize: 9, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 4, textAlign: 'right' },
+  riskTrack: { height: 4, borderRadius: 2, overflow: 'hidden' },
+  riskFill: { height: 4, borderRadius: 2 },
+
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 11 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 3, borderWidth: 1, borderRadius: 7, paddingHorizontal: 7, paddingVertical: 3 },
   chipText: { fontSize: 11, fontWeight: '800', fontVariant: ['tabular-nums'] },
@@ -486,6 +611,8 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
     stability: BASELINE, lives: BASELINE, progress: BASELINE, freedom: BASELINE,
   });
   const [deltas, setDeltas] = useState<Record<MeterKey, number> | null>(null);
+  const [standing, setStanding] = useState<Record<string, number>>({});
+  const [actorDeltas, setActorDeltas] = useState<Record<string, number>>({});
   const [route, setRoute] = useState<string[]>([]);
   const [pickedId, setPickedId] = useState<string | null>(null);
   const [wasNew, setWasNew] = useState(false);
@@ -497,8 +624,10 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
     setPhase('intro'); setNodeId(''); setRoute([]); setPickedId(null); setWasNew(false);
     setMeters({ stability: BASELINE, lives: BASELINE, progress: BASELINE, freedom: BASELINE });
     setDeltas(null);
+    setActorDeltas({});
+    setStanding(Object.fromEntries((universe?.actors ?? []).map(a => [a.id, a.start])));
     bodyFade.setValue(1);
-  }, [visible, bodyFade]);
+  }, [visible, bodyFade, universe]);
 
   const node: Node | undefined = byId[nodeId];
   const step = route.length;
@@ -529,8 +658,20 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
       next[k] = clamp(next[k] + choice.effects[k]);
     }
 
+    // Factions move on the same beat. Their deltas are the half of the consequence the
+    // four meters cannot express: who you just made an enemy of.
+    const nextStanding = { ...standing };
+    const ad: Record<string, number> = {};
+    for (const [id, delta] of Object.entries(choice.actorEffects ?? {})) {
+      ad[id] = delta;
+      nextStanding[id] = clamp((nextStanding[id] ?? BASELINE) + delta);
+    }
+
     // Meters move while the cards are still leaving, so cause and effect land together.
-    setTimeout(() => { setMeters(next); setDeltas(d); }, 120);
+    setTimeout(() => {
+      setMeters(next); setDeltas(d);
+      setStanding(nextStanding); setActorDeltas(ad);
+    }, 120);
 
     setTimeout(() => {
       Animated.timing(bodyFade, { toValue: 0, duration: 180, useNativeDriver: true }).start(() => {
@@ -538,6 +679,7 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
         setRoute(r => [...r, choice.id]);
         setPickedId(null);
         setDeltas(null);
+        setActorDeltas({});
         setNodeId(choice.next);
         if (target && !target.choices?.length) {
           const isNew = !discovered.includes(target.id);
@@ -554,7 +696,7 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
         Animated.timing(bodyFade, { toValue: 1, duration: 260, useNativeDriver: true }).start();
       });
     }, 620);
-  }, [pickedId, meters, byId, bodyFade, discovered, eventId, isPro]);
+  }, [pickedId, meters, standing, byId, bodyFade, discovered, eventId, isPro]);
 
   if (!universe) return null;
 
@@ -631,6 +773,21 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
                 ))}
               </View>
 
+              {!!universe.actors?.length && (
+                <View style={[g.actorBox, { borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.09)' }]}>
+                  {universe.actors.map(act => (
+                    <ActorRow
+                      key={act.id}
+                      actor={act}
+                      value={standing[act.id] ?? act.start}
+                      delta={actorDeltas[act.id] ?? 0}
+                      isDark={isDark}
+                      gold={gold}
+                    />
+                  ))}
+                </View>
+              )}
+
               <Text style={[g.stepLabel, { color: theme.subtext }]}>
                 {t.decision} {Math.min(step + 1, 3)} {t.of} 3
               </Text>
@@ -642,6 +799,8 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
                   <Text style={[g.nodeTitle, { color: theme.text }]}>{node.title}</Text>
                   <Text style={[g.nodeText, { color: theme.text }]}>{node.text}</Text>
 
+                  <FactStrip facts={node.facts ?? []} isDark={isDark} gold={gold} />
+
                   {node.choices.map((c, i) => (
                     <ChoiceCard
                       key={c.id} choice={c} delay={i * 90}
@@ -650,6 +809,7 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
                       exiting={!!pickedId}
                       chosen={pickedId === c.id}
                       showEffects={isPro}
+                      riskLabel={t.risk}
                       gold={gold} theme={theme} isDark={isDark}
                     />
                   ))}
@@ -678,6 +838,26 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
               <View style={[g.verdictBox, { borderColor: gold + '3A', backgroundColor: gold + '10' }]}>
                 <Text style={[g.verdict, { color: theme.text }]}>{node.verdict}</Text>
               </View>
+
+              {!!node.stats?.length && (
+                <View style={[g.statsTable, { borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.09)' }]}>
+                  <View style={[g.statsHead, { borderBottomColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)' }]}>
+                    <View style={{ flex: 1 }} />
+                    <Text style={[g.statsCol, { color: theme.subtext }]}>{t.realWorld}</Text>
+                    <Text style={[g.statsCol, { color: gold }]}>{t.yourWorld}</Text>
+                  </View>
+                  {node.stats.map((st, i) => (
+                    <View key={i} style={[g.statsRow, i > 0 && {
+                      borderTopWidth: StyleSheet.hairlineWidth,
+                      borderTopColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)',
+                    }]}>
+                      <Text style={[g.statsLabel, { color: theme.text }]} numberOfLines={2}>{st.label}</Text>
+                      <Text style={[g.statsReal, { color: theme.subtext }]} numberOfLines={2}>{st.real}</Text>
+                      <Text style={[g.statsAlt, { color: gold }]} numberOfLines={2}>{st.alt}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
 
               <Text style={[g.sectionLabel, { color: theme.subtext }]}>{t.yourWorld}</Text>
               <Radar values={meters} gold={gold} isDark={isDark} t={t} />
@@ -714,6 +894,8 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
                 <Pressable onPress={() => {
                   setPhase('intro'); setRoute([]); setNodeId('');
                   setMeters({ stability: BASELINE, lives: BASELINE, progress: BASELINE, freedom: BASELINE });
+                  setStanding(Object.fromEntries((universe.actors ?? []).map(a => [a.id, a.start])));
+                  setActorDeltas({});
                 }} accessibilityRole="button"
                   style={({ pressed }) => [g.againBtn, { borderColor: gold + '55', opacity: pressed ? 0.8 : 1 }]}>
                   <MaterialCommunityIcons name="restart" size={16} color={gold} />
@@ -821,7 +1003,16 @@ const g = StyleSheet.create({
   realityLabel: { fontSize: 9.5, fontWeight: '800', letterSpacing: 1.4, textTransform: 'uppercase', marginBottom: 7 },
   realityText: { fontSize: 15, lineHeight: 23 },
 
-  metersRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
+  metersRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 },
+  actorBox: { borderWidth: 1, borderRadius: 11, paddingHorizontal: 13, paddingVertical: 7, marginBottom: 18 },
+
+  statsTable: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 13, paddingBottom: 4, marginBottom: 26 },
+  statsHead: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, paddingVertical: 9, borderBottomWidth: StyleSheet.hairlineWidth },
+  statsCol: { width: 72, textAlign: 'right', fontSize: 8.5, fontWeight: '800', letterSpacing: 0.7, textTransform: 'uppercase' },
+  statsRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9 },
+  statsLabel: { flex: 1, fontSize: 12, fontWeight: '600', lineHeight: 16 },
+  statsReal: { width: 72, textAlign: 'right', fontSize: 11.5, lineHeight: 15, textDecorationLine: 'line-through' },
+  statsAlt: { width: 72, textAlign: 'right', fontSize: 12.5, fontWeight: '800', lineHeight: 16 },
   stepLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 14 },
 
   stage: { position: 'relative' },
