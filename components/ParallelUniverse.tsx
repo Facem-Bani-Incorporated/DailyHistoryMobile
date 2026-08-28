@@ -196,17 +196,20 @@ function moodUnrest(reactions: Reaction[] | undefined): number {
  * same as one who did both, and neither should score like one who did neither.
  */
 function runScore(meters: Record<MeterKey, number>, mood: number, rarity: string): number {
-  const world = (wellbeing(meters) + 200) / 400;
-  const people = mood / 100;
-  const rare = rarity === 'rare' ? 0.12 : rarity === 'uncommon' ? 0.06 : 0;
-  return Math.max(0, Math.min(1, world * 0.5 + people * 0.38 + rare));
+  const world = (wellbeing(meters) + 200) / 400;   // 0…1, reality at 0.5
+  const people = mood / 100;                       // 0…1, reality at 0.5
+  // The weights sum to 1 so a run that changes nothing lands at exactly 0.5 and grades
+  // in the middle. They summed to 0.88 before, which quietly made "the same as history"
+  // a 0.44 and stamped a C on a world that had come out better than the real one.
+  const rare = rarity === 'rare' ? 0.08 : rarity === 'uncommon' ? 0.04 : 0;
+  return Math.max(0, Math.min(1, world * 0.55 + people * 0.45 + rare));
 }
 
 const GRADES: { min: number; key: string; letter: string; tone: string }[] = [
-  { min: 0.84, key: 'gradeS', letter: 'S', tone: '#D4A843' },
-  { min: 0.70, key: 'gradeA', letter: 'A', tone: '#3FA97A' },
-  { min: 0.55, key: 'gradeB', letter: 'B', tone: '#5CB88C' },
-  { min: 0.38, key: 'gradeC', letter: 'C', tone: '#C17B2A' },
+  { min: 0.82, key: 'gradeS', letter: 'S', tone: '#D4A843' },
+  { min: 0.68, key: 'gradeA', letter: 'A', tone: '#3FA97A' },
+  { min: 0.52, key: 'gradeB', letter: 'B', tone: '#5CB88C' },
+  { min: 0.36, key: 'gradeC', letter: 'C', tone: '#C17B2A' },
   { min: -1, key: 'gradeD', letter: 'D', tone: '#D9603F' },
 ];
 const gradeFor = (score: number) => GRADES.find(g => score >= g.min) ?? GRADES[GRADES.length - 1];
@@ -459,10 +462,13 @@ function FactStrip({ facts, isDark, gold }: { facts: Fact[]; isDark: boolean; go
     <View style={[f_.wrap, { borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.09)' }]}>
       {facts.map((f, i) => (
         <View key={i} style={[f_.cell, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]}>
-          <Text style={[f_.label, { color: isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.42)' }]} numberOfLines={1}>
+          {/* Stacked, not side by side. Sharing a row meant a long value squeezed the
+              label down to "P…" — the facts are what the player decides on, so neither
+              half may be the one that gets cut. */}
+          <Text style={[f_.label, { color: isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.42)' }]}>
             {f.label}
           </Text>
-          <Text style={[f_.value, { color: gold }]} numberOfLines={1}>{f.value}</Text>
+          <Text style={[f_.value, { color: gold }]}>{f.value}</Text>
         </View>
       ))}
     </View>
@@ -471,9 +477,9 @@ function FactStrip({ facts, isDark, gold }: { facts: Fact[]; isDark: boolean; go
 
 const f_ = StyleSheet.create({
   wrap: { borderWidth: 1, borderRadius: 11, paddingHorizontal: 13, paddingVertical: 4, marginBottom: 18 },
-  cell: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingVertical: 7 },
-  label: { flex: 1, fontSize: 10.5, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase' },
-  value: { fontSize: 12.5, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  cell: { paddingVertical: 9 },
+  label: { fontSize: 9.5, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 3 },
+  value: { fontSize: 13.5, fontWeight: '800', lineHeight: 18 },
 });
 
 const m = StyleSheet.create({
@@ -632,10 +638,10 @@ function ChoiceCard({ choice, onPick, disabled, exiting, chosen, showEffects, go
           <View style={[cc.footer, { borderTopColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]}>
             {!!choice.outcome?.value && (
               <View style={cc.outcome}>
-                <Text style={[cc.outLabel, { color: theme.subtext }]} numberOfLines={1}>
+                <Text style={[cc.outLabel, { color: theme.subtext }]}>
                   {choice.outcome.label}
                 </Text>
-                <Text style={[cc.outValue, { color: theme.text }]} numberOfLines={1}>
+                <Text style={[cc.outValue, { color: theme.text }]}>
                   {choice.outcome.value}
                 </Text>
               </View>
@@ -678,7 +684,7 @@ const cc = StyleSheet.create({
   footer: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 12, paddingTop: 11, borderTopWidth: StyleSheet.hairlineWidth },
   outcome: { flex: 1 },
   outLabel: { fontSize: 9, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase' },
-  outValue: { fontSize: 13.5, fontWeight: '800', marginTop: 2, fontVariant: ['tabular-nums'] },
+  outValue: { fontSize: 13.5, fontWeight: '800', marginTop: 2, lineHeight: 18 },
   risk: { width: 78 },
   riskLabel: { fontSize: 9, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 4, textAlign: 'right' },
   riskTrack: { height: 4, borderRadius: 2, overflow: 'hidden' },

@@ -80,9 +80,10 @@ export const AmbientBackdrop = memo(function AmbientBackdrop({
     clock.value = withRepeat(withTiming(1, { duration: 26000, easing: Easing.linear }), -1, false);
   }, [clock]);
 
-  // Light mode gets roughly a third of the amplitude: the same ribbon that reads as
-  // atmosphere on near-black reads as a smudge on ivory.
-  const A = isDark ? (isPremium ? 1 : 0.72) : 0.34;
+  // Light mode runs at about half: the same ribbon that reads as atmosphere on
+  // near-black reads as a smudge on ivory. A third turned out to be invisible on a
+  // real screen, which is worse than absent — it costs a canvas and gives nothing.
+  const A = isDark ? (isPremium ? 1 : 0.72) : 0.55;
 
   const ground = isDark
     ? (isPremium ? ['#0B0817', '#07060E', '#05040A'] : ['#141821', '#0E1117', '#0B0E14'])

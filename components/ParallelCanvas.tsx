@@ -268,7 +268,10 @@ export const MoodTide = memo(function MoodTide({
   const surface = useDerivedValue(() => {
     'worklet';
     const level = H - (mood.value / 100) * H;
-    const amp = 1.5 + unrest.value * 5;
+    // Always visibly moving. At zero unrest the old amplitude was 1.5px, which on a 58px
+    // band is a straight line — the tide read as a flat brown puddle rather than as a
+    // room full of people who have not settled.
+    const amp = 3.5 + unrest.value * 7;
     const p = Skia.Path.Make();
     p.moveTo(0, H);
     p.lineTo(0, level);
@@ -293,9 +296,11 @@ export const MoodTide = memo(function MoodTide({
     [width],
   );
 
+  // Pushed away from the muddy grey that sat in the middle of the old ramp: at fifty the
+  // room is uneasy, not neutral, and it should look it.
   const tint = useDerivedValue(() =>
-    interpolateColor(mood.value, [0, 30, 50, 70, 100], [BAD, '#C0713A', '#8A7E6B', '#5CB88C', GOOD]));
-  const glowOpacity = useDerivedValue(() => 0.28 + unrest.value * 0.32);
+    interpolateColor(mood.value, [0, 25, 50, 75, 100], [BAD, '#C7623A', '#B08A5A', '#4FB185', GOOD]));
+  const glowOpacity = useDerivedValue(() => 0.4 + unrest.value * 0.35);
 
   return (
     <Canvas style={{ width, height: H }}>
@@ -305,9 +310,9 @@ export const MoodTide = memo(function MoodTide({
         <Path path={surface} color={tint} opacity={glowOpacity}>
           <BlurMask blur={11} style="normal" />
         </Path>
-        <Path path={surface} color={tint} opacity={0.5} />
+        <Path path={surface} color={tint} opacity={0.72} />
         {/* The waterline itself, drawn crisp on top of the soft body. */}
-        <Path path={surface} style="stroke" strokeWidth={1.6} color={tint} />
+        <Path path={surface} style="stroke" strokeWidth={2.2} color={tint} />
       </Group>
       {/* Reality, again: half the room content is the neutral the tide is measured from. */}
       <Rect x={0} y={H / 2} width={width} height={1}
@@ -330,52 +335,82 @@ export const MoodTide = memo(function MoodTide({
 export const BranchMap = memo(function BranchMap({
   width, depth, step, isDark,
 }: { width: number; depth: number; step: number; isDark: boolean }) {
-  const H = 96;
+  const H = 64;
   const progress = useSharedValue(0);
+  const pulse = useSharedValue(0);
 
   useMemo(() => {
     progress.value = withTiming(depth ? step / depth : 0, {
-      duration: 620, easing: Easing.out(Easing.cubic),
+      duration: 700, easing: Easing.out(Easing.cubic),
     });
   }, [step, depth, progress]);
 
-  // A symmetric fan: every level doubles, which is close enough to the real 3/3/2 tree
-  // to read as its portrait without needing the tree itself passed down.
-  const { dim, lit } = useMemo(() => {
-    const padX = 10;
-    const usable = width - padX * 2;
-    const dimPath = Skia.Path.Make();
-    const litPath = Skia.Path.Make();
+  useMemo(() => {
+    pulse.value = withRepeat(withTiming(1, { duration: 2600, easing: Easing.inOut(Easing.sin) }), -1, false);
+  }, [pulse]);
 
-    const build = (x: number, y: number, level: number, spread: number, onPath: boolean) => {
-      if (level >= depth) return;
-      const nx = x + usable / depth;
-      const kids = level === 0 ? 3 : 2;
-      for (let k = 0; k < kids; k++) {
-        const offset = (k - (kids - 1) / 2) * spread;
-        const ny = y + offset;
-        const target = onPath && k === 0 ? litPath : dimPath;
-        target.moveTo(x, y);
-        target.cubicTo(x + usable / depth / 2, y, nx - usable / depth / 2, ny, nx, ny);
-        build(nx, ny, level + 1, spread * 0.5, onPath && k === 0);
+  const PAD = 14;
+  const usable = width - PAD * 2;
+  const midY = H / 2;
+  const stepX = usable / Math.max(1, depth);
+
+  // The whole tree was drawn here before: twelve endpoints crushed into a 96px band,
+  // every line the same grey. It read as a scribble. This is a "you are here" map
+  // instead — the road behind you lit, the forks ahead of you open, and nothing drawn
+  // that the player cannot count at a glance.
+  const { travelled, ahead, nodes } = useMemo(() => {
+    const done = Skia.Path.Make();
+    const open = Skia.Path.Make();
+    const dots: { x: number; y: number; done: boolean }[] = [];
+
+    done.moveTo(PAD, midY);
+    for (let i = 0; i <= depth; i++) {
+      const x = PAD + i * stepX;
+      done.lineTo(x, midY);
+      dots.push({ x, y: midY, done: i <= step });
+    }
+
+    // The choices waiting at the node you are standing on.
+    if (step < depth) {
+      const from = PAD + step * stepX;
+      const to = from + stepX;
+      for (const dy of [-H * 0.3, 0, H * 0.3]) {
+        open.moveTo(from, midY);
+        open.cubicTo(from + stepX * 0.45, midY, to - stepX * 0.45, midY + dy, to, midY + dy);
       }
-    };
-    build(padX, H / 2, 0, H * 0.3, true);
-    return { dim: dimPath, lit: litPath };
-  }, [width, depth]);
+    }
+    return { travelled: done, ahead: open, nodes: dots };
+  }, [width, depth, step]);
+
+  const end = useDerivedValue(() => Math.max(0.001, progress.value));
+  // A slow glimmer running the road already walked, so a finished stretch still feels live.
+  const glow = useDerivedValue(() => 0.4 + Math.sin(pulse.value * Math.PI * 2) * 0.18);
 
   return (
     <Canvas style={{ width, height: H }}>
-      <Path path={dim} style="stroke" strokeWidth={1.1} strokeCap="round"
-        color={isDark ? 'rgba(245,236,215,0.14)' : 'rgba(0,0,0,0.13)'} />
-      {/* `end` trims the stroke, so the lit path draws itself forward as decisions are
-          taken instead of appearing a segment at a time. */}
-      <Path path={lit} style="stroke" strokeWidth={2.4} strokeCap="round"
-        color={GOLD} start={0} end={progress}>
-        <BlurMask blur={5} style="normal" />
+      <Path path={travelled} style="stroke" strokeWidth={2} strokeCap="round"
+        color={isDark ? 'rgba(245,236,215,0.16)' : 'rgba(0,0,0,0.14)'} />
+
+      {/* The forks you have not taken. Dashed so they read as possibility, not as path. */}
+      <Path path={ahead} style="stroke" strokeWidth={1.6} strokeCap="round"
+        color={isDark ? 'rgba(245,236,215,0.3)' : 'rgba(0,0,0,0.22)'} />
+
+      <Path path={travelled} style="stroke" strokeWidth={7} strokeCap="round"
+        color={GOLD} start={0} end={end} opacity={glow}>
+        <BlurMask blur={8} style="normal" />
       </Path>
-      <Path path={lit} style="stroke" strokeWidth={1.5} strokeCap="round"
-        color={IVORY} start={0} end={progress} />
+      <Path path={travelled} style="stroke" strokeWidth={3} strokeCap="round"
+        color={GOLD} start={0} end={end} />
+
+      {nodes.map((n, i) => (
+        <Circle key={i} cx={n.x} cy={n.y} r={n.done ? 5 : 3.5}
+          color={n.done ? IVORY : (isDark ? 'rgba(245,236,215,0.3)' : 'rgba(0,0,0,0.2)')} />
+      ))}
+      {nodes.filter(n => n.done).map((n, i) => (
+        <Circle key={`g${i}`} cx={n.x} cy={n.y} r={7} color={GOLD} opacity={0.5}>
+          <BlurMask blur={6} style="normal" />
+        </Circle>
+      ))}
     </Canvas>
   );
 });
@@ -505,7 +540,16 @@ export const CrowdOpinion = memo(function CrowdOpinion({
   const GAP = 5;
   const perRow = Math.max(6, Math.floor((width + GAP) / (R * 2 + GAP)));
   const present = order.filter(mo => (tally[mo] ?? 0) > 0);
-  const total = present.reduce((n, mo) => n + tally[mo], 0);
+  const voices = present.reduce((n, mo) => n + tally[mo], 0);
+
+  // Each voice stands for a slice of a population, not for one person. Eight quotes drew
+  // eight dots in a single row, which reads as a tally rather than as a crowd — and a
+  // proportion you cannot see is a proportion that says nothing. Scaled up to fill three
+  // or four rows, the blocks of colour become the opinion.
+  const scale = Math.max(1, Math.round(48 / Math.max(1, voices)));
+  const counts: Record<string, number> = {};
+  for (const mo of present) counts[mo] = tally[mo] * scale;
+  const total = voices * scale;
   const rows = Math.max(1, Math.ceil(total / perRow));
   const H = rows * (R * 2 + GAP) + 6;
 
@@ -521,7 +565,7 @@ export const CrowdOpinion = memo(function CrowdOpinion({
     let i = 0;
     return present.map(mo => {
       const path = Skia.Path.Make();
-      for (let n = 0; n < tally[mo]; n++, i++) {
+      for (let n = 0; n < counts[mo]; n++, i++) {
         const col = i % perRow;
         const row = Math.floor(i / perRow);
         // A little jitter per row so it reads as a crowd rather than a spreadsheet.
@@ -530,7 +574,7 @@ export const CrowdOpinion = memo(function CrowdOpinion({
       }
       return { mood: mo, path };
     });
-  }, [present, tally, perRow]);
+  }, [present, counts, perRow]);
 
   return (
     <Canvas style={{ width, height: H }}>

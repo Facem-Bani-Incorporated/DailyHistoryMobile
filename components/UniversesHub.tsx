@@ -13,6 +13,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, FlatList, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import { useLanguage } from '../context/LanguageContext';
 import { useRevenueCat } from '../context/RevenueCatContext';
 import { useTheme } from '../context/ThemeContext';
@@ -202,6 +204,9 @@ export default function UniversesHub({ events, topInset }: { events: any[]; topI
 
   const runsLeft = useRunsLeft(isPro);
   const [open, setOpen] = useState<any | null>(null);
+  // This tab draws its own header rather than sitting under the app chrome, so it owns
+  // the notch. Without this the kicker and the headline ran under the status bar.
+  const insets = useSafeAreaInsets();
 
   // `events` is the whole loaded archive — sixty days of content, not just today — so
   // this tab is a shelf of everything still playable rather than a single card. Newest
@@ -244,7 +249,10 @@ export default function UniversesHub({ events, topInset }: { events: any[]; topI
         data={games}
         keyExtractor={(item) => String(item.event?.id)}
         ListHeaderComponent={header}
-        contentContainerStyle={[s.scroll, topInset !== undefined && { paddingTop: topInset + 18 }]}
+        contentContainerStyle={[
+          s.scroll,
+          { paddingTop: (topInset ?? insets.top) + 18 },
+        ]}
         showsVerticalScrollIndicator={false}
         initialNumToRender={6}
         windowSize={7}
