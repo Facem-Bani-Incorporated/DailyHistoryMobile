@@ -201,6 +201,12 @@ export default function DailyWheel({ visible, onClose }: Props) {
   const resultScale = useRef(new Animated.Value(0.9)).current;
   const resultOpacity = useRef(new Animated.Value(0)).current;
   const glow = useRef(new Animated.Value(0)).current;
+  // Idle life. A dial that sits perfectly still reads as a screenshot; these three keep
+  // it breathing until the user commits.
+  const shimmer = useRef(new Animated.Value(0)).current;   // light sweeping the bezel
+  const ctaPulse = useRef(new Animated.Value(0)).current;  // the button asking to be hit
+  const burst = useRef(new Animated.Value(0)).current;     // rays behind a rare win
+  const tickTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   const prizes = bonus ? AD_WHEEL_PRIZES : WHEEL_PRIZES;
 
@@ -208,8 +214,28 @@ export default function DailyWheel({ visible, onClose }: Props) {
   useEffect(() => {
     if (!visible) return;
     setPhase('idle'); setPrize(null); setBonus(false);
-    resultOpacity.setValue(0); resultScale.setValue(0.9); glow.setValue(0);
+    resultOpacity.setValue(0); resultScale.setValue(0.9); glow.setValue(0); burst.setValue(0);
   }, [visible]);
+
+  // Idle loops. They run only while a spin is actually available — animating at a user
+  // who has already spent their turn is noise, and it drains battery for nothing.
+  useEffect(() => {
+    if (!visible || phase !== 'idle' || !canSpin) return;
+    const light = Animated.loop(
+      Animated.timing(shimmer, { toValue: 1, duration: 2600, easing: Easing.linear, useNativeDriver: true }),
+    );
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(ctaPulse, { toValue: 1, duration: 950, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        Animated.timing(ctaPulse, { toValue: 0, duration: 950, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+      ]),
+    );
+    light.start(); pulse.start();
+    return () => { light.stop(); pulse.stop(); shimmer.setValue(0); ctaPulse.setValue(0); };
+  }, [visible, phase, canSpin, shimmer, ctaPulse]);
+
+  // Clear any pending tick haptics if the sheet closes mid-spin.
+  useEffect(() => () => { tickTimers.current.forEach(clearTimeout); tickTimers.current = []; }, []);
 
   const award = useCallback((p: WheelPrize, source: 'free' | 'ad') => {
     switch (p.kind) {
@@ -262,10 +288,33 @@ export default function DailyWheel({ visible, onClose }: Props) {
     setPrize(null);
     haptic('medium');
 
+    // Tick as each boundary passes under the pointer. The spin easing is front-loaded,
+    // so the gaps are derived from the same curve rather than spaced evenly — the ticks
+    // race at the start and drag out at the end, which is what sells the deceleration.
+    tickTimers.current.forEach(clearTimeout);
+    tickTimers.current = [];
+    const travelled = Math.abs(to - turns.current);
+    const ticks = Math.min(48, Math.floor(travelled / sweep));
+    const DUR = 4200;
+    for (let i = 1; i <= ticks; i++) {
+      const linear = i / ticks;
+      // Inverse of a decelerating curve: most ticks land early.
+      const at = DUR * (1 - Math.pow(1 - linear, 1 / 3));
+      tickTimers.current.push(setTimeout(() => haptic('light'), at));
+    }
+
     Animated.sequence([
+      // Wind-up. A heavy wheel loads before it releases, and the tiny backwards pull is
+      // what makes the forward spin feel like it was thrown rather than teleported.
+      Animated.timing(rotation, {
+        toValue: turns.current - 14,
+        duration: 260,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
       Animated.timing(rotation, {
         toValue: to,
-        duration: 4200,
+        duration: DUR,
         // Heavy overshoot then settle — a weighted dial, not a spring toy.
         easing: Easing.bezier(0.15, 0.9, 0.12, 1),
         useNativeDriver: true,
@@ -290,6 +339,10 @@ export default function DailyWheel({ visible, onClose }: Props) {
       ]).start();
 
       if (won.rare) {
+        // Rays punch out once and stay; the halo behind them keeps breathing.
+        Animated.timing(burst, {
+          toValue: 1, duration: 620, easing: Easing.out(Easing.cubic), useNativeDriver: true,
+        }).start();
         Animated.loop(
           Animated.sequence([
             Animated.timing(glow, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
@@ -319,6 +372,17 @@ export default function DailyWheel({ visible, onClose }: Props) {
 
   const spin = rotation.interpolate({ inputRange: [0, 360], outputRange: ['0deg', '360deg'] });
   const glowOpacity = glow.interpolate({ inputRange: [0, 1], outputRange: [0.25, 0.85] });
+  // The shimmer is a single bright arc parented to its own rotation, so it sweeps the
+  // bezel independently of the dial — light moving across brass, not a spinning decal.
+  const shimmerSpin = shimmer.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  const shimmerFade = shimmer.interpolate({
+    inputRange: [0, 0.15, 0.5, 0.85, 1], outputRange: [0, 0.55, 0.18, 0.55, 0],
+  });
+  const ctaScale = ctaPulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.035] });
+  const ctaRing = ctaPulse.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1.16] });
+  const ctaRingFade = ctaPulse.interpolate({ inputRange: [0, 1], outputRange: [0.42, 0] });
+  const burstScale = burst.interpolate({ inputRange: [0, 1], outputRange: [0.55, 1.28] });
+  const burstFade = burst.interpolate({ inputRange: [0, 0.35, 1], outputRange: [0, 0.7, 0] });
 
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
@@ -345,6 +409,55 @@ export default function DailyWheel({ visible, onClose }: Props) {
                 pointerEvents="none"
                 style={[s.halo, { backgroundColor: gold, opacity: glowOpacity }]}
               />
+            )}
+
+            {/* Rays, fired once when a rare prize lands. */}
+            {prize?.rare && (
+              <Animated.View
+                pointerEvents="none"
+                style={[s.rays, { opacity: burstFade, transform: [{ scale: burstScale }] }]}
+              >
+                <Svg width={SIZE + 90} height={SIZE + 90}>
+                  {Array.from({ length: 16 }).map((_, i) => {
+                    const a = (i * 22.5 * Math.PI) / 180;
+                    const c = (SIZE + 90) / 2;
+                    const r0 = SIZE / 2 - 6;
+                    const r1 = c - 2;
+                    return (
+                      <Path
+                        key={i}
+                        d={`M ${c + r0 * Math.cos(a)} ${c + r0 * Math.sin(a)} L ${c + r1 * Math.cos(a)} ${c + r1 * Math.sin(a)}`}
+                        stroke={gold}
+                        strokeWidth={i % 2 ? 1.6 : 3.2}
+                        strokeLinecap="round"
+                        opacity={i % 2 ? 0.5 : 0.9}
+                      />
+                    );
+                  })}
+                </Svg>
+              </Animated.View>
+            )}
+
+            {/* Idle shimmer — a bright arc travelling round the bezel while the turn is
+                still unspent. It stops the moment the wheel is in play. */}
+            {phase === 'idle' && canSpin && (
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  s.shimmerWrap,
+                  { opacity: shimmerFade, transform: [{ rotate: shimmerSpin }] },
+                ]}
+              >
+                <Svg width={SIZE} height={SIZE}>
+                  <Path
+                    d={`M ${R} ${RIM / 2 + 1} A ${R - RIM / 2 - 1} ${R - RIM / 2 - 1} 0 0 1 ${R + (R - RIM / 2 - 1) * Math.cos(-Math.PI / 3)} ${R + (R - RIM / 2 - 1) * Math.sin(-Math.PI / 3)}`}
+                    stroke={gold}
+                    strokeWidth={RIM - 2}
+                    strokeLinecap="round"
+                    fill="none"
+                  />
+                </Svg>
+              </Animated.View>
             )}
 
             <Animated.View style={{ width: SIZE, height: SIZE, transform: [{ rotate: spin }] }}>
@@ -468,17 +581,32 @@ export default function DailyWheel({ visible, onClose }: Props) {
           {/* Action */}
           <View style={s.actions}>
             {phase !== 'won' && canSpin && (
-              <Pressable
-                onPress={() => runSpin('free')}
-                disabled={phase === 'spinning'}
-                accessibilityRole="button"
-                style={({ pressed }) => [s.cta, { opacity: phase === 'spinning' ? 0.55 : pressed ? 0.85 : 1 }]}
-              >
-                <LinearGradient colors={[gold, '#A9791F']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.ctaBg}>
-                  <MaterialCommunityIcons name="ship-wheel" size={17} color="#1A1408" />
-                  <Text style={s.ctaText}>{phase === 'spinning' ? t.spinning : t.spin}</Text>
-                </LinearGradient>
-              </Pressable>
+              <View style={s.ctaHost}>
+                {/* A ring that swells out of the button and fades. Cheap, native-driven,
+                    and it does more to say "press this" than any amount of colour. */}
+                {phase === 'idle' && (
+                  <Animated.View
+                    pointerEvents="none"
+                    style={[
+                      s.ctaRing,
+                      { borderColor: gold, opacity: ctaRingFade, transform: [{ scale: ctaRing }] },
+                    ]}
+                  />
+                )}
+                <Animated.View style={{ alignSelf: 'stretch', transform: [{ scale: phase === 'idle' ? ctaScale : 1 }] }}>
+                  <Pressable
+                    onPress={() => runSpin('free')}
+                    disabled={phase === 'spinning'}
+                    accessibilityRole="button"
+                    style={({ pressed }) => [s.cta, { opacity: phase === 'spinning' ? 0.55 : pressed ? 0.85 : 1 }]}
+                  >
+                    <LinearGradient colors={[gold, '#A9791F']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.ctaBg}>
+                      <MaterialCommunityIcons name="ship-wheel" size={17} color="#1A1408" />
+                      <Text style={s.ctaText}>{phase === 'spinning' ? t.spinning : t.spin}</Text>
+                    </LinearGradient>
+                  </Pressable>
+                </Animated.View>
+              </View>
             )}
 
             {phase === 'won' && !bonus && canSpinAd && (
@@ -542,6 +670,10 @@ const s = StyleSheet.create({
   title: { fontSize: 25, fontFamily: SERIF, fontWeight: '600', letterSpacing: -0.3, marginBottom: 18, textAlign: 'center' },
 
   dialWrap: { width: SIZE, height: SIZE, alignItems: 'center', justifyContent: 'center' },
+  rays: { position: 'absolute', width: SIZE + 90, height: SIZE + 90, alignItems: 'center', justifyContent: 'center' },
+  shimmerWrap: { position: 'absolute', width: SIZE, height: SIZE },
+  ctaHost: { alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' },
+  ctaRing: { position: 'absolute', left: 0, right: 0, top: -6, bottom: -6, borderRadius: 20, borderWidth: 2 },
   halo: { position: 'absolute', width: SIZE + 42, height: SIZE + 42, borderRadius: (SIZE + 42) / 2 },
   hub: {
     position: 'absolute', left: R - 14, top: R - 14, width: 28, height: 28,
