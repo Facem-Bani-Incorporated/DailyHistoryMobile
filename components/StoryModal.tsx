@@ -12,15 +12,22 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAllEvents } from '../context/AllEventsContext';
 import * as analytics from '../src/analytics/posthog';
 import { useLanguage } from '../context/LanguageContext';
+import { useRevenueCat } from '../context/RevenueCatContext';
 import { useTheme } from '../context/ThemeContext';
 import { useEventImages } from '../hooks/useEventImages';
 import { useTTS } from '../hooks/useTTS';
 import { useCoinPopupStore } from '../store/useCoinPopupStore';
 import { useCoinStore } from '../store/useCoinStore';
 import { useGamificationStore } from '../store/useGamificationStore';
+import { usePaywallStore } from '../store/usePaywallStore';
 import { getEventId, useSavedStore } from '../store/useSavedStore';
+import { noteStoryFinishedAndCheck } from '../utils/review';
+import { LongReadSection } from './LongReadSection';
+import ParallelUniverse from './ParallelUniverse';
+import ParallelEntryCard from './ParallelEntryCard';
 import { QuizSection } from './QuizSection';
 import RelatedEvents from './RelatedEvents';
+import ReviewPromptModal from './ReviewPromptModal';
 import { SharePickerModal } from './SharePickerModal';
 
 const { height: H, width: W } = Dimensions.get('window');
@@ -300,6 +307,7 @@ const sy = StyleSheet.create({
 export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEventsProp, prevEvent, nextEvent, onNavigate }: StoryModalProps) => {
   const { language, t } = useLanguage();
   const { isDark } = useTheme();
+  const { isPro, presentPaywall } = useRevenueCat();
   const insets = useSafeAreaInsets();
   const contextEvents = useAllEvents();
   const allEvents = (allEventsProp && allEventsProp.length > 0) ? allEventsProp : contextEvents;
@@ -307,6 +315,7 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
   const [eventStack, setEventStack] = useState<any[]>([]);
   const currentEvent = eventStack.length > 0 ? eventStack[eventStack.length - 1] : event;
 
+  const [parallelOpen, setParallelOpen] = useState(false);
   const [galleryIndex, setGalleryIndex] = useState(0);
   const [viewerVisible, setViewerVisible] = useState(false);
   const [viewerStartIndex, setViewerStartIndex] = useState(0);
@@ -338,6 +347,18 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
   const pendingResumeRef = useRef<number | null>(null);                            // pos to scroll to once content lays out
   const resumedThisEventRef = useRef(false);                                       // ensures we only restore once per event
   const resumeToastOpacity = useRef(new Animated.Value(0)).current;
+
+  // ── Review ask, fired once the reader reaches the end of a story ───────────
+  const [reviewVis, setReviewVis] = useState(false);
+  const reviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (reviewTimerRef.current) clearTimeout(reviewTimerRef.current); }, []);
+  // Closing the story cancels a pending ask — the modal would otherwise pop up
+  // over whatever screen the reader landed on next.
+  useEffect(() => {
+    if (visible) return;
+    if (reviewTimerRef.current) clearTimeout(reviewTimerRef.current);
+    setReviewVis(false);
+  }, [visible]);
 
   const persistReadPos = (eid: string | null, y: number) => {
     if (!eid) return;
@@ -456,6 +477,24 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
 
   const handleTTS = () => speak(`${title}. ${narrative}`, language);
 
+  // Seeing the locked chapter list is the top of the conversion funnel; tapping it is
+  // the intent signal. They are tracked separately so the gap between them is visible.
+  const handleLongReadTeaserSeen = (wordCount: number) => {
+    analytics.capture('deep_dive_teaser_viewed', {
+      event_id: eventId,
+      word_count: wordCount,
+      is_pro: isPro,
+    });
+  };
+
+  const openParallel = () => setParallelOpen(true);
+
+  const handleLongReadUnlock = () => {
+    analytics.capture('deep_dive_gate_hit', { event_id: eventId });
+    usePaywallStore.getState().registerDeepDiveGate();
+    presentPaywall('deep_dive_gate');
+  };
+
   return (
     <>
       <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={handleClose} statusBarTranslucent>
@@ -507,6 +546,14 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
                     analytics.capture('story_completed', {
                       story_id: eventId,
                       seconds_spent: Math.round((Date.now() - openedAtRef.current) / 1000),
+                    });
+                    // Finishing a story is the high point of the session — the one
+                    // moment worth asking for a rating. Gated by the cooldown/cap in
+                    // utils/review.ts, and delayed so it doesn't slam the reader the
+                    // instant they land on the last line.
+                    noteStoryFinishedAndCheck().then((ok) => {
+                      if (!ok) return;
+                      reviewTimerRef.current = setTimeout(() => setReviewVis(true), 1200);
                     });
                   }
                   if (savePosTimer.current) clearTimeout(savePosTimer.current);
@@ -612,6 +659,26 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
               {/* Narrative text */}
               <Paragraphs text={narrative || t('no_story_available')} theme={theme} isDark={isDark} />
 
+              {/* The Long Read — full article for PRO, chapter list + CTA for everyone else */}
+              <LongReadSection
+                event={currentEvent}
+                language={language}
+                theme={theme}
+                isDark={isDark}
+                isPro={isPro}
+                onUnlock={handleLongReadUnlock}
+                onTeaserSeen={handleLongReadTeaserSeen}
+              />
+
+              {/* Parallel Universes — the branching what-if game, when this event has one */}
+              <ParallelEntryCard
+                event={currentEvent}
+                language={language}
+                theme={theme}
+                isDark={isDark}
+                onOpen={openParallel}
+              />
+
               {/* Quiz */}
               <QuizSection eventId={eventId} language={language} theme={theme} isDark={isDark} />
 
@@ -712,6 +779,12 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
       {viewerVisible && gallery.length > 0 && (
         <ImageViewer images={gallery} initialIndex={viewerStartIndex} onClose={() => setViewerVisible(false)} />
       )}
+      <ParallelUniverse
+        visible={parallelOpen}
+        onClose={() => setParallelOpen(false)}
+        event={currentEvent}
+      />
+
       <SharePickerModal
         visible={sharePickerVisible}
         event={currentEvent}
@@ -719,6 +792,7 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
         gallery={gallery}
         onClose={() => setSharePickerVisible(false)}
       />
+      <ReviewPromptModal visible={reviewVis} onClose={() => setReviewVis(false)} />
     </>
   );
 };

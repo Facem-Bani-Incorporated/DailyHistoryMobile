@@ -1,5 +1,24 @@
 // config/coins.ts
 // Central tuning for the coin economy + referral pass. Keep all magic numbers here.
+//
+// ── THE COIN ECONOMY IS RETIRED ─────────────────────────────────────────────
+// Coins let an engaged free user read the entire daily PRO catalogue for 8 coins
+// — and the pipeline publishes exactly 4 PRO events a day, which PRO_UNLOCKS_PER_DAY
+// happens to equal. The "taste of PRO" cap WAS the whole catalogue, so the
+// subscription had no content left to sell. Every ad the user watched also taught
+// them they didn't need to subscribe.
+//
+// The store and its persisted data are deliberately left in place: `unlockedEvents`
+// and friends ride inside the gamification sync blob, and users who bought stories
+// with coins keep them forever. Nothing grants, spends, or displays coins any more —
+// the surfaces below all check COINS_ENABLED and the decision points now gate on
+// PRO or on a rewarded clip instead.
+//
+// Ads and PRO no longer sell the same thing. Ads buy breadth and convenience
+// (future days, half the map layers, XP boosts, a streak repair); PRO buys depth
+// and permanence (The Long Read, PRO stories, the crown-jewel layers, no ads).
+// A rewarded clip must never unlock PRO content.
+export const COINS_ENABLED = false;
 
 // ── Coin / gold visual tokens ──
 // Single source of truth for the coin accent so every coin surface (header pill,
@@ -30,6 +49,21 @@ export const COINS_WEEKLY_RECAP = 2;    // opening the Monday recap
  * served cheaply.
  */
 export const REWARDED_DAILY_CAP = 4;
+
+/**
+ * PRO stories a free user may open with coins in one day.
+ *
+ * Coins are meant to buy a taste of PRO, not a replacement for it: without a cap
+ * a user sitting on a pile of coins could read twenty stories in one sitting and
+ * the subscription would have nothing left to sell. Four costs 8 coins at
+ * COIN_COST_EVENT each — double what a full day of rewarded clips pays out
+ * (REWARDED_DAILY_CAP), so reaching the ceiling takes coins banked from XP,
+ * streaks or quizzes as well. It only binds the most engaged users, which is
+ * exactly who we want returning tomorrow rather than bingeing today.
+ *
+ * Already-unlocked stories stay readable forever and never count again.
+ */
+export const PRO_UNLOCKS_PER_DAY = 4;
 
 /**
  * Streak milestones and their coin bonus. Increasing rewards make the later

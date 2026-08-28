@@ -126,9 +126,13 @@ export default function CoinRewardModal() {
   // Closing this sheet is the moment the user is blocked and knows it — the one
   // place where "unlimited PRO" answers the question they just asked. The policy
   // store decides whether they've hit the threshold; usually this is a no-op.
+  // `failed_unlocks` retired with the v2 paywall policy — it was defined in terms of
+  // running out of coins, which is about to stop being a thing. `pro_story_blocked` is
+  // the same intent expressed in the new model. This whole component goes away with the
+  // coin economy; until then it keeps pitching at the right moment.
   const hide = useCallback(() => {
     hideRaw();
-    setTimeout(() => { maybePaywall('failed_unlocks'); }, 400);
+    setTimeout(() => { maybePaywall('pro_story_blocked'); }, 400);
   }, [hideRaw, maybePaywall]);
 
   const [phase, setPhase] = useState<'offer' | 'watching' | 'earned'>('offer');

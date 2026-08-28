@@ -1,69 +1,47 @@
 // hooks/useRewardedUnlock.ts
-// Thin subscriber over the shared singleton in rewardedAdManager.
 //
-// This hook used to own a RewardedAd per component. Five components mount it,
-// three of them unconditionally at boot, so every app open fired five requests
-// for one ad unit and at most one of them could ever be shown. The instance now
-// lives in the manager; this file only wires UI state and the reward callback.
+// Thin view onto the app-wide rewarded ad (services/rewardedAdManager). This hook
+// is called from five permanently-mounted components; before the manager existed
+// each of them loaded its own ad, so a cold start burned five requests for one
+// possible impression.
+
 import { useCallback, useEffect, useState } from 'react';
+import { rewardedAds } from '../services/rewardedAdManager';
 import * as analytics from '../src/analytics/posthog';
-import {
-  getRewardedStatus,
-  isRewardedPending,
-  prepareRewarded,
-  showRewarded,
-  subscribeRewarded,
-} from './rewardedAdManager';
+import { usePaywallStore } from '../store/usePaywallStore';
 
-interface Options {
-  /** Pass the surface's own `visible` flag. The ad starts loading when the
-   *  surface appears rather than at app boot, so it is warm by the time the
-   *  user taps without costing a request on every launch. */
-  preload?: boolean;
-}
-
-export function useRewardedUnlock({ preload = false }: Options = {}) {
-  const [status, setStatus] = useState(getRewardedStatus);
-  const [waiting, setWaiting] = useState(false);
-
-  useEffect(() => subscribeRewarded(setStatus), []);
+export function useRewardedUnlock() {
+  const [isReady, setIsReady] = useState(rewardedAds.isReady());
 
   useEffect(() => {
-    if (preload) prepareRewarded();
-  }, [preload]);
+    const unsubscribe = rewardedAds.subscribe(setIsReady);
+    rewardedAds.preload();
+    return unsubscribe;
+  }, []);
 
-  const showForUnlock = useCallback(
-    (onUnlocked: () => void, placement: string = 'unknown') => {
-      const result = showRewarded({
-        placement,
-        onReward: () => {
-          setWaiting(false);
-          onUnlocked();
-        },
-        onUnavailable: () => {
-          setWaiting(false);
-          // The ad genuinely could not be served within the wait window. Grant
-          // the reward anyway — punishing the user for our fill problem is
-          // worse than the lost impression — but make it visible in analytics
-          // instead of silent, which is how it used to be.
-          analytics.capture('rewarded_ad_unavailable', { placement });
-          console.warn('[Ads][Rewarded] unavailable — granting unlock without ad:', placement);
-          onUnlocked();
-        },
-      });
+  const showForUnlock = useCallback((onUnlocked: () => void, placement: string = 'unknown') => {
+    const shown = rewardedAds.show({
+      placement,
+      onOpened: () => analytics.capture('rewarded_ad_started', { placement }),
+      onClosed: (earned) => {
+        // No EARNED_REWARD by the time the ad closes = the user skipped out early.
+        if (!earned) {
+          analytics.capture('rewarded_ad_abandoned', { placement });
+          return;
+        }
+        analytics.capture('rewarded_ad_completed', { placement });
+        try { usePaywallStore.getState().registerRewardedWatched(); } catch { }
+        onUnlocked();
+      },
+    });
 
-      // 'waiting' means a load is in flight and the ad will open shortly.
-      setWaiting(result === 'waiting');
-      return result;
-    },
-    [],
-  );
+    if (!shown) {
+      // Nothing loaded — grant the unlock anyway rather than punish the user for
+      // our fill problem. The manager has already started loading the next one.
+      console.log('[Ads][RewardedUnlock] Not ready — fallback unlock');
+      onUnlocked();
+    }
+  }, []);
 
-  return {
-    showForUnlock,
-    isUnlockReady: status === 'ready',
-    /** True while a tap is queued behind an in-flight load — drive a spinner off this. */
-    isUnlockWaiting: waiting || isRewardedPending(),
-    prepareRewarded,
-  };
+  return { showForUnlock, isUnlockReady: isReady };
 }

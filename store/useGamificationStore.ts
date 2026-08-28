@@ -3,8 +3,20 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import * as analytics from '../src/analytics/posthog';
-import { COIN_COST_STREAK_RESTORE } from '../config/coins';
+import { COINS_ENABLED, COIN_COST_STREAK_RESTORE } from '../config/coins';
 import { useCoinStore } from './useCoinStore';
+
+/** Spend a wheel-won streak shield, if the user has one.
+ *
+ *  Required lazily: useWheelStore reaches useAuthStore, which lazily reaches back into
+ *  this store on logout. A top-level import would close that loop at module load. */
+function consumeWheelShield(): boolean {
+  try {
+    return require('./useWheelStore').useWheelStore.getState().consumeShield();
+  } catch {
+    return false;
+  }
+}
 
 const todayISO = () => new Date().toISOString().split('T')[0];
 const yesterdayISO = () => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().split('T')[0]; };
@@ -388,6 +400,12 @@ export const useGamificationStore = create<GamificationState>()(
           // Streak shield: absorb one missed day once per week
           newStreak = currentStreak > 0 ? currentStreak : 1;
           set({ streakShieldUsedWeek: currentWeek });
+        } else if (lastActiveDate && currentStreak > 0 && consumeWheelShield()) {
+          // A shield won on the daily wheel, spent only once the built-in weekly one is
+          // already gone. Without this the wheel's second-most-common prize did nothing
+          // at all — it was awarded, stored, and never read by anything.
+          newStreak = currentStreak;
+          analytics.capture('streak_shield_used', { streak_length: currentStreak, source: 'wheel' });
         } else {
           // Gap too large and the weekly shield is spent — the streak is gone.
           // (A falsy lastActiveDate is a first-ever visit, not a loss.)
@@ -416,11 +434,12 @@ export const useGamificationStore = create<GamificationState>()(
         setTimeout(() => { try { get().checkAchievements(); } catch {} }, 50);
       },
       /**
-       * Buy back the streak that broke. Offer is same-day only: restoring a
-       * streak from last week would make the counter meaningless.
-       * Returns false when there is nothing to restore or the coins are short.
+       * Retired with the coin economy — `restoreStreakFree` (a rewarded clip) is the
+       * only way back now. Kept as a hard `false` rather than deleted so any call site
+       * still wired to it degrades to "not available" instead of crashing.
        */
       restoreStreak: () => {
+        if (!COINS_ENABLED) return false;
         const { lostStreak, lostStreakDate } = get();
         if (!lostStreak || lostStreakDate !== todayISO()) return false;
         if (!useCoinStore.getState().spendCoins(COIN_COST_STREAK_RESTORE, 'streak_restore')) return false;

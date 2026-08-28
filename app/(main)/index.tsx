@@ -3,9 +3,11 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { CalendarClock, Trophy, Users } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   Animated,
   Dimensions,
   Easing,
@@ -19,7 +21,7 @@ import {
   View,
   ViewToken,
 } from 'react-native';
-import { BannerAd, BannerAdSize } from 'react-native-google-mobile-ads';
+import mobileAds, { BannerAd, BannerAdSize } from 'react-native-google-mobile-ads';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 import api from '../../api';
@@ -52,14 +54,22 @@ import MonthlyRecapModal from '../../components/MonthlyRecapModal';
 import WeeklyRecapModal from '../../components/WeeklyRecapModal';
 import { AD_UNIT_IDS, ADS_CONFIG } from '../../config/ads';
 import { ENDPOINTS } from '../../config/api';
-import { COIN_COST_DAY, COIN_COST_EVENT, COIN_GOLD, COIN_GOLD_DEEP } from '../../config/coins';
+// COIN_GOLD / COIN_GOLD_DEEP survive the coin economy as plain colour tokens.
+import { COINS_ENABLED, COIN_GOLD, COIN_GOLD_DEEP } from '../../config/coins';
 import { AllEventsProvider } from '../../context/AllEventsContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useRevenueCat } from '../../context/RevenueCatContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useCoinPopupStore } from '../../store/useCoinPopupStore';
-import { useCoins, useCoinStore, useIsEventUnlocked } from '../../store/useCoinStore';
+import { useCoins, useIsEventUnlocked } from '../../store/useCoinStore';
+import { useFutureDaysStore, useFutureDaysUnlocked } from '../../store/useFutureDaysStore';
+import { useWheelReady } from '../../store/useWheelStore';
+import DailyWheel from '../../components/DailyWheel';
+import ParallelPromoStrip from '../../components/ParallelPromoStrip';
+import { usePaywallStore } from '../../store/usePaywallStore';
+import { useRewardedUnlock } from '../../hooks/useRewardedUnlock';
+import * as analytics from '../../src/analytics/posthog';
 import { useUnlockStore } from '../../store/useUnlockStore';
 import { useUiStore } from '../../store/useUiStore';
 import { getLevelForXP, getXPProgress, useGamificationStore } from '../../store/useGamificationStore';
@@ -67,7 +77,7 @@ import { useNotificationEventStore } from '../../store/useNotificationEventStore
 import { useInterestQuizDone, usePreferencesStore, useUserInterests } from '../../store/usePreferencesStore';
 import { useUserSavedEvents } from '../../store/useSavedStore';
 import { haptic } from '../../utils/haptics';
-import { scheduleDailyForDays } from '../../utils/Notifications';
+import { cancelStreakReminderForToday } from '../../utils/Notifications';
 import { maybeRequestReview } from '../../utils/review';
 import { isDailyChallengeDone } from '../../utils/dailyChallenge';
 import DailyChallengeModal from '../../components/DailyChallengeModal';
@@ -82,17 +92,40 @@ const MAX_FWD = 2;
 const PAST_DAYS = 200;
 const TODAY_INDEX = PAST_DAYS;
 const AD_FREQUENCY = ADS_CONFIG.AD_CARD_DAY_FREQUENCY; // 7 days between AdCard slots
+// How many pages ahead of the user an AdCard is allowed to request its banner.
+// 0 would mean requesting only once the slot is on screen — too late, since the
+// measured banner latency (1.5–12.6s) dwarfs a swipe. Every page of slack also
+// costs requests for slots the user may turn back from, so keep this small.
+const AD_CARD_PRELOAD_PAGES = 2;
 
 // Show banner only on these tabs
-const SHOW_BANNER_TABS: Tab[] = ['today', 'discover', 'timeline', 'saved'];
+// `today` is deliberately absent. It is the reading surface, and it is where the Long
+// Read teaser now sits — a low-eCPM banner directly under a "continue with PRO" CTA
+// competes with the pitch and cheapens the moment. The banner stays on the navigation
+// surfaces, where it still makes "no ads" concrete without fighting the upsell.
+const SHOW_BANNER_TABS: Tab[] = ['discover', 'timeline', 'saved'];
 
 // ── Helpers ──
+const LOCALES: Record<string, string> = { ro: 'ro-RO', en: 'en-US', fr: 'fr-FR', de: 'de-DE', es: 'es-ES' };
 const offDate = (n: number) => { const d = new Date(); d.setDate(d.getDate() + n); return d; };
 const toISO = (d: Date) => d.toISOString().split('T')[0];
 const isoFor = (n: number) => toISO(offDate(n));
 const todayISO = () => new Date().toISOString().split('T')[0];
+// "9 August 2026" for an ISO day string, in the user's language.
+const fmtDay = (iso: string, lang: string) => {
+  const d = new Date(`${String(iso).slice(0, 10)}T00:00:00`);
+  if (isNaN(d.getTime())) return String(iso ?? '');
+  return d.toLocaleDateString(LOCALES[lang] ?? 'en-US', { day: 'numeric', month: 'long', year: 'numeric' });
+};
+// FNV-1a — turns today's date into a stable seed so the fallback story is the
+// same all day instead of reshuffling on every render.
+const hashSeed = (s: string) => {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+};
 const labelFor = (off: number, lang: string) => {
-  const loc = ({ ro: 'ro-RO', en: 'en-US', fr: 'fr-FR', de: 'de-DE', es: 'es-ES' } as Record<string, string>)[lang] || 'en-US';
+  const loc = LOCALES[lang] || 'en-US';
   const d = offDate(off);
   return {
     day: d.getDate().toString().padStart(2, '0'),
@@ -111,18 +144,27 @@ const d2o = (date: Date) => {
 type Tier = 'free' | 'pro';
 interface PD { data: any[]; empty: boolean }
 const EMPTY: PD = { data: [], empty: true };
-const ck = (iso: string, tier: Tier = 'free') => tier === 'pro' ? `dh_v6_pro_${iso}` : `dh_v6_${iso}`;
+// `tier` splits the day's events into free/PRO cards. `full` is a different axis:
+// whether this payload came from the PRO-only endpoint and therefore carries the long
+// read. Both belong in the key — otherwise a expiring PRO Pass keeps serving long reads
+// from cache, and a starting one keeps serving payloads without them.
+// v7: added the long read.
+const ck = (iso: string, tier: Tier = 'free', full = false) =>
+  `dh_v7_${full ? 'full_' : ''}${tier === 'pro' ? 'pro_' : ''}${iso}`;
+// No `full` dimension here on purpose: the in-memory map is wiped wholesale when PRO
+// state flips (see the effect in the screen), so it only ever holds one variant at a
+// time. The persistent key in `ck` does carry it, because that one survives restarts.
 const mk = (tier: Tier, iso: string) => `${tier}_${iso}`;
-const rC = async (iso: string, tier: Tier = 'free', allowStale = false) => {
+const rC = async (iso: string, tier: Tier = 'free', allowStale = false, full = false) => {
   try {
-    const r = await AsyncStorage.getItem(ck(iso, tier)); if (!r) return null;
+    const r = await AsyncStorage.getItem(ck(iso, tier, full)); if (!r) return null;
     const e = JSON.parse(r);
     if (!allowStale && Date.now() - e.ts > CACHE_TTL) return null;
     return e as { ts: number; data: any[]; empty: boolean };
   } catch { return null; }
 };
-const wC = async (iso: string, tier: Tier, d: any[], e: boolean) => {
-  try { await AsyncStorage.setItem(ck(iso, tier), JSON.stringify({ ts: Date.now(), data: d, empty: e })); } catch { }
+const wC = async (iso: string, tier: Tier, d: any[], e: boolean, full = false) => {
+  try { await AsyncStorage.setItem(ck(iso, tier, full), JSON.stringify({ ts: Date.now(), data: d, empty: e })); } catch { }
 };
 
 const DAY_OFFSETS = Array.from({ length: PAST_DAYS + 1 + MAX_FWD }, (_, i) => i - PAST_DAYS);
@@ -145,6 +187,45 @@ const ey = StyleSheet.create({
   i: { fontSize: 24, fontWeight: '300' },
   t: { fontSize: 18, fontWeight: '700', letterSpacing: 0.2 },
   d: { fontSize: 13, textAlign: 'center', lineHeight: 20, opacity: 0.7 },
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// PIPELINE DOWN — today's content never landed.
+// Instead of a dead end, borrow a story from a day that does have content and
+// say so plainly: the pipeline is down, a new story arrives tomorrow, and what
+// you're reading right now belongs to <date>.
+// ═════════════════════════════════════════════════════════════════════════════
+const PipelineDownCard = ({ event, allEvents, theme, gold, t, language }: {
+  event: any; allEvents: any[]; theme: any; gold: string;
+  t: (k: string) => string; language: string;
+}) => {
+  const sourceDay = event?.__day ?? event?.eventDate ?? event?.event_date ?? '';
+  return (
+    <View style={{ flex: 1 }}>
+      <View style={[pdn.notice, { borderColor: gold + '38', backgroundColor: gold + '12' }]}>
+        <View style={pdn.head}>
+          <Ionicons name="construct-outline" size={13} color={gold} />
+          <Text style={[pdn.title, { color: gold }]} numberOfLines={1}>
+            {t('pipeline_down_title')}
+          </Text>
+        </View>
+        <Text style={[pdn.body, { color: theme.subtext }]}>{t('pipeline_down_body')}</Text>
+        <Text style={[pdn.from, { color: theme.text }]}>
+          {t('pipeline_down_story_from').replace('{date}', fmtDay(sourceDay, language))}
+        </Text>
+      </View>
+      <View style={{ flex: 1 }}>
+        <HistoryCard event={event} allEvents={allEvents} />
+      </View>
+    </View>
+  );
+};
+const pdn = StyleSheet.create({
+  notice: { borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 11, marginBottom: 10, gap: 4 },
+  head: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  title: { fontSize: 10, fontWeight: '900', letterSpacing: 1.6, textTransform: 'uppercase', flexShrink: 1 },
+  body: { fontSize: 12, lineHeight: 17 },
+  from: { fontSize: 12, lineHeight: 17, fontWeight: '700' },
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -293,12 +374,40 @@ const _peek = StyleSheet.create({
 const PRO_CARD_H = Math.max(280, H * 0.5);
 const SERIF_FONT = Platform.OS === 'ios' ? 'Georgia' : 'serif';
 
-const PRO_COIN_T: Record<string, { unlock: string; goPro: string; hint: string }> = {
-  en: { unlock: 'Unlock', goPro: 'Get PRO — unlimited', hint: 'Spend a coin to unlock, or go PRO' },
-  ro: { unlock: 'Deblochează', goPro: 'Ia PRO — nelimitat', hint: 'Folosește o monedă sau ia PRO' },
-  fr: { unlock: 'Débloquer', goPro: 'Passer PRO — illimité', hint: 'Dépense une pièce ou passe PRO' },
-  de: { unlock: 'Freischalten', goPro: 'PRO holen — unbegrenzt', hint: 'Mit einer Münze freischalten oder PRO' },
-  es: { unlock: 'Desbloquear', goPro: 'Obtener PRO — ilimitado', hint: 'Usa una moneda u obtén PRO' },
+const PRO_COIN_T: Record<string, {
+  unlock: string; goPro: string; hint: string;
+  left: string; capped: string; cappedCta: string;
+}> = {
+  en: {
+    unlock: 'Unlock', goPro: 'Get PRO — unlimited', hint: 'Spend a coin to unlock, or go PRO',
+    left: '{n} of {cap} PRO stories left today',
+    capped: "That's all {cap} PRO stories for today. New ones tomorrow — or go PRO to read them all now.",
+    cappedCta: 'Get PRO',
+  },
+  ro: {
+    unlock: 'Deblochează', goPro: 'Ia PRO — nelimitat', hint: 'Folosește o monedă sau ia PRO',
+    left: 'Îți mai rămân {n} din {cap} povești PRO azi',
+    capped: 'Ai citit toate cele {cap} povești PRO de azi. Mâine apar altele — sau ia PRO și le citești pe toate acum.',
+    cappedCta: 'Ia PRO',
+  },
+  fr: {
+    unlock: 'Débloquer', goPro: 'Passer PRO — illimité', hint: 'Dépense une pièce ou passe PRO',
+    left: 'Il vous reste {n} histoires PRO sur {cap} aujourd’hui',
+    capped: 'Vous avez lu les {cap} histoires PRO du jour. D’autres demain — ou passez PRO pour tout lire maintenant.',
+    cappedCta: 'Passer PRO',
+  },
+  de: {
+    unlock: 'Freischalten', goPro: 'PRO holen — unbegrenzt', hint: 'Mit einer Münze freischalten oder PRO',
+    left: 'Noch {n} von {cap} PRO-Geschichten heute',
+    capped: 'Das waren alle {cap} PRO-Geschichten für heute. Morgen gibt es neue — oder hol dir PRO und lies sofort alle.',
+    cappedCta: 'PRO holen',
+  },
+  es: {
+    unlock: 'Desbloquear', goPro: 'Obtener PRO — ilimitado', hint: 'Usa una moneda u obtén PRO',
+    left: 'Te quedan {n} de {cap} historias PRO hoy',
+    capped: 'Esas son las {cap} historias PRO de hoy. Mañana hay nuevas — u obtén PRO para leerlas todas ahora.',
+    cappedCta: 'Obtener PRO',
+  },
 };
 
 const ProCardSection = ({ event, allEvents, gold, isPro, onPaywall, t, language }: {
@@ -327,25 +436,24 @@ const ProCardSection = ({ event, allEvents, gold, isPro, onPaywall, t, language 
   const glowOp = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.18, 0.55] });
   const ruleOp = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.9] });
 
-  // Coin unlock: 1 coin unlocks this PRO story for good (isPro already folds in
-  // the referral pass). If the user has no coins, offer the "watch a clip" pop-up.
+  // PRO stories are subscription-only. There is deliberately no rewarded-ad path:
+  // an ad that opens PRO content is an ad that tells the user not to subscribe.
+  //
+  // `legacyUnlocked` honours stories bought with coins before the economy was
+  // retired — those stay readable forever. Nothing new is ever added to that list.
   const eventId = String(event?.id ?? '');
-  const coinUnlocked = useIsEventUnlocked(eventId);
-  const coins = useCoins();
-  const unlocked = isPro || coinUnlocked;
+  const legacyUnlocked = useIsEventUnlocked(eventId);
+  const unlocked = isPro || legacyUnlocked;
 
   const handleUnlockAttempt = () => {
     if (unlocked) return;
     haptic('medium');
-    if (useCoinStore.getState().spendCoins(COIN_COST_EVENT, 'pro_story')) {
-      useCoinStore.getState().unlockEvent(eventId);
-      haptic('success');
-    } else {
-      // No coins → the per-event sheet lets them watch one clip to unlock for free.
-      useUnlockStore.getState().open(event);
-    }
+    // Counts toward `pro_story_blocked`; the policy store decides if it's time to pitch.
+    usePaywallStore.getState().registerProStoryTap();
+    onPaywall();
   };
 
+  const copy = PRO_COIN_T[language] ?? PRO_COIN_T.en;
   const title =
     event?.titleTranslations?.[language] ??
     event?.titleTranslations?.en ??
@@ -401,28 +509,20 @@ const ProCardSection = ({ event, allEvents, gold, isPro, onPaywall, t, language 
             <Text style={_proSec.peekCategory}>{category}{year ? `  ·  ${year}` : ''}</Text>
             <Text style={_proSec.peekTitle} numberOfLines={2}>{title}</Text>
 
-            {/* Lock hint */}
-            <Text style={_proSec.lockHint}>
-              {(PRO_COIN_T[language] ?? PRO_COIN_T.en).hint}
-            </Text>
+            {/* Lock hint — one line, since there is no daily quota to explain any more. */}
+            <Text style={_proSec.lockHint}>{copy.goPro}</Text>
 
-            {/* Primary CTA — unlock with a coin (tapping the card does the same) */}
+            {/* Primary CTA — the subscription is the only way in. Tapping the card
+                does the same thing. */}
             <Animated.View style={{ transform: [{ scale: ctaScale }] }}>
               <View style={[_proSec.ctaBtn, { backgroundColor: gold }]}>
-                <Ionicons name="lock-open-outline" size={15} color="#0A0815" />
-                <Text style={_proSec.ctaBtnText}>
-                  {(PRO_COIN_T[language] ?? PRO_COIN_T.en).unlock} · {COIN_COST_EVENT}
-                </Text>
-                <CoinIcon size={13} style={{ marginLeft: -4 }} />
-                <Text style={[_proSec.ctaBtnText, { opacity: 0.7 }]}>({coins})</Text>
+                <Ionicons name="star" size={15} color="#0A0815" />
+                <Text style={_proSec.ctaBtnText}>{copy.cappedCta}</Text>
               </View>
             </Animated.View>
 
-            {/* Secondary — go PRO for unlimited (stops the coin-spend tap) */}
-            <TouchableOpacity onPress={(e) => { e.stopPropagation?.(); onPaywall(); }} activeOpacity={0.7} style={_proSec.goProLink}>
-              <Ionicons name="star" size={11} color={gold} />
-              <Text style={[_proSec.goProText, { color: gold }]}>{(PRO_COIN_T[language] ?? PRO_COIN_T.en).goPro}</Text>
-            </TouchableOpacity>
+            {/* The daily-allowance counter went with the coin economy: there is no
+                allowance to spend any more, only a subscription. */}
 
             {/* Glow behind CTA */}
             <Animated.View style={[_proSec.ctaGlow, { backgroundColor: gold, opacity: glowOp }]} pointerEvents="none" />
@@ -539,6 +639,13 @@ const _proSec = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0.2,
+  },
+  quotaLine: {
+    color: 'rgba(245,236,215,0.42)',
+    fontSize: 10.5,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+    marginTop: 2,
   },
   ctaGlow: {
     position: 'absolute',
@@ -850,13 +957,6 @@ export default function HomeScreen() {
   const newAch = useGamificationStore(s => s.newAchievements);
   const totalEventsRead = useGamificationStore(s => s.totalEventsRead);
 
-  const coins = useCoins();
-
-  const [tomorrowMainUnlocked, setTomorrowMainUnlocked] = useState(false);
-  const [tomorrowDiscoverUnlocked, setTomorrowDiscoverUnlocked] = useState(false);
-  const [day2MainUnlocked, setDay2MainUnlocked] = useState(false);
-  const [day2DiscoverUnlocked, setDay2DiscoverUnlocked] = useState(false);
-  const [unlockDate, setUnlockDate] = useState(todayISO());
   const [bannerLoaded, setBannerLoaded] = useState(false);
   const [bannerError, setBannerError] = useState(false);
   // Bumping this remounts <BannerAd> with a clean instance after a failure.
@@ -877,31 +977,26 @@ export default function HomeScreen() {
     return () => clearTimeout(t);
   }, [bannerError]);
 
-  useEffect(() => {
-    const today = todayISO();
-    if (unlockDate !== today) {
-      setTomorrowMainUnlocked(false);
-      setTomorrowDiscoverUnlocked(false);
-      setDay2MainUnlocked(false);
-      setDay2DiscoverUnlocked(false);
-      setUnlockDate(today);
-    }
-  });
+  const [wheelOpen, setWheelOpen] = useState(false);
+  const wheelReady = useWheelReady();
 
-  // Spend a coin to unlock a locked future-day card; no coins → offer the pop-up.
-  const spendForDay = useCallback((onDone: () => void) => {
+
+  // One clip opens days +1 and +2 on both surfaces for 24h. Four separate flags for
+  // what the user calls "tomorrow" was friction that cost conversion, and four clips
+  // for two days was exactly the request volume that drew the AdMob fill throttle.
+  const futureDaysUnlocked = useFutureDaysUnlocked();
+  const { showForUnlock } = useRewardedUnlock();
+
+  const handleUnlockFutureDays = useCallback(() => {
     haptic('medium');
-    if (useCoinStore.getState().spendCoins(COIN_COST_DAY, 'day_unlock')) {
+    // If no ad is loaded, showForUnlock grants anyway — never punish the user for a
+    // fill problem they cannot see or fix.
+    showForUnlock(() => {
+      useFutureDaysStore.getState().unlock();
       haptic('success');
-      onDone();
-    } else {
-      useCoinPopupStore.getState().show('no_coins');
-    }
-  }, []);
-  const handleUnlockMain = useCallback(() => spendForDay(() => setTomorrowMainUnlocked(true)), [spendForDay]);
-  const handleUnlockDiscover = useCallback(() => spendForDay(() => setTomorrowDiscoverUnlocked(true)), [spendForDay]);
-  const handleUnlockDay2Main = useCallback(() => spendForDay(() => setDay2MainUnlocked(true)), [spendForDay]);
-  const handleUnlockDay2Discover = useCallback(() => spendForDay(() => setDay2DiscoverUnlocked(true)), [spendForDay]);
+      analytics.capture('future_days_unlocked', { method: 'rewarded_ad' });
+    }, 'future_days');
+  }, [showForUnlock]);
 
   const [leadVis, setLeadVis] = useState(false);
   const [recapVis, setRecapVis] = useState(false);
@@ -926,6 +1021,19 @@ export default function HomeScreen() {
   const [off, setOff] = useState(0);
   const [allEvents, setAllEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Open the wheel on the first launch of the day. The whole point is that the reason
+  // to come back is the first thing that happens, not something buried behind an icon.
+  // Deferred so it lands after the day's content has painted rather than on a blank
+  // screen, and only once per launch — reopening it after the user closed it would be
+  // a nag, not a reward.
+  const wheelAutoShownRef = useRef(false);
+  useEffect(() => {
+    if (wheelAutoShownRef.current || loading || !wheelReady) return;
+    wheelAutoShownRef.current = true;
+    const id = setTimeout(() => setWheelOpen(true), 1400);
+    return () => clearTimeout(id);
+  }, [loading, wheelReady]);
   const [tab, setTab] = useState<Tab>('today');
   const user = useAuthStore(s => s.user);
   const isTestAccount = (user as any)?.email === 'stefanrazvan.dogaru@gmail.com';
@@ -990,10 +1098,12 @@ export default function HomeScreen() {
   }, [searchTick]);
 
   // No interstitials anywhere: every ad is user-initiated (rewarded), per the
-  // monetisation policy. See UnlockStoryModal / CoinRewardModal.
+  // monetisation policy.
 
   // ── Data loading ──
   const mem = useRef<Record<string, PD>>({});
+  // Which endpoint `fetchOne` should use, without putting `isPro` in its deps.
+  const isProRef = useRef(isPro);
   const [tick, setTick] = useState(0);
   // Set when a fetch fails with no cache to fall back on — lets us show a branded
   // offline state (with retry) instead of an empty-day card on a network failure.
@@ -1002,43 +1112,93 @@ export default function HomeScreen() {
 
   const fetchOne = useCallback(async (o: number, tierArg: Tier = 'free', force = false): Promise<PD> => {
     const iso = isoFor(o);
+    // Read through a ref so a PRO Pass starting or ending doesn't rebuild this callback
+    // and cascade a refetch of every mounted page; the effect below handles that once.
+    const full = isProRef.current;
     const key = mk(tierArg, iso);
     if (!force && mem.current[key]) return mem.current[key];
     if (!force) {
-      const c = await rC(iso, tierArg);
+      const c = await rC(iso, tierArg, false, full);
       if (c) { mem.current[key] = { data: c.data, empty: c.empty }; return mem.current[key]; }
     }
     try {
-      const r = await api.get(ENDPOINTS.DAILY_CONTENT, { params: { date: iso, _t: Date.now() } });
-      const allData: any[] = r.data?.events ?? [];
+      // PRO users read the endpoint that carries the long read. It 403s if the server
+      // disagrees about entitlement (a lapsed subscription the client hasn't noticed),
+      // so fall back rather than showing an empty day.
+      let r;
+      try {
+        r = await api.get(
+          full ? ENDPOINTS.FULL_DAILY_CONTENT : ENDPOINTS.DAILY_CONTENT,
+          { params: { date: iso, _t: Date.now() } },
+        );
+      } catch (err: any) {
+        // Fall back on ANY client error, not just 403. A 404 means this build is
+        // talking to a backend that predates the endpoint — which is exactly what
+        // happens during an OTA rollout, when the JS ships before the server does.
+        // Narrowing this to 403 would show every subscriber an empty app until the
+        // backend caught up.
+        const status = err?.response?.status;
+        if (full && typeof status === 'number' && status >= 400 && status < 500) {
+          r = await api.get(ENDPOINTS.DAILY_CONTENT, { params: { date: iso, _t: Date.now() } });
+        } else {
+          throw err;
+        }
+      }
+      // Tag every event with the day it was published for, so a story borrowed
+      // by the pipeline-down card can name the day it belongs to.
+      const day = r.data?.dateProcessed ?? iso;
+      const allData: any[] = (r.data?.events ?? []).map((e: any) => ({ ...e, __day: day }));
       const freeData = allData.filter((e: any) => !e.isPro);
       const proData  = allData.filter((e: any) => !!e.isPro);
       const freePg: PD = { data: freeData, empty: freeData.length === 0 };
       const proPg:  PD = { data: proData,  empty: proData.length  === 0 };
       mem.current[mk('free', iso)] = freePg;
       mem.current[mk('pro',  iso)] = proPg;
-      wC(iso, 'free', freeData, freePg.empty);
-      wC(iso, 'pro',  proData,  proPg.empty);
+      wC(iso, 'free', freeData, freePg.empty, full);
+      wC(iso, 'pro',  proData,  proPg.empty, full);
       if (__DEV__) console.log(`[fetchOne] ${iso}: total=${allData.length} free=${freeData.length} pro=${proData.length}`);
       return tierArg === 'pro' ? proPg : freePg;
     } catch (e: any) {
       if (__DEV__) console.log(`[fetchOne] ${iso} ERROR:`, e?.response?.status, e?.message);
-      const stale = await rC(iso, tierArg, true);
+      const stale = await rC(iso, tierArg, true, full);
       if (stale && stale.data.length > 0) {
         mem.current[key] = { data: stale.data, empty: stale.empty };
         return mem.current[key];
       }
-      // No network and nothing cached → remember so the UI can offer a retry.
-      netErrRef.current = true;
+      // A day the pipeline never wrote answers 404, and the PRO endpoint answers
+      // 403 for free users — the server is reachable, that day is simply empty.
+      // Only a missing response (or a 5xx) means we are actually offline.
+      // Treating a 404 as offline is what used to swap the whole pager for the
+      // retry screen on a day with no content, making past days unreachable.
+      const status = e?.response?.status;
+      const serverAnswered = typeof status === 'number' && status < 500;
+      if (!serverAnswered) netErrRef.current = true;
       return EMPTY;
     }
   }, []);
 
+  // A PRO Pass starting or ending changes which endpoint serves the day, so every
+  // page in memory is now the wrong variant. Wipe and refetch the visible days —
+  // otherwise a new subscriber reads the app for the rest of the session with no long
+  // reads, and someone whose pass just lapsed keeps reading them.
+  const prevIsProRef = useRef(isPro);
+  useEffect(() => {
+    isProRef.current = isPro;
+    if (prevIsProRef.current === isPro) return;
+    prevIsProRef.current = isPro;
+    mem.current = {};
+    Promise.all([fetchOne(0, 'free', true), fetchOne(-1, 'free', true), fetchOne(1, 'free', true)])
+      .then(() => setTick(t => t + 1))
+      .catch(() => { });
+  }, [isPro, fetchOne]);
+
   const fetchAll = useCallback(async () => {
     const ps = Array.from({ length: 60 }, (_, i) => {
       const d = new Date(); d.setDate(d.getDate() - i);
-      return api.get(ENDPOINTS.DAILY_CONTENT, { params: { date: d.toISOString().split('T')[0] } })
-        .then(r => r.data?.events ?? []).catch(() => []);
+      const iso = d.toISOString().split('T')[0];
+      return api.get(ENDPOINTS.DAILY_CONTENT, { params: { date: iso } })
+        .then(r => (r.data?.events ?? []).map((e: any) => ({ ...e, __day: r.data?.dateProcessed ?? iso })))
+        .catch(() => []);
     });
     const all = (await Promise.all(ps)).flat();
     const seen = new Set<string>();
@@ -1061,15 +1221,19 @@ export default function HomeScreen() {
         setOffline(!gotData && netErrRef.current);
         setLoading(false);
         setTick(t => t + 1);
-        if (gotData) fetchAll();
+        // Always refill the archive: an empty today still needs a pool of past
+        // stories for the pipeline-down card to borrow from.
+        if (!netErrRef.current) fetchAll();
       });
   }, [fetchOne, fetchAll]);
 
   useEffect(() => {
     recordVisit();
+    // recordVisit() is what secures the streak, so today's 9 PM reminder is now moot.
+    cancelStreakReminderForToday().catch(() => {});
     try { genMonthlyRecap(); } catch { }
     setTimeout(() => { if (getUnseenMonthlyRecap()) setRecapVis(true); }, 2000);
-    Promise.all([fetchOne(0), fetchOne(-1), fetchOne(1), fetchOne(2)]).then(async () => {
+    Promise.all([fetchOne(0), fetchOne(-1), fetchOne(1), fetchOne(2)]).then(() => {
       const todayPg = mem.current[mk('free', isoFor(0))];
       const gotData = !!todayPg && todayPg.data.length > 0;
       if (!gotData && netErrRef.current) setOffline(true);
@@ -1078,21 +1242,10 @@ export default function HomeScreen() {
       fetchAll();
       fetchOne(0, 'pro').catch(() => {}); fetchOne(-1, 'pro').catch(() => {}); fetchOne(1, 'pro').catch(() => {}); fetchOne(2, 'pro').catch(() => {});
       for (let i = 2; i <= 7; i++) { fetchOne(-i).catch(() => { }); fetchOne(-i, 'pro').catch(() => {}); }
-      const notifPref = await AsyncStorage.getItem('notifications_enabled');
-      if (notifPref !== 'false') {
-        // Schedule next 7 days at 9 AM local time, each with that day's free main event.
-        // Re-runs on every app open so the queue stays fresh as days roll forward.
-        const eventsByDate: Record<string, any[]> = {};
-        const days = 7;
-        await Promise.all(
-          Array.from({ length: days }, (_, i) =>
-            fetchOne(i + 1)
-              .then((d) => { eventsByDate[isoFor(i + 1)] = d.data ?? []; })
-              .catch(() => { eventsByDate[isoFor(i + 1)] = []; }),
-          ),
-        );
-        scheduleDailyForDays(eventsByDate, language, 9, 0).catch(() => {});
-      }
+      // Notification scheduling deliberately does NOT live here. It has a single
+      // owner — useNotifications() in app/_layout.tsx. Two schedulers racing here
+      // was the bug: scheduleDailyForDays() opens with cancelAllScheduledNotifications(),
+      // so whichever ran second wiped the notifications the first had already queued.
     });
   }, []);
 
@@ -1182,31 +1335,42 @@ export default function HomeScreen() {
     return (b?.impactScore ?? 0) - (a?.impactScore ?? 0);
   }, [interestSet]);
 
+  // Stand-in story for a day the pipeline never filled. Picked from the archive
+  // with a seed derived from today's date, so everyone keeps the same story for
+  // the whole day instead of it changing on every re-render.
+  const fallbackEvent = useMemo(() => {
+    const iso = todayISO();
+    const pool = allEvents.filter((e: any) => e && !e.isPro && e.__day !== iso);
+    if (!pool.length) return null;
+    return pool[hashSeed(iso) % pool.length];
+  }, [allEvents]);
+
   const renderItem = useCallback(({ item: dayOff }: { item: number }) => {
     let content: React.ReactNode = null;
 
-    if (dayOff === 1 && !isPro) {
-      const hintPg = mem.current[mk('free', isoFor(1))] ?? EMPTY;
+    // Days +1 and +2 share one unlock now, so the card only differs by which day it
+    // is teasing and which surface it sits on.
+    if ((dayOff === 1 || dayOff === 2) && !isPro && !futureDaysUnlocked && (tab === 'today' || tab === 'discover')) {
+      const hintPg = mem.current[mk('free', isoFor(dayOff))] ?? EMPTY;
       const hintEvent = [...hintPg.data].sort(sortByImpact)[0] ?? undefined;
-      if (tab === 'today' && !tomorrowMainUnlocked) {
-        content = <LockedTomorrowCard variant="main" onUnlock={handleUnlockMain} isReady={true} coinCost={COIN_COST_DAY} coins={coins} dayOffset={1} hintEvent={hintEvent} bottomPad={floatingBarPad} onPaywall={() => presentPaywall('locked_tomorrow_main_day1')} />;
-      } else if (tab === 'discover' && !tomorrowDiscoverUnlocked) {
-        content = <LockedTomorrowCard variant="discover" onUnlock={handleUnlockDiscover} isReady={true} coinCost={COIN_COST_DAY} coins={coins} dayOffset={1} hintEvent={hintEvent} bottomPad={floatingBarPad} onPaywall={() => presentPaywall('locked_tomorrow_discover_day1')} />;
-      }
+      content = (
+        <LockedTomorrowCard
+          variant={tab === 'today' ? 'main' : 'discover'}
+          onUnlock={handleUnlockFutureDays}
+          isReady={true}
+          dayOffset={dayOff}
+          hintEvent={hintEvent}
+          bottomPad={floatingBarPad}
+          onPaywall={() => presentPaywall(`locked_future_${tab}_day${dayOff}`)}
+        />
+      );
     }
 
-    if (dayOff === 2 && !isPro) {
-      const hintPg = mem.current[mk('free', isoFor(2))] ?? EMPTY;
-      const hintEvent = [...hintPg.data].sort(sortByImpact)[0] ?? undefined;
-      if (tab === 'today' && !day2MainUnlocked) {
-        content = <LockedTomorrowCard variant="main" onUnlock={handleUnlockDay2Main} isReady={true} coinCost={COIN_COST_DAY} coins={coins} dayOffset={2} hintEvent={hintEvent} bottomPad={floatingBarPad} onPaywall={() => presentPaywall('locked_tomorrow_main_day2')} />;
-      } else if (tab === 'discover' && !day2DiscoverUnlocked) {
-        content = <LockedTomorrowCard variant="discover" onUnlock={handleUnlockDay2Discover} isReady={true} coinCost={COIN_COST_DAY} coins={coins} dayOffset={2} hintEvent={hintEvent} bottomPad={floatingBarPad} onPaywall={() => presentPaywall('locked_tomorrow_discover_day2')} />;
-      }
-    }
-
-    if (!content && !isPro && dayOff < 0 && Math.abs(dayOff) % AD_FREQUENCY === 0 && tab === 'today') {
-      content = <AdCard />;
+    // Only in the deep archive (a week back or more). Catching up on the last few days
+    // is habit-formation territory; an ad card in the middle of it costs more in
+    // retention than it earns. Browsing 1848 is relaxed enough to carry one.
+    if (!content && !isPro && dayOff <= -7 && Math.abs(dayOff) % AD_FREQUENCY === 0 && tab === 'today') {
+      content = <AdCard active={Math.abs(dayOff - off) <= AD_CARD_PRELOAD_PAGES} />;
     }
 
     if (!content) {
@@ -1218,10 +1382,14 @@ export default function HomeScreen() {
       const freeMain = freeSorted[0] ?? null;
       const proMain = proSorted[0] ?? null;
       const pi = labelFor(dayOff, language);
+      // Today with nothing published → borrow a story rather than dead-end.
+      const pipelineDown = pi.isToday && freePg.empty && !!fallbackEvent;
 
       if (tab === 'today') {
         if (freePg.empty || !freeMain) {
-          content = <EmptyDay isToday={pi.isToday} theme={theme} t={t} />;
+          content = pipelineDown
+            ? <PipelineDownCard event={fallbackEvent} allEvents={allEvents} theme={theme} gold={goldColor} t={t} language={language} />
+            : <EmptyDay isToday={pi.isToday} theme={theme} t={t} />;
         } else if (proMain) {
           // ── Symmetric layout: Free card + animated arrow between + PRO card ──
           content = (
@@ -1273,7 +1441,9 @@ export default function HomeScreen() {
           ...freeSorted.slice(1), // FREE stories fill the rest of the top grid
           ...restPro,             // remaining PRO at the bottom of "More Stories"
         ].filter(Boolean);
-        content = (
+        content = pipelineDown ? (
+          <PipelineDownCard event={fallbackEvent} allEvents={allEvents} theme={theme} gold={goldColor} t={t} language={language} />
+        ) : (
           <DiscoverSection
             events={combinedSorted}
             theme={theme}
@@ -1298,11 +1468,9 @@ export default function HomeScreen() {
     );
   }, [
     tab, theme, t, language, allEvents, tick, goldColor, isPro,
-    tomorrowMainUnlocked, tomorrowDiscoverUnlocked,
-    day2MainUnlocked, day2DiscoverUnlocked, coins,
-    handleUnlockMain, handleUnlockDiscover,
-    handleUnlockDay2Main, handleUnlockDay2Discover,
-    scrollX, presentPaywall, floatingBarPad, sortByInterest,
+    futureDaysUnlocked, handleUnlockFutureDays,
+    scrollX, presentPaywall, floatingBarPad, sortByInterest, fallbackEvent,
+    off, // drives the AdCard preload window
   ]);
 
   const getItemLayout = useCallback((_: any, index: number) => ({
@@ -1330,16 +1498,9 @@ export default function HomeScreen() {
     return () => clearTimeout(timer);
   }, [tab]);
 
-  const isNextDayLocked = canFwd && !isPro && (
-    (off === 0 && (
-      (tab === 'today' && !tomorrowMainUnlocked) ||
-      (tab === 'discover' && !tomorrowDiscoverUnlocked)
-    )) ||
-    (off === 1 && (
-      (tab === 'today' && !day2MainUnlocked) ||
-      (tab === 'discover' && !day2DiscoverUnlocked)
-    ))
-  );
+  const isNextDayLocked = canFwd && !isPro && !futureDaysUnlocked
+    && (off === 0 || off === 1)
+    && (tab === 'today' || tab === 'discover');
 
   const shouldShowBanner = SHOW_BANNER_TABS.includes(tab) && !loading && !isPro;
 
@@ -1358,6 +1519,8 @@ export default function HomeScreen() {
         <StatusBar style={isDark ? 'light' : 'dark'} />
         <AchievementToast />
         <CelebrationOverlay />
+
+        <DailyWheel visible={wheelOpen} onClose={() => setWheelOpen(false)} />
         <XPFloatToast />
 
         {/* ═════════════════ CHROME (header) ═════════════════ */}
@@ -1437,12 +1600,49 @@ export default function HomeScreen() {
                         setTimeout(() => { if (getUnseenMonthlyRecap()) setRecapVis(true); }, 300);
                       }, 100);
                     }}
+                    // Long-press → Google's Ad Inspector overlay: every request,
+                    // its fill result, failure reason and latency, live on device.
+                    // Requires this device to be registered as a test device in
+                    // AdMob, otherwise the SDK refuses to open it.
+                    onLongPress={() => {
+                      haptic('medium');
+                      mobileAds().openAdInspector()
+                        .then(() => console.log('[Ads][Inspector] closed'))
+                        .catch((err: any) => {
+                          console.warn('[Ads][Inspector] failed', err);
+                          Alert.alert(
+                            'Ad Inspector',
+                            `Nu s-a putut deschide.\n\ncode: ${err?.code ?? '(none)'}\nmessage: ${err?.message ?? '(none)'}\n\nDacă scrie că device-ul nu e test device, adaugă-l în AdMob → Settings → Test devices.`,
+                          );
+                        });
+                    }}
+                    delayLongPress={600}
                     style={[ms.iconBtn, { backgroundColor: '#FF375F20', borderWidth: 1, borderColor: '#FF375F50' }]}
                   >
                     <Text style={{ fontSize: 10, fontWeight: '900', color: '#FF375F' }}>DEV</Text>
                   </TouchableOpacity>
                 )}
-                {!isPro && <CoinButton isDark={isDark} />}
+                {/* The header balance pill went with the coin economy. Kept out of the
+                    tree rather than deleted so the component can come back if we ever
+                    want a balance surface for something else. */}
+                {COINS_ENABLED && !isPro && <CoinButton isDark={isDark} />}
+
+                {/* Daily wheel. The dot is the whole mechanic: an unspent turn is
+                    visible from the home screen, so the reason to open the app is on
+                    screen before the user has decided anything. */}
+                <TouchableOpacity onPress={() => { haptic('light'); setWheelOpen(true); }}
+                  activeOpacity={0.6}
+                  hitSlop={HEADER_HIT}
+                  accessibilityRole="button" accessibilityLabel={t('daily_wheel')}
+                  style={ms.iconBtn}>
+                  <MaterialCommunityIcons name="ship-wheel" size={19} color={wheelReady ? goldColor : theme.subtext} />
+                  {wheelReady && (
+                    <View style={{
+                      position: 'absolute', top: 2, right: 2, width: 7, height: 7,
+                      borderRadius: 4, backgroundColor: goldColor,
+                    }} />
+                  )}
+                </TouchableOpacity>
 
                 <TouchableOpacity onPress={() => { haptic('light'); uiShow('friends'); }}
                   activeOpacity={0.6}
@@ -1458,6 +1658,18 @@ export default function HomeScreen() {
 
             <View style={[ms.sep, { backgroundColor: isPremium ? '#D4A84315' : theme.border }]} />
           </View>
+        )}
+
+        {/* Parallel Universes — directly under the header, where the `today` banner used
+            to sit. The in-story card was below a 600-word narrative and a long read, so
+            almost nobody scrolled to it. Renders nothing on a day with no game. */}
+        {tab === 'today' && (
+          <ParallelPromoStrip
+            events={mem.current[mk('free', isoFor(off))]?.data ?? []}
+            language={language}
+            theme={theme}
+            isDark={isDark}
+          />
         )}
 
         {/* ═════════════════ TOP BANNER AD (between calendar header and today's event) ═════════════════ */}
@@ -1546,7 +1758,11 @@ export default function HomeScreen() {
                 snapToAlignment="start"
                 disableIntervalMomentum
                 maxToRenderPerBatch={3}
-                windowSize={3}
+                // 5 = two pages mounted either side of the visible one. An AdCard
+                // cannot request its banner before it is mounted, so this has to
+                // be at least 2 * AD_CARD_PRELOAD_PAGES + 1 or the preload window
+                // below never opens and the ad only starts loading on arrival.
+                windowSize={2 * AD_CARD_PRELOAD_PAGES + 1}
                 removeClippedSubviews={false}
                 extraData={tick}
                 bounces={false}

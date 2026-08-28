@@ -5,9 +5,6 @@ import { BannerAd, BannerAdSize } from 'react-native-google-mobile-ads';
 import { AD_UNIT_IDS } from '../config/ads';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
-import * as analytics from '../src/analytics/posthog';
-
-const PLACEMENT = 'feed_ad_card';
 
 const T: Record<string, string> = {
   en: 'Sponsored',
@@ -17,17 +14,20 @@ const T: Record<string, string> = {
   es: 'Patrocinado',
 };
 
-export default function AdCard() {
+// `active` gates the actual ad request. The card lives inside the horizontal day
+// pager, which renders neighbouring pages the user never necessarily reaches —
+// requesting an ad on mount meant paying a request for a slot that mostly never
+// hit the screen. The caller turns this on a couple of pages out, which is also
+// the preload window: measured banner latency runs 1.5–12.6s, far longer than a
+// swipe, so the request has to start before the user arrives.
+export default function AdCard({ active = true }: { active?: boolean }) {
   const { theme, isDark } = useTheme();
   const { language } = useLanguage();
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(false);
 
-  useEffect(() => {
-    analytics.capture('ad_requested', {
-      format: 'banner_mrec', placement: PLACEMENT, unit_id: AD_UNIT_IDS.BANNER,
-    });
-  }, []);
+  // Going inactive tears the BannerAd down; don't keep claiming we have an ad.
+  useEffect(() => { if (!active) setLoaded(false); }, [active]);
 
   if (error) return null;
 
@@ -43,15 +43,12 @@ export default function AdCard() {
 
         {/* Ad container — centered. We show a placeholder or hide if failed */}
         <View style={[styles.adWrap, !loaded && styles.adLoading]}>
-          <BannerAd
+          {active && <BannerAd
             unitId={AD_UNIT_IDS.BANNER}
             size={BannerAdSize.MEDIUM_RECTANGLE}
             onAdLoaded={() => {
               console.log('[Ads][AdCard] LOADED — unitId=', AD_UNIT_IDS.BANNER);
               setLoaded(true);
-              analytics.capture('ad_loaded', {
-                format: 'banner_mrec', placement: PLACEMENT, unit_id: AD_UNIT_IDS.BANNER,
-              });
             }}
             onAdFailedToLoad={(err: any) => {
               console.warn(
@@ -62,17 +59,10 @@ export default function AdCard() {
                 '\n  unitId :', AD_UNIT_IDS.BANNER,
               );
               setError(true);
-              analytics.capture('ad_failed', {
-                format: 'banner_mrec', placement: PLACEMENT, unit_id: AD_UNIT_IDS.BANNER,
-                error_code: err?.code ?? 'unknown', error_message: err?.message ?? '',
-              });
             }}
-            onAdOpened={() => {
-              console.log('[Ads][AdCard] OPENED');
-              analytics.capture('ad_clicked', { format: 'banner_mrec', placement: PLACEMENT });
-            }}
+            onAdOpened={() => console.log('[Ads][AdCard] OPENED')}
             onAdClosed={() => console.log('[Ads][AdCard] CLOSED')}
-          />
+          />}
         </View>
 
         {/* Bottom accent */}

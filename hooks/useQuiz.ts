@@ -152,12 +152,12 @@ export function useQuiz(eventId: string | null, language = 'en') {
         total: submitResult.totalQuestions,
         perfect: submitResult.perfectScore,
       });
-      // A flawless run pays a coin. The backend rejects a second submit for the
-      // same event (409), so this can't be farmed by retrying.
-      if (submitResult.perfectScore) {
-        try { useCoinStore.getState().addCoins(COINS_PERFECT_QUIZ, 'perfect_quiz'); } catch {}
-      }
-      // Opportunistic "watch a clip for a coin" pop-up after finishing a quiz.
+      // A flawless run used to pay a coin. The XP the backend already awards for a
+      // perfect run (XP_QUIZ_PERFECT_BONUS) is now the whole reward — a currency that
+      // buys PRO content is exactly what stopped people subscribing.
+      //
+      // The post-quiz coin pop-up is gone with it; maybeShow() is inert while
+      // COINS_ENABLED is false, and this call site goes when the store does.
       try { useCoinPopupStore.getState().maybeShow('quiz'); } catch {}
       return submitResult;
     } catch (e: any) {

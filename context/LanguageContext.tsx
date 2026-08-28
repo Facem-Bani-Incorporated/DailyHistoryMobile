@@ -23,6 +23,7 @@ const LanguageContext = createContext<LanguageContextType>({
 
 const translations: Record<Language, Record<string, string>> = {
   en: {
+    daily_wheel: 'Daily wheel',
     Daily: "Daily", History: "History", today: "Today", tomorrow: "Tomorrow",
     history: "History", discover: "Discover", timeline: "Timeline", map: "Map",
     saved: "Saved", retry: "Retry", no_content: "Nothing here",
@@ -94,9 +95,14 @@ const translations: Record<Language, Record<string, string>> = {
     story_locked: "This story is locked. Upgrade to PRO to read the full account.",
     unlock_pro_cta: "Unlock PRO",
     pro_early_access: "PRO EARLY ACCESS",
+    // PIPELINE DOWN — today's content never landed
+    pipeline_down_title: "Pipeline down today",
+    pipeline_down_body: "No new story made it in for today. Come back tomorrow for a fresh one.",
+    pipeline_down_story_from: "In the meantime, here is the story of {date}.",
   },
 
   ro: {
+    daily_wheel: 'Roata zilei',
     Daily: "Daily", History: "History", today: "Astăzi", tomorrow: "Mâine",
     history: "Istorie", discover: "Descoperă", timeline: "Cronologie", map: "Hartă",
     saved: "Salvate", retry: "Reîncearcă", no_content: "Nimic aici",
@@ -168,9 +174,14 @@ const translations: Record<Language, Record<string, string>> = {
     story_locked: "Această poveste este blocată. Fă upgrade la PRO pentru a citi.",
     unlock_pro_cta: "Deblochează PRO",
     pro_early_access: "ACCES TIMPURIU PRO",
+    // PIPELINE DOWN — today's content never landed
+    pipeline_down_title: "Pipeline picat azi",
+    pipeline_down_body: "Nu a intrat nicio poveste nouă pentru azi. Revino mâine pentru una proaspătă.",
+    pipeline_down_story_from: "Până atunci, iată povestea zilei de {date}.",
   },
 
   fr: {
+    daily_wheel: 'Le tour du jour',
     Daily: "Daily", History: "History", today: "Aujourd'hui", tomorrow: "Demain",
     history: "Histoire", discover: "Découvrir", timeline: "Chronologie", map: "Carte",
     saved: "Sauvegardés", retry: "Réessayer", no_content: "Rien ici",
@@ -242,9 +253,14 @@ const translations: Record<Language, Record<string, string>> = {
     story_locked: "Cette histoire est verrouillée. Passez à PRO pour tout lire.",
     unlock_pro_cta: "Débloquer PRO",
     pro_early_access: "ACCÈS ANTICIPÉ PRO",
+    // PIPELINE DOWN — today's content never landed
+    pipeline_down_title: "Pipeline en panne aujourd'hui",
+    pipeline_down_body: "Aucune nouvelle histoire n'est arrivée pour aujourd'hui. Revenez demain pour une nouvelle.",
+    pipeline_down_story_from: "En attendant, voici l'histoire du {date}.",
   },
 
   de: {
+    daily_wheel: 'Tagesrad',
     Daily: "Daily", History: "History", today: "Heute", tomorrow: "Morgen",
     history: "Geschichte", discover: "Entdecken", timeline: "Zeitleiste", map: "Karte",
     saved: "Gespeichert", retry: "Erneut versuchen", no_content: "Nichts hier",
@@ -316,9 +332,14 @@ const translations: Record<Language, Record<string, string>> = {
     story_locked: "Diese Geschichte ist gesperrt. Upgrade auf PRO zum Lesen.",
     unlock_pro_cta: "PRO Freischalten",
     pro_early_access: "PRO FRÜHZUGANG",
+    // PIPELINE DOWN — today's content never landed
+    pipeline_down_title: "Pipeline heute ausgefallen",
+    pipeline_down_body: "Für heute ist keine neue Geschichte eingetroffen. Komm morgen für eine frische wieder.",
+    pipeline_down_story_from: "In der Zwischenzeit: die Geschichte vom {date}.",
   },
 
   es: {
+    daily_wheel: 'Ruleta diaria',
     Daily: "Daily", History: "History", today: "Hoy", tomorrow: "Mañana",
     history: "Historia", discover: "Descubrir", timeline: "Cronología", map: "Mapa",
     saved: "Guardados", retry: "Reintentar", no_content: "Nada aquí",
@@ -390,6 +411,10 @@ const translations: Record<Language, Record<string, string>> = {
     story_locked: "Esta historia está bloqueada. Mejora a PRO para leerla.",
     unlock_pro_cta: "Desbloquear PRO",
     pro_early_access: "ACCESO ANTICIPADO PRO",
+    // PIPELINE DOWN — today's content never landed
+    pipeline_down_title: "Pipeline caído hoy",
+    pipeline_down_body: "Hoy no llegó ninguna historia nueva. Vuelve mañana para una fresca.",
+    pipeline_down_story_from: "Mientras tanto, aquí está la historia del {date}.",
   },
 };
 
