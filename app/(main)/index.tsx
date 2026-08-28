@@ -3,7 +3,8 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
-import { CalendarClock, Sparkles, Trophy, Users } from 'lucide-react-native';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { CalendarClock, Trophy, Users } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
@@ -960,6 +961,7 @@ export default function HomeScreen() {
   const [wheelOpen, setWheelOpen] = useState(false);
   const wheelReady = useWheelStore(s => s.lastSpinDate !== todayISO());
 
+
   // One clip opens days +1 and +2 on both surfaces for 24h. Four separate flags for
   // what the user calls "tomorrow" was friction that cost conversion, and four clips
   // for two days was exactly the request volume that drew the AdMob fill throttle.
@@ -1000,6 +1002,19 @@ export default function HomeScreen() {
   const [off, setOff] = useState(0);
   const [allEvents, setAllEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Open the wheel on the first launch of the day. The whole point is that the reason
+  // to come back is the first thing that happens, not something buried behind an icon.
+  // Deferred so it lands after the day's content has painted rather than on a blank
+  // screen, and only once per launch — reopening it after the user closed it would be
+  // a nag, not a reward.
+  const wheelAutoShownRef = useRef(false);
+  useEffect(() => {
+    if (wheelAutoShownRef.current || loading || !wheelReady) return;
+    wheelAutoShownRef.current = true;
+    const id = setTimeout(() => setWheelOpen(true), 1400);
+    return () => clearTimeout(id);
+  }, [loading, wheelReady]);
   const [tab, setTab] = useState<Tab>('today');
   const user = useAuthStore(s => s.user);
   const isTestAccount = (user as any)?.email === 'stefanrazvan.dogaru@gmail.com';
@@ -1592,7 +1607,7 @@ export default function HomeScreen() {
                   hitSlop={HEADER_HIT}
                   accessibilityRole="button" accessibilityLabel={t('daily_wheel')}
                   style={ms.iconBtn}>
-                  <Sparkles size={18} color={wheelReady ? goldColor : theme.subtext} strokeWidth={1.8} />
+                  <MaterialCommunityIcons name="ship-wheel" size={19} color={wheelReady ? goldColor : theme.subtext} />
                   {wheelReady && (
                     <View style={{
                       position: 'absolute', top: 2, right: 2, width: 7, height: 7,

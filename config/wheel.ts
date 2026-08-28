@@ -9,10 +9,19 @@
 // of mechanic — Apple 3.2.2(vi), Google Play's deceptive-behaviour policy. A 0%
 // segment cannot be disclosed honestly, so every segment here is winnable.
 //
-// It is also the better business. A user who lives inside PRO for three days and then
+// It is also the better business. A user who spends a few hours inside PRO and then
 // loses it converts far better than one who only ever saw a paywall — that is what
-// `pass_expiring` exists to catch. At 20 DAU a 3% chance of three days costs roughly
-// nothing, because those users were never paying.
+// `pass_expiring` exists to catch.
+//
+// ── Hours, not days, and rarely ──────────────────────────────────────────────
+// PRO is capped at 24 hours and sits at 1.8% across all five segments combined, so a
+// daily spinner meets one roughly every eight weeks. That is deliberately a jackpot
+// rather than an expectation: at ~3 minutes of PRO per spin the whole mechanic costs
+// about an hour of PRO a day across the entire user base.
+//
+// The trade to watch: at 1.8% the PRO segments stop being a reason to spin and become
+// a surprise when they land. If the wheel's pull fades, this is the number to raise —
+// and `wheel_spun` reports the kind, so the effect is measurable either way.
 //
 // ── Why the ad wheel cannot grant PRO ────────────────────────────────────────
 // Ads buy breadth and convenience; the subscription buys depth and permanence. A clip
@@ -26,12 +35,12 @@ export type WheelPrizeKind =
   | 'streak_shield'
   | 'future_days'
   | 'map_layer'
-  | 'pro_days';
+  | 'pro_hours';
 
 export interface WheelPrize {
   id: string;
   kind: WheelPrizeKind;
-  /** XP amount, PRO days, or 1 for the on/off prizes. */
+  /** XP amount, PRO *hours*, or 1 for the on/off prizes. */
   value: number;
   /** Out of WEIGHT_TOTAL. Kept as integers so the odds screen never shows rounding drift. */
   weight: number;
@@ -50,16 +59,16 @@ export const WEIGHT_TOTAL = 10000;
  * passing a jackpot on the way to a small win is a frequent, visible near-miss.
  */
 export const WHEEL_PRIZES: WheelPrize[] = [
-  { id: 'xp_50',     kind: 'xp',            value: 50,  weight: 3000, color: '#2A3A38' },
-  { id: 'pro_1',     kind: 'pro_days',      value: 1,   weight: 700,  color: '#0C6560', rare: true },
-  { id: 'xp_150',    kind: 'xp',            value: 150, weight: 2200, color: '#33403C' },
-  { id: 'map_layer', kind: 'map_layer',     value: 1,   weight: 1000, color: '#3D3524' },
-  { id: 'pro_3',     kind: 'pro_days',      value: 3,   weight: 300,  color: '#0A544F', rare: true },
-  { id: 'shield',    kind: 'streak_shield', value: 1,   weight: 1500, color: '#3A2E2A' },
-  { id: 'future',    kind: 'future_days',   value: 1,   weight: 1200, color: '#2E3A44' },
-  { id: 'pro_7',     kind: 'pro_days',      value: 7,   weight: 90,   color: '#08433F', rare: true },
-  { id: 'pro_30',    kind: 'pro_days',      value: 30,  weight: 9,    color: '#6B4A0E', rare: true },
-  { id: 'pro_365',   kind: 'pro_days',      value: 365, weight: 1,    color: '#8A5A0C', rare: true },
+  { id: 'xp_50',     kind: 'xp',            value: 50,  weight: 3150, color: '#2A3A38' },
+  { id: 'pro_1h',    kind: 'pro_hours',     value: 1,   weight: 100,  color: '#0C6560', rare: true },
+  { id: 'xp_150',    kind: 'xp',            value: 150, weight: 2350, color: '#33403C' },
+  { id: 'map_layer', kind: 'map_layer',     value: 1,   weight: 1200, color: '#3D3524' },
+  { id: 'pro_3h',    kind: 'pro_hours',     value: 3,   weight: 50,   color: '#0A544F', rare: true },
+  { id: 'shield',    kind: 'streak_shield', value: 1,   weight: 1700, color: '#3A2E2A' },
+  { id: 'future',    kind: 'future_days',   value: 1,   weight: 1420, color: '#2E3A44' },
+  { id: 'pro_6h',    kind: 'pro_hours',     value: 6,   weight: 20,   color: '#08433F', rare: true },
+  { id: 'pro_12h',   kind: 'pro_hours',     value: 12,  weight: 7,    color: '#6B4A0E', rare: true },
+  { id: 'pro_24h',   kind: 'pro_hours',     value: 24,  weight: 3,    color: '#8A5A0C', rare: true },
 ];
 
 /**

@@ -215,12 +215,15 @@ export function buildWeeklyRecapNotification(language: string): { title: string;
 // ── Daily Challenge (bonus quiz) — fires at noon, links to the challenge quiz ──
 export const DAILY_CHALLENGE_HOUR = 12;
 
+// The wheel rides along with this one rather than getting a notification of its own.
+// A second daily push is the fastest way to get switched off entirely, and both things
+// live on the same screen anyway — one trip covers them.
 const DAILY_CHALLENGE_TEXT: Record<string, { title: string; body: string }> = {
-  en: { title: '🏆 Daily Challenge is ready!', body: 'Ace today\'s quiz on all free events for 1000 XP. Can you get a perfect score?' },
-  ro: { title: '🏆 Provocarea zilei e gata!', body: 'Răspunde corect la tot quiz-ul din evenimentele de azi pentru 1000 XP. Poți lua scor perfect?' },
-  es: { title: '🏆 ¡El reto diario está listo!', body: 'Acierta todo el quiz de los eventos de hoy y gana 1000 XP. ¿Puedes lograr un puntaje perfecto?' },
-  fr: { title: '🏆 Le défi du jour est prêt !', body: 'Réussis tout le quiz des événements du jour pour 1000 XP. Peux-tu faire un sans-faute ?' },
-  de: { title: '🏆 Die Tagesherausforderung ist da!', body: 'Beantworte das Quiz zu den heutigen Ereignissen perfekt für 1000 XP. Schaffst du es?' },
+  en: { title: '🎡 Your turn is waiting', body: 'Spin today\'s wheel, then ace the daily quiz for 1000 XP. Both reset at midnight.' },
+  ro: { title: '🎡 Ai o rotire neatinsă', body: 'Învârte roata de azi, apoi ia quiz-ul zilnic pentru 1000 XP. Se resetează amândouă la miezul nopții.' },
+  es: { title: '🎡 Tu giro te espera', body: 'Gira la ruleta de hoy y luego acierta el reto diario por 1000 XP. Ambos se reinician a medianoche.' },
+  fr: { title: '🎡 Votre tour vous attend', body: 'Faites tourner la roue du jour, puis réussissez le quiz quotidien pour 1000 XP. Tout se remet à zéro à minuit.' },
+  de: { title: '🎡 Deine Drehung wartet', body: 'Dreh das Rad des Tages und meistere dann das Tagesquiz für 1000 XP. Beides endet um Mitternacht.' },
 };
 
 export function buildDailyChallengeNotification(language: string): { title: string; body: string } {
