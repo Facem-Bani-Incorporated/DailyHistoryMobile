@@ -103,7 +103,7 @@ export default function UnlockStoryModal() {
   const hide = useUnlockStore(s => s.hide);
   const coins = useCoins();
   // Mounted globally in _layout — preload only once the sheet is on screen.
-  const { showForUnlock } = useRewardedUnlock({ preload: visible });
+  const { showForUnlock } = useRewardedUnlock();
 
   const [phase, setPhase] = useState<'offer' | 'watching'>('offer');
   const [reading, setReading] = useState(false);

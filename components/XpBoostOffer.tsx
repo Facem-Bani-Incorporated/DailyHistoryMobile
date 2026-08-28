@@ -39,7 +39,7 @@ export default function XpBoostOffer({ xpEarned, placement }: { xpEarned: number
 
   const addQuizXP = useGamificationStore(s => s.addQuizXP);
   // Rendered only inside an open quiz-result sheet, so mounting is the signal.
-  const { showForUnlock } = useRewardedUnlock({ preload: true });
+  const { showForUnlock } = useRewardedUnlock();
   const [state, setState] = useState<'offer' | 'watching' | 'done'>('offer');
 
   // Nothing to double, PRO users (who bought the ad-free experience), or the

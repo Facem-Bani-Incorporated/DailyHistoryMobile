@@ -1,5 +1,5 @@
 import { BlurView } from 'expo-blur';
-import { Bookmark, CalendarDays, Clock, Compass, Map } from 'lucide-react-native';
+import { Bookmark, CalendarDays, Clock, Compass, GitFork, Map } from 'lucide-react-native';
 import { useEffect, useRef } from 'react';
 import {
   Animated,
@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { haptic } from '../utils/haptics';
 
-export type Tab = 'today' | 'discover' | 'timeline' | 'map' | 'saved' | 'search';
+export type Tab = 'today' | 'discover' | 'universes' | 'timeline' | 'map' | 'saved' | 'search';
 
 export const TABBAR_PILL_HEIGHT = 62;
 export const TABBAR_BANNER_HEIGHT = 52;
@@ -26,12 +26,16 @@ interface TabBarProps {
   t: (key: string) => string;
 }
 
+// Six is the ceiling for this bar — the pill and label still fit on a 360dp screen, but
+// a seventh would force the labels to truncate. `universes` sits third rather than last
+// because it is a destination people open on purpose, not somewhere they end up.
 const TABS: { key: Tab; icon: any; labelKey: string }[] = [
-  { key: 'today',    icon: CalendarDays, labelKey: 'today'    },
-  { key: 'discover', icon: Compass,      labelKey: 'discover' },
-  { key: 'timeline', icon: Clock,        labelKey: 'timeline' },
-  { key: 'map',      icon: Map,          labelKey: 'map'      },
-  { key: 'saved',    icon: Bookmark,     labelKey: 'saved'    },
+  { key: 'today',     icon: CalendarDays, labelKey: 'today'     },
+  { key: 'discover',  icon: Compass,      labelKey: 'discover'  },
+  { key: 'universes', icon: GitFork,      labelKey: 'universes' },
+  { key: 'timeline',  icon: Clock,        labelKey: 'timeline'  },
+  { key: 'map',       icon: Map,          labelKey: 'map'       },
+  { key: 'saved',     icon: Bookmark,     labelKey: 'saved'     },
 ];
 
 const easing = Easing.bezier(0.4, 0, 0.2, 1);

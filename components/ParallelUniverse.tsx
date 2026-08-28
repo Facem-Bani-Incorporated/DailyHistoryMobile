@@ -1,9 +1,14 @@
 // components/ParallelUniverse.tsx
 // "Parallel Universes" — a branching what-if game built on a real event.
 //
-// Three decisions, one of twelve endings. Four world meters and four named factions
-// move against each other the whole way. The pipeline generates the tree
-// (engine/parallel.py); this runs it.
+// Three decisions, one of eighteen endings. Four world meters, four named factions and
+// the mood of ordinary people all move against each other the whole way. The pipeline
+// generates the tree (engine/parallel.py); this runs it.
+//
+// The turn has three beats, and the middle one is the reason the game is not a quiz:
+// you choose, the room answers (named people from that exact week, with a mood the
+// public-mood bar is made of), and only then does time move. Advancing is the
+// player's own press — the voices are the point, not a transition.
 //
 // The design principle throughout: show consequence, never state it. A line of text
 // saying "freedom decreased" is worth less than a bar that visibly falls. So every
@@ -12,9 +17,15 @@
 // made an enemy of, and at the end a table setting your world's figures against the
 // real ones.
 //
-// Everything on the native driver except the radar reveal, which is a one-off rAF
-// sweep — SVG polygon points cannot be driven natively, and animating it through
-// Animated listeners would setState on every frame for the whole run.
+// Everything drawn lives in ParallelCanvas.tsx, on Skia. This file keeps the state, the
+// copy and the typography: React Native <Text> sits on top of the canvases rather than
+// inside them, because Skia text would cost a bundled typeface, font scaling, screen
+// readers and the five languages the app ships in.
+//
+// The two layers meet at a handful of Reanimated shared values — the four meters, public
+// mood, how divided the room is, how far the world has drifted. React state drives the
+// words; those shared values drive the drawing, on the UI thread, so the meters keep
+// easing and the tide keeps moving through the frame where a 160KB tree is being parsed.
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { X } from 'lucide-react-native';
@@ -23,8 +34,15 @@ import {
   Animated, Dimensions, Easing, Modal, Platform, Pressable,
   ScrollView, StyleSheet, Text, View,
 } from 'react-native';
-import Svg, { Circle, Line, Polygon } from 'react-native-svg';
+import {
+  useSharedValue, withTiming, Easing as REasing, type SharedValue,
+} from 'react-native-reanimated';
 
+import {
+  BranchMap, ConsequenceBloom, DivergenceField, ForkMark, MoodTide,
+  RarityAura, SkiaMeter, TrajectoryCurve, WorldRadar,
+  METER_WIDTH, MOOD_TIDE_HEIGHT,
+} from './ParallelCanvas';
 import { useLanguage } from '../context/LanguageContext';
 import { useRevenueCat } from '../context/RevenueCatContext';
 import { useTheme } from '../context/ThemeContext';
@@ -33,8 +51,11 @@ import { usePaywallStore } from '../store/usePaywallStore';
 import { useDiscovered, useParallelStore, useRunsLeft } from '../store/useParallelStore';
 import { haptic } from '../utils/haptics';
 
-const { width: W } = Dimensions.get('window');
+const { width: W, height: H } = Dimensions.get('window');
 const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
+
+/** Diameter of the halo behind an ending's rarity badge. */
+const AURA = 150;
 
 // ─── Shape of the JSON the pipeline produces ─────────────────────────────────
 interface Effects { stability: number; lives: number; progress: number; freedom: number }
@@ -42,11 +63,15 @@ interface Actor { id: string; name: string; start: number }
 interface Fact { label: string; value: string }
 interface Outcome { label: string; value: string }
 interface Stat { label: string; real: string; alt: string }
+/** One person alive at that moment, reacting to what you just did. */
+interface Reaction { who: string; mood: string; quote: string }
 interface Choice {
   id: string; label: string; detail: string; effects: Effects; next: string;
   actorEffects?: Record<string, number>;
   risk?: number;
   outcome?: Outcome | null;
+  /** Two or three voices from the week this was decided. */
+  reactions?: Reaction[];
 }
 interface Node {
   id: string; year: string; title: string; text: string;
@@ -54,6 +79,9 @@ interface Node {
   choices: Choice[];
   verdict: string; epitaph: string; rarity: string;
   stats?: Stat[];
+  /** Endings only: the same idea generations later — how the people who ended up
+   *  living in this world talk about what was decided. */
+  legacy?: Reaction[];
 }
 interface Universe {
   pivotYear: string; pivotTitle: string; premise: string; root: string;
@@ -80,6 +108,84 @@ const METER_ICON: Record<MeterKey, React.ComponentProps<typeof MaterialCommunity
   freedom: 'bird',
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+// PUBLIC MOOD
+// ═════════════════════════════════════════════════════════════════════════════
+/**
+ * A closed vocabulary, mirrored in engine/parallel.py. The generator may only emit these
+ * ten, which is what lets a mood be a colour, an icon and a number at the same time —
+ * `valence` is what turns a handful of quotes into a bar that moves.
+ *
+ * Ordered best to worst; the order is what the legend along the mood bar reads off.
+ */
+type Mood =
+  | 'elated' | 'hopeful' | 'relieved' | 'defiant'
+  | 'uneasy' | 'resigned' | 'afraid' | 'angry' | 'betrayed' | 'grieving';
+
+const MOOD_META: Record<Mood, {
+  valence: number;
+  color: string;
+  icon: React.ComponentProps<typeof MaterialCommunityIcons>['name'];
+}> = {
+  elated:   { valence:  3, color: '#3FA97A', icon: 'party-popper' },
+  hopeful:  { valence:  2, color: '#5CB88C', icon: 'weather-sunset-up' },
+  relieved: { valence:  2, color: '#6FA8C9', icon: 'weather-partly-cloudy' },
+  defiant:  { valence:  1, color: '#C99A3C', icon: 'flag-triangle' },
+  uneasy:   { valence: -1, color: '#B08A5A', icon: 'eye-outline' },
+  resigned: { valence: -1, color: '#8A8A96', icon: 'weather-fog' },
+  afraid:   { valence: -2, color: '#9B7BD4', icon: 'ghost-outline' },
+  angry:    { valence: -2, color: '#D9603F', icon: 'fire' },
+  betrayed: { valence: -3, color: '#C7433F', icon: 'knife-military' },
+  grieving: { valence: -3, color: '#7A6E86', icon: 'candle' },
+};
+
+const isMood = (m: string): m is Mood => m in MOOD_META;
+const moodMeta = (m: string) => MOOD_META[isMood(m) ? m : 'uneasy'];
+
+/** Where public mood starts: reality, like every other meter. */
+const MOOD_BASELINE = 50;
+/** One point of average valence is worth this much on the 0-100 bar. Six keeps a
+ *  unanimously furious crowd (-3) at a visible but survivable -18 a turn. */
+const MOOD_SCALE = 6;
+
+/**
+ * The crowd's temper as one word, read off the bar itself. Needed because the mood meter
+ * is on screen the whole time, not only in the beat after a choice when there are quotes
+ * to name it from. `defiant` is absent on purpose — it is a reaction to a specific act,
+ * not a resting state a population sits in.
+ */
+function moodAt(value: number): Mood {
+  if (value >= 78) return 'elated';
+  if (value >= 66) return 'hopeful';
+  if (value >= 57) return 'relieved';
+  if (value >= 48) return 'uneasy';
+  if (value >= 38) return 'resigned';
+  if (value >= 28) return 'afraid';
+  if (value >= 18) return 'angry';
+  if (value >= 9) return 'betrayed';
+  return 'grieving';
+}
+
+/**
+ * How far apart the voices are, 0-1. A country that agrees on a decision lies flat; one
+ * arguing about it will not settle. The average swing says which way the room moved —
+ * only the spread says whether it moved together, and that is the half a single bar
+ * cannot carry.
+ */
+function moodUnrest(reactions: Reaction[] | undefined): number {
+  if (!reactions || reactions.length < 2) return 0;
+  const vals = reactions.map(r => moodMeta(r.mood).valence);
+  // Widest possible gap is elated (+3) to grieving (-3).
+  return Math.min(1, (Math.max(...vals) - Math.min(...vals)) / 6);
+}
+
+/** The average feeling in the room, as a signed swing. */
+function moodSwing(reactions: Reaction[] | undefined): number {
+  if (!reactions?.length) return 0;
+  const total = reactions.reduce((sum, r) => sum + moodMeta(r.mood).valence, 0);
+  return Math.round((total / reactions.length) * MOOD_SCALE);
+}
+
 type Lang = 'en' | 'ro' | 'fr' | 'de' | 'es';
 
 const L: Record<Lang, Record<string, string>> = {
@@ -95,6 +201,13 @@ const L: Record<Lang, Record<string, string>> = {
     getPro: 'Unlock unlimited runs', locked: 'Come back tomorrow',
     preview: 'PRO sees the cost before choosing', already: 'Found before',
     firstTime: 'New timeline', risk: 'Risk',
+    voices: 'What people are saying', mood: 'Public mood', onward: 'Live with it',
+    legacyTitle: 'How they remember it', trajectory: 'How it went',
+    worldNow: 'The world you made', noVoices: 'The news has not travelled yet',
+    bandRuin: 'In ruins', bandWorse: 'Worse than history', bandSame: 'Much as it was',
+    bandBetter: 'Better than history', bandGolden: 'A golden age',
+    elated: 'Elated', hopeful: 'Hopeful', relieved: 'Relieved', defiant: 'Defiant', uneasy: 'Uneasy',
+    resigned: 'Resigned', afraid: 'Afraid', angry: 'Angry', betrayed: 'Betrayed', grieving: 'Grieving',
   },
   ro: {
     kicker: 'UNIVERSURI PARALELE', reality: 'Ce s-a întâmplat cu adevărat',
@@ -108,6 +221,13 @@ const L: Record<Lang, Record<string, string>> = {
     getPro: 'Deblochează rulări nelimitate', locked: 'Revino mâine',
     preview: 'PRO vede costul înainte să aleagă', already: 'Găsită deja',
     firstTime: 'Cronologie nouă', risk: 'Risc',
+    voices: 'Ce se spune în epocă', mood: 'Starea de spirit', onward: 'Trăiește cu asta',
+    legacyTitle: 'Cum își amintesc', trajectory: 'Cum a mers',
+    worldNow: 'Lumea pe care ai făcut-o', noVoices: 'Vestea nu a ajuns încă departe',
+    bandRuin: 'În ruină', bandWorse: 'Mai rău decât în realitate', bandSame: 'Cam ca înainte',
+    bandBetter: 'Mai bine decât în realitate', bandGolden: 'O epocă de aur',
+    elated: 'Exaltați', hopeful: 'Plini de speranță', relieved: 'Ușurați', defiant: 'Sfidători', uneasy: 'Neliniștiți',
+    resigned: 'Resemnați', afraid: 'Înspăimântați', angry: 'Furioși', betrayed: 'Trădați', grieving: 'Îndoliați',
   },
   fr: {
     kicker: 'UNIVERS PARALLÈLES', reality: 'Ce qui est vraiment arrivé',
@@ -121,6 +241,13 @@ const L: Record<Lang, Record<string, string>> = {
     getPro: 'Débloquer les parties illimitées', locked: 'Revenez demain',
     preview: 'PRO voit le coût avant de choisir', already: 'Déjà trouvée',
     firstTime: 'Nouvelle chronologie', risk: 'Risque',
+    voices: 'Ce que l\'on dit', mood: 'Humeur publique', onward: 'Vivre avec',
+    legacyTitle: 'Ce qu\'on en retient', trajectory: 'Comment ça a tourné',
+    worldNow: 'Le monde que vous avez fait', noVoices: 'La nouvelle n\'a pas encore voyagé',
+    bandRuin: 'En ruines', bandWorse: 'Pire que l\'histoire', bandSame: 'À peu près pareil',
+    bandBetter: 'Mieux que l\'histoire', bandGolden: 'Un âge d\'or',
+    elated: 'Exaltés', hopeful: 'Pleins d\'espoir', relieved: 'Soulagés', defiant: 'Défiants', uneasy: 'Inquiets',
+    resigned: 'Résignés', afraid: 'Effrayés', angry: 'En colère', betrayed: 'Trahis', grieving: 'En deuil',
   },
   de: {
     kicker: 'PARALLELE WELTEN', reality: 'Was wirklich geschah',
@@ -134,6 +261,13 @@ const L: Record<Lang, Record<string, string>> = {
     getPro: 'Unbegrenzte Durchgänge freischalten', locked: 'Komm morgen wieder',
     preview: 'PRO sieht die Kosten vor der Wahl', already: 'Schon gefunden',
     firstTime: 'Neue Zeitlinie', risk: 'Risiko',
+    voices: 'Was die Leute sagen', mood: 'Stimmung im Volk', onward: 'Damit leben',
+    legacyTitle: 'Wie man sich erinnert', trajectory: 'Wie es lief',
+    worldNow: 'Die Welt, die du gemacht hast', noVoices: 'Die Nachricht ist noch nicht weit gekommen',
+    bandRuin: 'In Trümmern', bandWorse: 'Schlimmer als die Geschichte', bandSame: 'Fast wie zuvor',
+    bandBetter: 'Besser als die Geschichte', bandGolden: 'Ein goldenes Zeitalter',
+    elated: 'Begeistert', hopeful: 'Hoffnungsvoll', relieved: 'Erleichtert', defiant: 'Trotzig', uneasy: 'Beunruhigt',
+    resigned: 'Resigniert', afraid: 'Verängstigt', angry: 'Wütend', betrayed: 'Verraten', grieving: 'Trauernd',
   },
   es: {
     kicker: 'UNIVERSOS PARALELOS', reality: 'Lo que realmente pasó',
@@ -147,6 +281,13 @@ const L: Record<Lang, Record<string, string>> = {
     getPro: 'Desbloquear partidas ilimitadas', locked: 'Vuelve mañana',
     preview: 'PRO ve el coste antes de elegir', already: 'Ya encontrada',
     firstTime: 'Cronología nueva', risk: 'Riesgo',
+    voices: 'Lo que dice la gente', mood: 'Ánimo público', onward: 'Vive con ello',
+    legacyTitle: 'Cómo lo recuerdan', trajectory: 'Cómo fue',
+    worldNow: 'El mundo que hiciste', noVoices: 'La noticia aún no ha viajado',
+    bandRuin: 'En ruinas', bandWorse: 'Peor que la historia', bandSame: 'Casi igual',
+    bandBetter: 'Mejor que la historia', bandGolden: 'Una edad de oro',
+    elated: 'Eufóricos', hopeful: 'Esperanzados', relieved: 'Aliviados', defiant: 'Desafiantes', uneasy: 'Inquietos',
+    resigned: 'Resignados', afraid: 'Asustados', angry: 'Furiosos', betrayed: 'Traicionados', grieving: 'De luto',
   },
 };
 
@@ -167,23 +308,17 @@ const clamp = (n: number) => Math.max(0, Math.min(100, n));
 // ═════════════════════════════════════════════════════════════════════════════
 // WORLD METERS — four bars that trade against each other
 // ═════════════════════════════════════════════════════════════════════════════
-const BAR_W = 62;
-
+/**
+ * One world meter. The bar itself is Skia (ParallelCanvas), the icon, label and floating
+ * delta stay React Native — Skia text would cost a bundled typeface, font scaling and the
+ * five languages this app ships in, for four words.
+ */
 function Meter({ k, value, delta, label, isDark }: {
-  k: MeterKey; value: number; delta: number | null; label: string; isDark: boolean;
+  k: MeterKey; value: SharedValue<number>; delta: number | null; label: string; isDark: boolean;
 }) {
   const color = METER_COLOR[k];
-  const fill = useRef(new Animated.Value(value / 100)).current;
   const floatY = useRef(new Animated.Value(0)).current;
   const floatOp = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    // Overshoot slightly and settle. A bar that slides linearly to its new value reads
-    // as a progress indicator; one that springs reads as a reaction.
-    Animated.spring(fill, {
-      toValue: value / 100, tension: 52, friction: 9, useNativeDriver: true,
-    }).start();
-  }, [value, fill]);
 
   useEffect(() => {
     if (delta === null || delta === 0) return;
@@ -197,24 +332,10 @@ function Meter({ k, value, delta, label, isDark }: {
     ]).start();
   }, [delta, floatY, floatOp]);
 
-  // scaleX anchors at the centre, so translate back by half the lost width to pin it left.
-  const scaleX = fill;
-  const shift = fill.interpolate({ inputRange: [0, 1], outputRange: [-BAR_W / 2, 0] });
-
   return (
     <View style={m.wrap}>
       <MaterialCommunityIcons name={METER_ICON[k]} size={13} color={color} />
-      <View style={[m.track, { backgroundColor: isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)' }]}>
-        <Animated.View
-          style={[
-            m.fill,
-            { backgroundColor: color, width: BAR_W, transform: [{ translateX: shift }, { scaleX }] },
-          ]}
-        />
-        {/* Reality sits at the midpoint — the notch is what makes a bar readable as
-            "above or below what actually happened" rather than just a quantity. */}
-        <View style={[m.notch, { backgroundColor: isDark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.3)' }]} />
-      </View>
+      <SkiaMeter value={value} hue={color} isDark={isDark} />
       <Text style={[m.label, { color: isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.45)' }]} numberOfLines={1}>
         {label}
       </Text>
@@ -228,116 +349,6 @@ function Meter({ k, value, delta, label, isDark }: {
           {delta > 0 ? `+${delta}` : delta}
         </Animated.Text>
       )}
-    </View>
-  );
-}
-
-// ═════════════════════════════════════════════════════════════════════════════
-// DIVERGENCE FIELD — the other timelines, drifting past
-// ═════════════════════════════════════════════════════════════════════════════
-/**
- * Sixteen motes drifting on their own loops behind the whole screen. Slow, low
- * contrast, never in step with each other — the point is a room that feels alive at
- * the edge of vision, not a particle effect anyone should notice.
- *
- * Positions are computed once from a fixed pattern rather than randomised per render,
- * so the field is stable across re-renders and nothing recalculates while you play.
- */
-const MOTES = Array.from({ length: 16 }, (_, i) => ({
-  x: ((i * 137) % 100) / 100,
-  y: ((i * 61) % 100) / 100,
-  size: 1.6 + ((i * 7) % 5) * 0.5,
-  dur: 7000 + ((i * 991) % 6000),
-  rise: 26 + ((i * 13) % 40),
-}));
-
-function DivergenceField({ color }: { color: string }) {
-  const drift = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.timing(drift, { toValue: 1, duration: 9000, easing: Easing.linear, useNativeDriver: true }),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [drift]);
-
-  return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {MOTES.map((mo, i) => {
-        // Each mote rides the one shared clock at its own phase, so sixteen dots cost
-        // one driver rather than sixteen.
-        const phase = i / MOTES.length;
-        const y = drift.interpolate({
-          inputRange: [0, 1],
-          outputRange: [0, -mo.rise],
-        });
-        const opacity = drift.interpolate({
-          inputRange: [0, phase, Math.min(1, phase + 0.5), 1],
-          outputRange: [0.08, 0.34, 0.08, 0.08],
-          extrapolate: 'clamp',
-        });
-        return (
-          <Animated.View
-            key={i}
-            style={{
-              position: 'absolute',
-              left: `${mo.x * 100}%`,
-              top: `${mo.y * 100}%`,
-              width: mo.size,
-              height: mo.size,
-              borderRadius: mo.size,
-              backgroundColor: color,
-              opacity,
-              transform: [{ translateY: y }],
-            }}
-          />
-        );
-      })}
-    </View>
-  );
-}
-
-// ═════════════════════════════════════════════════════════════════════════════
-// FORK — three paths opening out of one, drawn on the intro
-// ═════════════════════════════════════════════════════════════════════════════
-function ForkReveal({ gold, isDark }: { gold: string; isDark: boolean }) {
-  const grow = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.timing(grow, {
-      toValue: 1, duration: 1100, easing: Easing.out(Easing.cubic), useNativeDriver: true,
-    }).start();
-  }, [grow]);
-
-  const H = 84;
-  const stem = grow.interpolate({ inputRange: [0, 0.45, 1], outputRange: [0, 1, 1] });
-  const arms = grow.interpolate({ inputRange: [0, 0.45, 1], outputRange: [0, 0, 1] });
-  const ghost = isDark ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.14)';
-
-  return (
-    <View style={{ height: H, alignItems: 'center', justifyContent: 'flex-start', marginBottom: 18 }} pointerEvents="none">
-      {/* One line up to the fork… */}
-      <Animated.View style={{
-        width: 2, height: H * 0.42, backgroundColor: gold, borderRadius: 1,
-        transform: [{ scaleY: stem }, { translateY: H * 0.21 }],
-      }} />
-      {/* …then three, the middle one still gold because it is the one you are on. */}
-      <View style={{ flexDirection: 'row', gap: 46, marginTop: -1 }}>
-        {[ghost, gold, ghost].map((c, i) => (
-          <Animated.View
-            key={i}
-            style={{
-              width: 2, height: H * 0.5, backgroundColor: c, borderRadius: 1,
-              transform: [
-                { scaleY: arms },
-                { translateY: H * 0.25 },
-                { rotate: `${(i - 1) * 17}deg` },
-              ],
-            }}
-          />
-        ))}
-      </View>
     </View>
   );
 }
@@ -414,161 +425,11 @@ const f_ = StyleSheet.create({
 });
 
 const m = StyleSheet.create({
-  wrap: { alignItems: 'center', width: BAR_W + 8 },
-  track: { width: BAR_W, height: 6, borderRadius: 3, marginTop: 5, overflow: 'hidden', justifyContent: 'center' },
-  fill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 3 },
-  notch: { position: 'absolute', left: BAR_W / 2 - 0.5, width: 1, top: 0, bottom: 0 },
-  label: { fontSize: 8, letterSpacing: 0.5, marginTop: 4, textTransform: 'uppercase', fontWeight: '700' },
+  wrap: { alignItems: 'center', width: METER_WIDTH + 8 },
+  label: { fontSize: 8, letterSpacing: 0.5, marginTop: 2, textTransform: 'uppercase', fontWeight: '700' },
   delta: { position: 'absolute', top: -4, fontSize: 12, fontWeight: '900', fontVariant: ['tabular-nums'] },
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// BRANCH SPINE — the timeline you are building, down the left edge
-// ═════════════════════════════════════════════════════════════════════════════
-function Spine({ steps, total, gold, isDark }: {
-  steps: number; total: number; gold: string; isDark: boolean;
-}) {
-  return (
-    <View style={sp.wrap} pointerEvents="none">
-      {Array.from({ length: total }).map((_, i) => {
-        const done = i < steps;
-        const current = i === steps;
-        return (
-          <View key={i} style={sp.seg}>
-            <SpineDot done={done} current={current} gold={gold} isDark={isDark} />
-            {i < total - 1 && (
-              <View style={[sp.line, {
-                backgroundColor: done ? gold : (isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)'),
-              }]} />
-            )}
-          </View>
-        );
-      })}
-    </View>
-  );
-}
-
-function SpineDot({ done, current, gold, isDark }: {
-  done: boolean; current: boolean; gold: string; isDark: boolean;
-}) {
-  const pulse = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    if (!current) return;
-    const loop = Animated.loop(Animated.sequence([
-      Animated.timing(pulse, { toValue: 1, duration: 780, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-      Animated.timing(pulse, { toValue: 0, duration: 780, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-    ]));
-    loop.start();
-    return () => { loop.stop(); pulse.setValue(0); };
-  }, [current, pulse]);
-
-  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.45] });
-  const idle = isDark ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.14)';
-
-  return (
-    <Animated.View
-      style={[
-        sp.dot,
-        {
-          backgroundColor: done || current ? gold : idle,
-          transform: [{ scale: current ? scale : 1 }],
-        },
-      ]}
-    />
-  );
-}
-
-const sp = StyleSheet.create({
-  wrap: { position: 'absolute', left: 0, top: 4, alignItems: 'center', width: 18 },
-  seg: { alignItems: 'center' },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  line: { width: 2, height: 34, marginVertical: 2, borderRadius: 1 },
-});
-
-// ═════════════════════════════════════════════════════════════════════════════
-// RADAR — your world against the real one
-// ═════════════════════════════════════════════════════════════════════════════
-const RAD = 96;
-
-function Radar({ values, gold, isDark, t }: {
-  values: Record<MeterKey, number>; gold: string; isDark: boolean; t: Record<string, string>;
-}) {
-  // One-off reveal. SVG polygon points cannot be driven natively, so this sweeps with
-  // rAF for ~700ms rather than putting an Animated listener on every frame of the run.
-  const [p, setP] = useState(0);
-  useEffect(() => {
-    let raf = 0; const start = Date.now();
-    const tick = () => {
-      const k = Math.min(1, (Date.now() - start) / 700);
-      setP(1 - Math.pow(1 - k, 3));
-      if (k < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, []);
-
-  const c = RAD;
-  const pt = (i: number, r: number) => {
-    const a = (i * 90 - 90) * (Math.PI / 180);
-    return [c + r * Math.cos(a), c + r * Math.sin(a)];
-  };
-  const poly = (get: (k: MeterKey) => number) =>
-    METERS.map((k, i) => pt(i, (get(k) / 100) * (RAD - 16)).join(',')).join(' ');
-
-  const grid = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.09)';
-  const realColor = isDark ? '#7A8A94' : '#8A97A0';
-
-  return (
-    <View style={{ alignItems: 'center' }}>
-      <Svg width={RAD * 2} height={RAD * 2}>
-        {[0.25, 0.5, 0.75, 1].map(r => (
-          <Polygon
-            key={r}
-            points={METERS.map((_, i) => pt(i, r * (RAD - 16)).join(',')).join(' ')}
-            fill="none" stroke={grid} strokeWidth={1}
-          />
-        ))}
-        {METERS.map((_, i) => {
-          const [x, y] = pt(i, RAD - 16);
-          return <Line key={i} x1={c} y1={c} x2={x} y2={y} stroke={grid} strokeWidth={1} />;
-        })}
-
-        {/* Reality first, underneath — your world is drawn over it. */}
-        <Polygon points={poly(() => BASELINE)} fill={realColor + '22'} stroke={realColor} strokeWidth={1.5} />
-        <Polygon
-          points={poly(k => BASELINE + (values[k] - BASELINE) * p)}
-          fill={gold + '2E'} stroke={gold} strokeWidth={2.2}
-        />
-        {METERS.map((k, i) => {
-          const [x, y] = pt(i, ((BASELINE + (values[k] - BASELINE) * p) / 100) * (RAD - 16));
-          return <Circle key={k} cx={x} cy={y} r={3.4} fill={METER_COLOR[k]} />;
-        })}
-      </Svg>
-      <View style={r_.legend}>
-        {METERS.map((k, i) => {
-          const [x, y] = pt(i, RAD - 4);
-          return (
-            <View key={k} style={[r_.tag, { left: x - 30, top: y - 8 }]}>
-              <Text style={[r_.tagText, { color: METER_COLOR[k] }]} numberOfLines={1}>
-                {t[k]}
-              </Text>
-            </View>
-          );
-        })}
-      </View>
-    </View>
-  );
-}
-
-const r_ = StyleSheet.create({
-  legend: { position: 'absolute', width: RAD * 2, height: RAD * 2 },
-  tag: { position: 'absolute', width: 60, alignItems: 'center' },
-  tagText: { fontSize: 8.5, fontWeight: '800', letterSpacing: 0.6, textTransform: 'uppercase' },
-});
-
-// ═════════════════════════════════════════════════════════════════════════════
-// CHOICE CARD
-// ═════════════════════════════════════════════════════════════════════════════
 // ═════════════════════════════════════════════════════════════════════════════
 // YEAR — rolls over when the scene jumps forward
 // ═════════════════════════════════════════════════════════════════════════════
@@ -765,6 +626,283 @@ const cc = StyleSheet.create({
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
+// HOW WELL IS IT GOING — the one reading that answers the whole question
+// ═════════════════════════════════════════════════════════════════════════════
+/** The four meters against reality, summed. -200 (ruin) … +200 (golden age). */
+function wellbeing(meters: Record<MeterKey, number>): number {
+  return METERS.reduce((sum, k) => sum + (meters[k] - BASELINE), 0);
+}
+
+/** Five bands, because "your world is at -34" means nothing and "worse than history"
+ *  means everything. The thresholds are deliberately wide in the middle: most runs
+ *  land near reality, and a band that flickered every turn would be noise. */
+const BANDS: { max: number; key: string; color: string }[] = [
+  { max: -60,      key: 'bandRuin',   color: '#C7433F' },
+  { max: -20,      key: 'bandWorse',  color: '#D9603F' },
+  { max:  20,      key: 'bandSame',   color: '#8A8A96' },
+  { max:  60,      key: 'bandBetter', color: '#5CB88C' },
+  { max: Infinity, key: 'bandGolden', color: '#3FA97A' },
+];
+const bandFor = (w: number) => BANDS.find(b => w < b.max) ?? BANDS[BANDS.length - 1];
+
+/**
+ * The headline readout: a bar centred on reality with your world sitting to one side of
+ * it, and the band named underneath. This is the answer to "is this going well?", which
+ * four separate meters never quite give — they can all move and still leave you unsure
+ * whether you are winning.
+ */
+function WorldBand({ meters, label, t, theme, isDark }: {
+  meters: Record<MeterKey, number>; label: string;
+  t: Record<string, string>; theme: any; isDark: boolean;
+}) {
+  const w = wellbeing(meters);
+  const band = bandFor(w);
+  // -200…+200 onto 0…1, clamped: past ±140 the needle would leave the track and the
+  // difference stops being legible anyway.
+  const pos = Math.max(0, Math.min(1, (w + 140) / 280));
+  const slide = useRef(new Animated.Value(pos)).current;
+
+  useEffect(() => {
+    Animated.spring(slide, { toValue: pos, tension: 46, friction: 9, useNativeDriver: false }).start();
+  }, [pos, slide]);
+
+  return (
+    <View style={[wb.wrap, { borderColor: band.color + '3A', backgroundColor: band.color + '0E' }]}>
+      <Text style={[wb.kicker, { color: theme.subtext }]}>{label}</Text>
+      <Text style={[wb.band, { color: band.color }]}>{t[band.key]}</Text>
+
+      <View style={[wb.track, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]}>
+        {/* Reality is the centre line, not zero on the left — the whole bar is a
+            comparison, so the thing being compared to has to be visible. */}
+        <View style={[wb.centre, { backgroundColor: isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.26)' }]} />
+        <Animated.View
+          style={[
+            wb.needle,
+            {
+              backgroundColor: band.color,
+              left: slide.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }),
+            },
+          ]}
+        />
+      </View>
+      <Text style={[wb.value, { color: band.color }]}>{w > 0 ? `+${w}` : w}</Text>
+    </View>
+  );
+}
+
+const wb = StyleSheet.create({
+  wrap: { borderWidth: 1, borderRadius: 13, paddingHorizontal: 15, paddingVertical: 13, marginBottom: 16 },
+  kicker: { fontSize: 9, fontWeight: '800', letterSpacing: 1.4, textTransform: 'uppercase' },
+  band: { fontSize: 17, fontWeight: '800', letterSpacing: -0.2, marginTop: 3, marginBottom: 10 },
+  track: { height: 5, borderRadius: 3, position: 'relative', justifyContent: 'center' },
+  centre: { position: 'absolute', left: '50%', width: 1.5, height: 11, borderRadius: 1, marginLeft: -0.75 },
+  needle: { position: 'absolute', width: 3, height: 15, borderRadius: 2, marginLeft: -1.5 },
+  value: { fontSize: 11, fontWeight: '800', textAlign: 'right', marginTop: 7, fontVariant: ['tabular-nums'] },
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// PUBLIC MOOD — the fifth meter, and the only one made of people
+// ═════════════════════════════════════════════════════════════════════════════
+/**
+ * The four world meters are abstractions: stability, lives, progress, freedom. This one
+ * is the room. It moves on the average feeling of the people quoted after each choice,
+ * which is why it can fall while every other meter rises — a decision can be correct and
+ * still be hated, and that gap is the most interesting thing the game has to say.
+ */
+function MoodBar({ value, unrest, delta, label, moodLabel, moodColor, width, theme, isDark }: {
+  value: SharedValue<number>; unrest: SharedValue<number>; delta: number | null;
+  label: string; moodLabel: string; moodColor: string; width: number;
+  theme: any; isDark: boolean;
+}) {
+  const floatY = useRef(new Animated.Value(0)).current;
+  const floatOp = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!delta) return;
+    floatY.setValue(0); floatOp.setValue(0);
+    Animated.sequence([
+      Animated.parallel([
+        Animated.timing(floatOp, { toValue: 1, duration: 170, useNativeDriver: true }),
+        Animated.timing(floatY, { toValue: -15, duration: 620, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+      ]),
+      Animated.timing(floatOp, { toValue: 0, duration: 460, useNativeDriver: true }),
+    ]).start();
+  }, [delta, floatY, floatOp]);
+
+  return (
+    <View style={[mb.wrap, { borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.09)' }]}>
+      <View style={mb.head}>
+        <Text style={[mb.label, { color: theme.subtext }]}>{label}</Text>
+        <View style={mb.right}>
+          <Text style={[mb.mood, { color: moodColor }]}>{moodLabel}</Text>
+          {!!delta && (
+            <Animated.Text
+              style={[
+                mb.delta,
+                { color: delta > 0 ? '#3FA97A' : '#D9603F', opacity: floatOp, transform: [{ translateY: floatY }] },
+              ]}
+            >
+              {delta > 0 ? `+${delta}` : delta}
+            </Animated.Text>
+          )}
+        </View>
+      </View>
+      <MoodTide width={width} mood={value} unrest={unrest} isDark={isDark} />
+    </View>
+  );
+}
+
+const mb = StyleSheet.create({
+  wrap: { borderWidth: 1, borderRadius: 13, paddingHorizontal: 11, paddingTop: 10, paddingBottom: 9, marginBottom: 18 },
+  head: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 },
+  label: { fontSize: 9, fontWeight: '800', letterSpacing: 1.3, textTransform: 'uppercase' },
+  right: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
+  mood: { fontSize: 12.5, fontWeight: '800' },
+  delta: { fontSize: 12, fontWeight: '900', fontVariant: ['tabular-nums'] },
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// VOICES OF THE AGE
+// ═════════════════════════════════════════════════════════════════════════════
+/**
+ * One person, alive that week, on what you just did.
+ *
+ * Deliberately not a chat bubble: the mood colour runs down the left edge, the speaker
+ * is set small and the quote large and serif, so a screen of three of them reads as
+ * testimony rather than notifications.
+ */
+function VoiceCard({ voice, delay, t, theme, isDark }: {
+  voice: Reaction; delay: number; t: Record<string, string>; theme: any; isDark: boolean;
+}) {
+  const enter = useRef(new Animated.Value(0)).current;
+  const meta = moodMeta(voice.mood);
+
+  useEffect(() => {
+    Animated.spring(enter, {
+      toValue: 1, tension: 54, friction: 11, delay, useNativeDriver: true,
+    }).start();
+  }, [enter, delay]);
+
+  return (
+    <Animated.View
+      style={{
+        opacity: enter,
+        transform: [
+          { translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) },
+          { scale: enter.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) },
+        ],
+      }}
+    >
+      <View style={[vc.card, {
+        borderColor: meta.color + '30',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.022)',
+      }]}>
+        <View style={[vc.spine, { backgroundColor: meta.color }]} />
+        <View style={vc.body}>
+          <View style={vc.head}>
+            <MaterialCommunityIcons name={meta.icon} size={13} color={meta.color} />
+            <Text style={[vc.mood, { color: meta.color }]}>{t[voice.mood] ?? voice.mood}</Text>
+            <Text style={[vc.who, { color: theme.subtext }]} numberOfLines={1}>{voice.who}</Text>
+          </View>
+          <Text style={[vc.quote, { color: theme.text }]}>“{voice.quote}”</Text>
+        </View>
+      </View>
+    </Animated.View>
+  );
+}
+
+const vc = StyleSheet.create({
+  card: { flexDirection: 'row', borderWidth: 1, borderRadius: 13, marginBottom: 10, overflow: 'hidden' },
+  spine: { width: 3 },
+  body: { flex: 1, paddingHorizontal: 13, paddingVertical: 12 },
+  head: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 7 },
+  mood: { fontSize: 9.5, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' },
+  who: { flex: 1, fontSize: 11, textAlign: 'right' },
+  quote: { fontSize: 15.5, lineHeight: 23, fontFamily: SERIF, fontStyle: 'italic' },
+});
+
+/**
+ * The beat between deciding and living with it.
+ *
+ * The old flow went straight from a tap to the next scene, which meant the consequence
+ * of a choice was four bars twitching while the screen was already changing. Now the
+ * choice lands, the room answers, and only then does time move — and the player has to
+ * press on rather than being carried, so the quotes are read instead of glimpsed.
+ */
+function ReactionWave({ choice, t, gold, theme, isDark, onward }: {
+  choice: Choice;
+  t: Record<string, string>; gold: string; theme: any; isDark: boolean; onward: () => void;
+}) {
+  const voices = choice.reactions ?? [];
+  const btn = useRef(new Animated.Value(0)).current;
+  // The button waits for the last voice to land. A "continue" that is tappable before
+  // anyone has spoken invites skipping the only part of the turn that is about people.
+  const btnDelay = 420 + voices.length * 260;
+
+  useEffect(() => {
+    Animated.timing(btn, {
+      toValue: 1, duration: 420, delay: btnDelay, easing: Easing.out(Easing.quad),
+      useNativeDriver: true,
+    }).start();
+  }, [btn, btnDelay]);
+
+  return (
+    <View>
+      <View style={rw.head}>
+        <MaterialCommunityIcons name="account-voice" size={14} color={gold} />
+        <Text style={[rw.headText, { color: gold }]}>{t.voices}</Text>
+      </View>
+
+      {voices.length
+        ? voices.map((v, i) => (
+            <VoiceCard key={`${v.who}-${i}`} voice={v} delay={280 + i * 260}
+              t={t} theme={theme} isDark={isDark} />
+          ))
+        : <Text style={[rw.silent, { color: theme.subtext }]}>{t.noVoices}</Text>}
+
+      <Animated.View style={{ opacity: btn, transform: [{ translateY: btn.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }] }}>
+        <Pressable onPress={onward} accessibilityRole="button" accessibilityLabel={t.onward}
+          style={({ pressed }) => [rw.btn, { borderColor: gold + '55', opacity: pressed ? 0.8 : 1 }]}>
+          <Text style={[rw.btnText, { color: gold }]}>{t.onward}</Text>
+          <MaterialCommunityIcons name="arrow-right" size={16} color={gold} />
+        </Pressable>
+      </Animated.View>
+    </View>
+  );
+}
+
+const rw = StyleSheet.create({
+  head: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 12 },
+  headText: { fontSize: 9.5, fontWeight: '800', letterSpacing: 1.5, textTransform: 'uppercase' },
+  silent: { fontSize: 13.5, fontStyle: 'italic', marginBottom: 14 },
+  btn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    borderWidth: 1, borderRadius: 15, paddingVertical: 14, marginTop: 6,
+  },
+  btnText: { fontSize: 14.5, fontWeight: '800' },
+});
+
+/** How the people who ended up living in this world talk about what was decided. */
+function LegacyVoices({ voices, label, t, gold, theme, isDark }: {
+  voices: Reaction[]; label: string; t: Record<string, string>;
+  gold: string; theme: any; isDark: boolean;
+}) {
+  if (!voices.length) return null;
+  return (
+    <View style={{ marginBottom: 26 }}>
+      <View style={rw.head}>
+        <MaterialCommunityIcons name="account-voice" size={14} color={gold} />
+        <Text style={[rw.headText, { color: gold }]}>{label}</Text>
+      </View>
+      {voices.map((v, i) => (
+        <VoiceCard key={`${v.who}-${i}`} voice={v} delay={160 + i * 200}
+          t={t} theme={theme} isDark={isDark} />
+      ))}
+    </View>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
 // THE GAME
 // ═════════════════════════════════════════════════════════════════════════════
 interface Props { visible: boolean; onClose: () => void; event: any }
@@ -792,6 +930,21 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
     [universe],
   );
 
+  // How many decisions a run takes, walked off the tree rather than assumed. The shape
+  // has changed twice — 2-wide, then 3/2, now 3/3/2 — and a screen reading "Decision 3
+  // of 3" on a four-deep tree is the kind of thing nobody notices until a player does.
+  const depth = useMemo(() => {
+    let n = 0;
+    let cur = byId[universe?.root ?? ''];
+    const seen = new Set<string>();
+    while (cur?.choices?.length && !seen.has(cur.id)) {
+      seen.add(cur.id);
+      n += 1;
+      cur = byId[cur.choices[0].next];
+    }
+    return n || 1;
+  }, [byId, universe]);
+
   const discovered = useDiscovered(eventId);
   const runsLeft = useRunsLeft(isPro);
 
@@ -807,7 +960,52 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
   const [pickedId, setPickedId] = useState<string | null>(null);
   const [wasNew, setWasNew] = useState(false);
 
+  // The beat between deciding and living with it. Non-null means the voices are on
+  // screen and time is paused until the player presses on.
+  const [reacting, setReacting] = useState<Choice | null>(null);
+  const [publicMood, setPublicMood] = useState(MOOD_BASELINE);
+  const [moodDelta, setMoodDelta] = useState(0);
+  // The run's shape, one point per decision plus the world as it stood at the fork.
+  const [history, setHistory] = useState<{ world: number; mood: number }[]>([
+    { world: 0, mood: MOOD_BASELINE },
+  ]);
+  // `nonce` and not a boolean: two bad choices running must flash twice.
+  const [flash, setFlash] = useState({ net: 0, nonce: 0 });
+
   const bodyFade = useRef(new Animated.Value(1)).current;
+
+  // ── The bridge to the canvas ───────────────────────────────────────────────
+  // React state drives the copy; these drive the drawing. Skia reads shared values on
+  // the UI thread, so the meters keep easing and the tide keeps moving through the frame
+  // where a 160KB tree is being parsed or a modal is mounting.
+  const mStability = useSharedValue(BASELINE);
+  const mLives = useSharedValue(BASELINE);
+  const mProgress = useSharedValue(BASELINE);
+  const mFreedom = useSharedValue(BASELINE);
+  const meterSV: Record<MeterKey, SharedValue<number>> = {
+    stability: mStability, lives: mLives, progress: mProgress, freedom: mFreedom,
+  };
+  const moodSV = useSharedValue(MOOD_BASELINE);
+  /** 0-1: how divided the last set of voices was. Drives the chop on the mood tide. */
+  const unrestSV = useSharedValue(0);
+  const divergenceSV = useSharedValue(0);
+
+  const EASE = { duration: 620, easing: REasing.out(REasing.cubic) };
+
+  useEffect(() => {
+    for (const k of METERS) {
+      meterSV[k].value = withTiming(meters[k], EASE);
+    }
+    divergenceSV.value = withTiming(
+      (METERS.reduce((sum, k) => sum + Math.abs(meters[k] - BASELINE), 0) / (METERS.length * BASELINE)) * 100,
+      EASE,
+    );
+  }, [meters]);
+
+  useEffect(() => {
+    moodSV.value = withTiming(publicMood, EASE);
+  }, [publicMood]);
+
 
   useEffect(() => {
     if (!visible) return;
@@ -816,6 +1014,14 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
     setDeltas(null);
     setActorDeltas({});
     setStanding(Object.fromEntries((universe?.actors ?? []).map(a => [a.id, a.start])));
+    setReacting(null);
+    setPublicMood(MOOD_BASELINE); setMoodDelta(0);
+    setHistory([{ world: 0, mood: MOOD_BASELINE }]);
+    setFlash({ net: 0, nonce: 0 });
+    for (const k of METERS) meterSV[k].value = BASELINE;
+    moodSV.value = MOOD_BASELINE;
+    unrestSV.value = 0;
+    divergenceSV.value = 0;
     bodyFade.setValue(1);
   }, [visible, bodyFade, universe]);
 
@@ -837,7 +1043,7 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
   }, [universe, isPro, runsLeft, presentPaywall, eventId]);
 
   const pick = useCallback((choice: Choice) => {
-    if (pickedId) return;
+    if (pickedId || reacting) return;
     haptic('medium');
     setPickedId(choice.id);
 
@@ -857,36 +1063,62 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
       nextStanding[id] = clamp((nextStanding[id] ?? BASELINE) + delta);
     }
 
+    // The people move on the same beat as the meters. Mood can fall while every other
+    // bar rises — a decision can be correct and still be hated, and that gap is the most
+    // interesting thing this game has to say.
+    const swing = moodSwing(choice.reactions);
+    const nextMood = clamp(publicMood + swing);
+    const unrest = moodUnrest(choice.reactions);
+    const net = METERS.reduce((sum, k) => sum + choice.effects[k], 0);
+
     // Meters move while the cards are still leaving, so cause and effect land together.
     setTimeout(() => {
       setMeters(next); setDeltas(d);
       setStanding(nextStanding); setActorDeltas(ad);
+      setPublicMood(nextMood); setMoodDelta(swing);
+      unrestSV.value = withTiming(unrest, { duration: 900, easing: REasing.out(REasing.cubic) });
+      setFlash(f => ({ net, nonce: f.nonce + 1 }));
+      setHistory(h => [...h, { world: wellbeing(next), mood: nextMood }]);
+      // A second, quieter haptic under the flash: the screen and the hand agree on
+      // whether that went well before a single number has been read.
+      if (net !== 0) haptic(net > 0 ? 'success' : 'warning');
     }, 120);
 
-    setTimeout(() => {
-      Animated.timing(bodyFade, { toValue: 0, duration: 180, useNativeDriver: true }).start(() => {
-        const target = byId[choice.next];
-        setRoute(r => [...r, choice.id]);
-        setPickedId(null);
-        setDeltas(null);
-        setActorDeltas({});
-        setNodeId(choice.next);
-        if (target && !target.choices?.length) {
-          const isNew = !discovered.includes(target.id);
-          setWasNew(isNew);
-          useParallelStore.getState().recordEnding(eventId, target.id);
-          analytics.capture('parallel_ending', {
-            event_id: eventId, ending_id: target.id, rarity: target.rarity,
-            is_new: isNew, is_pro: isPro,
-            divergence: METERS.reduce((s, k) => s + Math.abs(next[k] - BASELINE), 0),
-          });
-          haptic(target.rarity === 'rare' ? 'success' : 'light');
-          setPhase('end');
-        }
-        Animated.timing(bodyFade, { toValue: 1, duration: 260, useNativeDriver: true }).start();
-      });
-    }, 620);
-  }, [pickedId, meters, standing, byId, bodyFade, discovered, eventId, isPro]);
+    // Then the room speaks, and time stops until the player presses on. Advancing
+    // straight to the next scene is what made the old flow feel like a questionnaire.
+    setTimeout(() => setReacting(choice), 560);
+  }, [pickedId, reacting, meters, standing, publicMood]);
+
+  /** Leave the reaction beat and walk through the door. */
+  const onward = useCallback(() => {
+    const choice = reacting;
+    if (!choice) return;
+    haptic('light');
+    setReacting(null);
+    Animated.timing(bodyFade, { toValue: 0, duration: 180, useNativeDriver: true }).start(() => {
+      const target = byId[choice.next];
+      setRoute(r => [...r, choice.id]);
+      setPickedId(null);
+      setDeltas(null);
+      setActorDeltas({});
+      setMoodDelta(0);
+      setNodeId(choice.next);
+      if (target && !target.choices?.length) {
+        const isNew = !discovered.includes(target.id);
+        setWasNew(isNew);
+        useParallelStore.getState().recordEnding(eventId, target.id);
+        analytics.capture('parallel_ending', {
+          event_id: eventId, ending_id: target.id, rarity: target.rarity,
+          is_new: isNew, is_pro: isPro,
+          divergence: METERS.reduce((s, k) => s + Math.abs(meters[k] - BASELINE), 0),
+          public_mood: publicMood,
+        });
+        haptic(target.rarity === 'rare' ? 'success' : 'light');
+        setPhase('end');
+      }
+      Animated.timing(bodyFade, { toValue: 1, duration: 260, useNativeDriver: true }).start();
+    });
+  }, [reacting, byId, bodyFade, discovered, eventId, isPro, meters, publicMood]);
 
   if (!universe) return null;
 
@@ -904,7 +1136,8 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
           colors={isDark ? ['#12101A', '#08070A'] : ['#FFFDF7', '#F2EFE6']}
           style={StyleSheet.absoluteFill}
         />
-        <DivergenceField color={gold} />
+        <DivergenceField width={W} height={H} divergence={divergenceSV} isDark={isDark} />
+        <ConsequenceBloom width={W} height={H} net={flash.net} nonce={flash.nonce} />
 
         <Pressable onPress={() => { haptic('light'); onClose(); }} hitSlop={14}
           accessibilityRole="button" accessibilityLabel={t.done}
@@ -918,7 +1151,7 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
           {/* ── INTRO ───────────────────────────────────────────────── */}
           {phase === 'intro' && (
             <>
-              <ForkReveal gold={gold} isDark={isDark} />
+              <ForkMark width={W - 44} isDark={isDark} />
 
               <Text style={[g.pivotYear, { color: theme.subtext }]}>{universe.pivotYear}</Text>
               <Text style={[g.title, { color: theme.text }]}>{universe.pivotTitle}</Text>
@@ -961,10 +1194,27 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
             <>
               <View style={g.metersRow}>
                 {METERS.map(k => (
-                  <Meter key={k} k={k} value={meters[k]} delta={deltas?.[k] ?? null}
+                  <Meter key={k} k={k} value={meterSV[k]} delta={deltas?.[k] ?? null}
                     label={t[k]} isDark={isDark} />
                 ))}
               </View>
+
+              {/* Four bars can all move and still leave you unsure whether you are
+                  winning. These two say so outright, and they stay on screen the whole
+                  run so the player watches them move rather than meeting them at the end. */}
+              <WorldBand meters={meters} label={t.worldNow} t={t} theme={theme} isDark={isDark} />
+
+              <MoodBar
+                value={moodSV}
+                unrest={unrestSV}
+                delta={moodDelta}
+                label={t.mood}
+                moodLabel={t[moodAt(publicMood)]}
+                moodColor={moodMeta(moodAt(publicMood)).color}
+                width={W - 44 - 22}
+                theme={theme}
+                isDark={isDark}
+              />
 
               {!!universe.actors?.length && (
                 <View style={[g.actorBox, { borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.09)' }]}>
@@ -982,36 +1232,46 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
               )}
 
               <Text style={[g.stepLabel, { color: theme.subtext }]}>
-                {t.decision} {Math.min(step + 1, 3)} {t.of} 3
+                {t.decision} {Math.min(step + 1, depth)} {t.of} {depth}
               </Text>
 
               <View style={g.stage}>
-                <Spine steps={step} total={4} gold={gold} isDark={isDark} />
-                <Animated.View style={{ opacity: bodyFade, paddingLeft: 30 }}>
+                <BranchMap width={W - 44} depth={depth} step={step} isDark={isDark} />
+                <Animated.View style={{ opacity: bodyFade }}>
                   <YearMark year={node.year} gold={gold} />
                   <Text style={[g.nodeTitle, { color: theme.text }]}>{node.title}</Text>
                   <Text style={[g.nodeText, { color: theme.text }]}>{node.text}</Text>
 
                   <FactStrip facts={node.facts ?? []} isDark={isDark} gold={gold} />
 
-                  {node.choices.map((c, i) => (
-                    <ChoiceCard
-                      key={c.id} choice={c} delay={i * 90}
-                      onPick={() => pick(c)}
-                      disabled={!!pickedId}
-                      exiting={!!pickedId}
-                      chosen={pickedId === c.id}
-                      showEffects={isPro}
-                      riskLabel={t.risk}
-                      gold={gold} theme={theme} isDark={isDark}
+                  {reacting ? (
+                    <ReactionWave
+                      choice={reacting}
+                      t={t} gold={gold} theme={theme} isDark={isDark}
+                      onward={onward}
                     />
-                  ))}
+                  ) : (
+                    <>
+                      {node.choices.map((c, i) => (
+                        <ChoiceCard
+                          key={c.id} choice={c} delay={i * 90}
+                          onPick={() => pick(c)}
+                          disabled={!!pickedId}
+                          exiting={!!pickedId}
+                          chosen={pickedId === c.id}
+                          showEffects={isPro}
+                          riskLabel={t.risk}
+                          gold={gold} theme={theme} isDark={isDark}
+                        />
+                      ))}
 
-                  {!isPro && (
-                    <View style={g.previewHint}>
-                      <MaterialCommunityIcons name="eye-off-outline" size={12} color={theme.subtext} />
-                      <Text style={[g.previewHintText, { color: theme.subtext }]}>{t.preview}</Text>
-                    </View>
+                      {!isPro && (
+                        <View style={g.previewHint}>
+                          <MaterialCommunityIcons name="eye-off-outline" size={12} color={theme.subtext} />
+                          <Text style={[g.previewHintText, { color: theme.subtext }]}>{t.preview}</Text>
+                        </View>
+                      )}
+                    </>
                   )}
                 </Animated.View>
               </View>
@@ -1032,6 +1292,17 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
                 <Text style={[g.verdict, { color: theme.text }]}>{node.verdict}</Text>
               </View>
 
+              {/* The two readings the player actually came for: how the world ended up,
+                  and how the people in it feel about it. */}
+              <WorldBand meters={meters} label={t.worldNow} t={t} theme={theme} isDark={isDark} />
+              <MoodBar
+                value={moodSV} unrest={unrestSV} delta={null} label={t.mood}
+                moodLabel={t[moodAt(publicMood)]}
+                moodColor={moodMeta(moodAt(publicMood)).color}
+                width={W - 44 - 22}
+                theme={theme} isDark={isDark}
+              />
+
               {!!node.stats?.length && (
                 <View style={[g.statsTable, { borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.09)' }]}>
                   <View style={[g.statsHead, { borderBottomColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)' }]}>
@@ -1045,8 +1316,15 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
                 </View>
               )}
 
+              <LegacyVoices
+                voices={node.legacy ?? []} label={t.legacyTitle}
+                t={t} gold={gold} theme={theme} isDark={isDark}
+              />
+
               <Text style={[g.sectionLabel, { color: theme.subtext }]}>{t.yourWorld}</Text>
-              <Radar values={meters} gold={gold} isDark={isDark} t={t} />
+              <View style={{ alignItems: 'center' }}>
+                <WorldRadar size={Math.min(W - 70, 260)} values={METERS.map(k => meters[k])} isDark={isDark} />
+              </View>
 
               <View style={g.statRow}>
                 {METERS.map(k => {
@@ -1061,6 +1339,21 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
                     </View>
                   );
                 })}
+              </View>
+
+              <View style={[g.trajectoryBox, { borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.09)' }]}>
+                <Text style={[g.divergeLabel, { color: theme.subtext }]}>{t.trajectory}</Text>
+                <TrajectoryCurve width={W - 44 - 26} history={history} isDark={isDark} />
+                <View style={g.legendRow}>
+                  <View style={g.legendKey}>
+                    <View style={[g.legendSwatch, { backgroundColor: gold }]} />
+                    <Text style={[g.legendText, { color: theme.subtext }]}>{t.yourWorld}</Text>
+                  </View>
+                  <View style={g.legendKey}>
+                    <View style={[g.legendSwatch, { backgroundColor: '#7B5EA7' }]} />
+                    <Text style={[g.legendText, { color: theme.subtext }]}>{t.mood}</Text>
+                  </View>
+                </View>
               </View>
 
               <View style={[g.divergeBox, { borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.09)' }]}>
@@ -1082,6 +1375,11 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
                   setMeters({ stability: BASELINE, lives: BASELINE, progress: BASELINE, freedom: BASELINE });
                   setStanding(Object.fromEntries((universe.actors ?? []).map(a => [a.id, a.start])));
                   setActorDeltas({});
+                  setReacting(null);
+                  setPublicMood(MOOD_BASELINE); setMoodDelta(0);
+                  setHistory([{ world: 0, mood: MOOD_BASELINE }]);
+                  setFlash({ net: 0, nonce: 0 });
+                  unrestSV.value = 0;
                 }} accessibilityRole="button"
                   style={({ pressed }) => [g.againBtn, { borderColor: gold + '55', opacity: pressed ? 0.8 : 1 }]}>
                   <MaterialCommunityIcons name="restart" size={16} color={gold} />
@@ -1122,6 +1420,12 @@ function RarityBadge({ rarity, label, color, isNew, newLabel }: {
 
   return (
     <View style={g.badgeWrap}>
+      {/* The aura is the tell. A rare world turns a full gold sweep behind the badge and
+          a common one barely glows — the treatment has to differ at a glance, or the
+          rarity is just a word. */}
+      <View style={g.auraWrap} pointerEvents="none">
+        <RarityAura size={AURA} rarity={rarity} />
+      </View>
       <Animated.View style={[g.badge, { borderColor: color, transform: [{ scale: rarity === 'rare' ? scale : 1 }] }]}>
         <MaterialCommunityIcons
           name={rarity === 'rare' ? 'diamond-stone' : 'bookmark-check'}
@@ -1205,7 +1509,8 @@ const g = StyleSheet.create({
   previewHint: { flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center', marginTop: 4 },
   previewHintText: { fontSize: 11, fontStyle: 'italic' },
 
-  badgeWrap: { alignItems: 'center', marginBottom: 14 },
+  badgeWrap: { alignItems: 'center', marginBottom: 14, justifyContent: 'center' },
+  auraWrap: { position: 'absolute', top: -(AURA - 30) / 2, alignItems: 'center', justifyContent: 'center' },
   badge: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1.5, borderRadius: 20, paddingHorizontal: 13, paddingVertical: 6 },
   badgeText: { fontSize: 10.5, fontWeight: '900', letterSpacing: 1.5 },
   newTag: { fontSize: 10, fontWeight: '800', letterSpacing: 1.2, marginTop: 7, textTransform: 'uppercase' },
@@ -1223,6 +1528,11 @@ const g = StyleSheet.create({
   statLabel: { fontSize: 8.5, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase', marginTop: 3 },
 
   divergeBox: { borderWidth: 1, borderRadius: 13, padding: 15, marginBottom: 24 },
+  trajectoryBox: { borderWidth: 1, borderRadius: 13, paddingHorizontal: 12, paddingTop: 13, paddingBottom: 11, marginBottom: 24 },
+  legendRow: { flexDirection: 'row', gap: 16, marginTop: 8 },
+  legendKey: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  legendSwatch: { width: 10, height: 2.5, borderRadius: 2 },
+  legendText: { fontSize: 10.5 },
   divergeLabel: { fontSize: 9.5, fontWeight: '800', letterSpacing: 1.3, textTransform: 'uppercase' },
   divergeVal: { fontSize: 30, fontWeight: '900', fontVariant: ['tabular-nums'], marginTop: 3, marginBottom: 9 },
   divergeTrack: { height: 6, borderRadius: 3, overflow: 'hidden' },

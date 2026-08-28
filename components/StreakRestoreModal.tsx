@@ -70,7 +70,7 @@ export default function StreakRestoreModal() {
   // Computed before the hook so the ad only loads when this sheet is actually
   // on screen. This component is mounted for every user on every launch from
   // _layout, so an unconditional preload here was a guaranteed wasted request.
-  const { showForUnlock } = useRewardedUnlock({ preload: visible });
+  const { showForUnlock } = useRewardedUnlock();
 
   const [watching, setWatching] = useState(false);
 

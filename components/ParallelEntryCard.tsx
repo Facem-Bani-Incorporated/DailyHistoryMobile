@@ -20,35 +20,35 @@ const L: Record<Lang, Record<string, string>> = {
   en: {
     kicker: 'PARALLEL UNIVERSES',
     title: 'What if it had gone differently?',
-    body: 'Three decisions. Four things you can break or save. Eight worlds waiting.',
+    body: 'Three decisions. Four things you can break or save. {n} worlds waiting.',
     cta: 'Enter the divergence',
     found: 'timelines found',
   },
   ro: {
     kicker: 'UNIVERSURI PARALELE',
     title: 'Dar dacă ar fi ieșit altfel?',
-    body: 'Trei decizii. Patru lucruri de salvat sau de distrus. Opt lumi care așteaptă.',
+    body: 'Trei decizii. Patru lucruri de salvat sau de distrus. {n} lumi care așteaptă.',
     cta: 'Intră în bifurcație',
     found: 'cronologii găsite',
   },
   fr: {
     kicker: 'UNIVERS PARALLÈLES',
     title: "Et si cela s'était passé autrement ?",
-    body: 'Trois décisions. Quatre choses à sauver ou à briser. Huit mondes en attente.',
+    body: 'Trois décisions. Quatre choses à sauver ou à briser. {n} mondes en attente.',
     cta: 'Entrer dans la divergence',
     found: 'chronologies trouvées',
   },
   de: {
     kicker: 'PARALLELE WELTEN',
     title: 'Und wenn es anders gekommen wäre?',
-    body: 'Drei Entscheidungen. Vier Dinge zum Retten oder Zerstören. Acht Welten warten.',
+    body: 'Drei Entscheidungen. Vier Dinge zum Retten oder Zerstören. {n} Welten warten.',
     cta: 'Betritt die Abzweigung',
     found: 'Zeitlinien gefunden',
   },
   es: {
     kicker: 'UNIVERSOS PARALELOS',
     title: '¿Y si hubiera salido de otra forma?',
-    body: 'Tres decisiones. Cuatro cosas que salvar o romper. Ocho mundos esperando.',
+    body: 'Tres decisiones. Cuatro cosas que salvar o romper. {n} mundos esperando.',
     cta: 'Entra en la bifurcación',
     found: 'cronologías encontradas',
   },
@@ -126,7 +126,7 @@ function ParallelEntryCardInner({ event, language, theme, isDark, onOpen }: Prop
         </View>
 
         <Text style={[s.title, { color: theme.text }]}>{t.title}</Text>
-        <Text style={[s.body, { color: theme.subtext }]}>{t.body}</Text>
+        <Text style={[s.body, { color: theme.subtext }]}>{t.body.replace('{n}', String(meta.endings))}</Text>
 
         <View style={s.footer}>
           <View style={s.count}>

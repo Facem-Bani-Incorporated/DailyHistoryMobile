@@ -25,7 +25,6 @@ import mobileAds, { BannerAd, BannerAdSize } from 'react-native-google-mobile-ad
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 import api from '../../api';
-import * as analytics from '../../src/analytics/posthog';
 import AchievementsModal from '../../components/AchievementsModal';
 import FriendsModal from '../../components/FriendsModal';
 import AchievementToast from '../../components/AchievementToast';
@@ -67,6 +66,7 @@ import { useFutureDaysStore, useFutureDaysUnlocked } from '../../store/useFuture
 import { useWheelReady } from '../../store/useWheelStore';
 import DailyWheel from '../../components/DailyWheel';
 import ParallelPromoStrip from '../../components/ParallelPromoStrip';
+import UniversesHub from '../../components/UniversesHub';
 import { usePaywallStore } from '../../store/usePaywallStore';
 import { useRewardedUnlock } from '../../hooks/useRewardedUnlock';
 import * as analytics from '../../src/analytics/posthog';
@@ -1729,6 +1729,7 @@ export default function HomeScreen() {
         {/* ═════════════════ CONTENT ═════════════════ */}
         <View style={{ flex: 1 }}>
           {tab === 'saved' ? <SavedScreen topInset={shouldShowBanner ? 0 : undefined} />
+            : tab === 'universes' ? <UniversesHub events={allEvents} topInset={shouldShowBanner ? 0 : undefined} />
             : tab === 'map' ? <MapScreen />
             : tab === 'search' ? <SearchScreen allEvents={allEvents} />
             : tab === 'timeline' ? <TimelineScreen allEvents={allEvents} topInset={shouldShowBanner ? 0 : undefined} />

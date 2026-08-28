@@ -275,9 +275,7 @@ const StreakModal = ({ visible, onClose }: { visible: boolean; onClose: () => vo
   const items = showAll ? readEventsToday : readEventsToday.slice(0, 4);
 
   // preload tied to `visible`: StreakModal's body runs even while the Modal is
-  // closed, so an unconditional preload here would fire a request on every app
-  // open. Loading starts when the sheet actually opens.
-  const { showRewardedAd, showRewardedAdForRestore, isRewardedReady } = useRewardedAd({ preload: visible });
+  const { showRewardedAd, showRewardedAdForRestore, isRewardedReady } = useRewardedAd();
 
   // State detection
   const isBroken = streak === 0 && longest > 0;

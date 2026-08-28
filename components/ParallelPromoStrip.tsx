@@ -7,7 +7,7 @@
 // story you then have to scroll through.
 //
 // It has to stop a thumb and explain itself in about a second, so it leads with a
-// three-way fork drawing itself and "3 decisions · 12 endings" rather than the feature
+// three-way fork drawing itself and "3 decisions · N endings" rather than the feature
 // name. Someone who has never heard of it should know what happens when they tap.
 //
 // Three native-driven loops and nothing else — this sits on the home screen, which is
@@ -29,35 +29,35 @@ const L: Record<Lang, Record<string, string>> = {
   en: {
     badge: 'NEW',
     title: 'Change one decision. See what happens.',
-    meta: '3 decisions · 12 endings',
+    meta: '3 decisions · {n} endings',
     found: 'found',
     play: 'Play',
   },
   ro: {
     badge: 'NOU',
     title: 'Schimbă o decizie. Vezi ce iese.',
-    meta: '3 decizii · 12 finaluri',
+    meta: '3 decizii · {n} finaluri',
     found: 'găsite',
     play: 'Joacă',
   },
   fr: {
     badge: 'NOUVEAU',
     title: 'Changez une décision. Voyez la suite.',
-    meta: '3 décisions · 12 fins',
+    meta: '3 décisions · {n} fins',
     found: 'trouvées',
     play: 'Jouer',
   },
   de: {
     badge: 'NEU',
     title: 'Ändere eine Entscheidung. Sieh, was folgt.',
-    meta: '3 Entscheidungen · 12 Enden',
+    meta: '3 Entscheidungen · {n} Enden',
     found: 'gefunden',
     play: 'Spielen',
   },
   es: {
     badge: 'NUEVO',
     title: 'Cambia una decisión. Mira qué pasa.',
-    meta: '3 decisiones · 12 finales',
+    meta: '3 decisiones · {n} finales',
     found: 'encontrados',
     play: 'Jugar',
   },
@@ -191,7 +191,12 @@ function ParallelPromoStripInner({ events, language, theme, isDark }: Props) {
               <View style={[s.badge, { backgroundColor: gold }]}>
                 <Text style={s.badgeText}>{t.badge}</Text>
               </View>
-              <Text style={[s.meta, { color: theme.subtext }]} numberOfLines={1}>{t.meta}</Text>
+              <Text style={[s.meta, { color: theme.subtext }]} numberOfLines={1}>
+                {/* Read off the tree rather than hardcoded: the generator's shape has
+                    changed twice, and a strip promising twelve endings when there are
+                    eighteen is the kind of lie a player notices on their second run. */}
+                {t.meta.replace('{n}', String(found.endings))}
+              </Text>
             </View>
             <Text style={[s.title, { color: theme.text }]} numberOfLines={2}>{t.title}</Text>
             <View style={s.progressRow}>
