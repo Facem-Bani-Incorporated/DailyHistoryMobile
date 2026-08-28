@@ -204,119 +204,115 @@ export const ConsequenceBloom = memo(function ConsequenceBloom({
 // WORLD METERS — four bars that trade against each other
 // ═════════════════════════════════════════════════════════════════════════════
 const METER_W = 66;
-const METER_H = 7;
+const METER_H = 9;
 
 /**
- * One meter. Reality is the midpoint notch, so the bar reads as "above or below what
- * actually happened" rather than as a quantity, and the fill glows in its own colour so
- * four of them side by side stay legible at a glance.
+ * One world meter, as a piece of glass with light in it.
+ *
+ * Two things make it read as an object rather than a progress bar: a specular highlight
+ * along the top of the fill, and a bloom underneath that grows with the value. And when
+ * one meter runs away from the other three it starts to burn — `dominance` drives a
+ * pulse, so a world that bought progress by spending everything else announces itself
+ * before you have read a single label.
  */
 export const SkiaMeter = memo(function SkiaMeter({
-  value, hue, isDark,
-}: { value: SharedValue<number>; hue: string; isDark: boolean }) {
-  const w = useDerivedValue(() => Math.max(2, (value.value / 100) * METER_W));
-  const glowW = useDerivedValue(() => Math.max(2, (value.value / 100) * METER_W));
+  value, dominance, hue, isDark,
+}: { value: SharedValue<number>; dominance: number; hue: string; isDark: boolean }) {
+  const burn = useSharedValue(0);
+  const pulse = useSharedValue(0);
+
+  useMemo(() => {
+    burn.value = withTiming(Math.max(0, Math.min(1, dominance)), { duration: 700 });
+  }, [dominance, burn]);
+
+  useMemo(() => {
+    pulse.value = withRepeat(withTiming(1, { duration: 1300, easing: Easing.inOut(Easing.sin) }), -1, true);
+  }, [pulse]);
+
+  const w = useDerivedValue(() => Math.max(3, (value.value / 100) * METER_W));
+  const bloom = useDerivedValue(() =>
+    0.35 + (value.value / 100) * 0.25 + burn.value * (0.35 + pulse.value * 0.4));
+  const bloomBlur = useDerivedValue(() => 5 + burn.value * 9);
+  const specW = useDerivedValue(() => Math.max(0, w.value - 3));
 
   return (
-    <Canvas style={{ width: METER_W, height: METER_H + 10 }}>
-      <Group transform={[{ translateY: 5 }]}>
+    <Canvas style={{ width: METER_W, height: METER_H + 12 }}>
+      <Group transform={[{ translateY: 6 }]}>
         <RoundedRect x={0} y={0} width={METER_W} height={METER_H} r={METER_H / 2}
-          color={isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)'} />
+          color={isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)'} />
 
-        {/* The glow is a second, blurred copy underneath — cheaper than a shadow and it
-            keeps the crisp edge on top. */}
-        <RoundedRect x={0} y={0} width={glowW} height={METER_H} r={METER_H / 2} color={hue} opacity={0.55}>
-          <BlurMask blur={6} style="normal" />
+        <RoundedRect x={0} y={0} width={w} height={METER_H} r={METER_H / 2}
+          color={hue} opacity={bloom}>
+          <BlurMask blur={bloomBlur} style="normal" />
         </RoundedRect>
 
+        {/* The fill: darker at the base, bright at the crown, like a lit tube. */}
         <RoundedRect x={0} y={0} width={w} height={METER_H} r={METER_H / 2}>
-          <LinearGradient start={vec(0, 0)} end={vec(METER_W, 0)} colors={[`${hue}AA`, hue]} />
+          <LinearGradient start={vec(0, 0)} end={vec(0, METER_H)}
+            colors={[`${hue}FF`, hue, `${hue}AA`]} />
         </RoundedRect>
 
-        {/* Reality. */}
-        <Rect x={METER_W / 2 - 0.75} y={-2} width={1.5} height={METER_H + 4}
-          color={isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.32)'} />
+        {/* Specular: a thin bright line along the upper third. This is the whole gloss. */}
+        <RoundedRect x={1.5} y={1.2} width={specW} height={METER_H * 0.34}
+          r={METER_H * 0.17} color="#FFFFFF" opacity={0.42} />
+
+        <Rect x={METER_W / 2 - 0.75} y={-2.5} width={1.5} height={METER_H + 5}
+          color={isDark ? 'rgba(255,255,255,0.42)' : 'rgba(0,0,0,0.34)'} />
       </Group>
     </Canvas>
   );
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
-// MOOD TIDE — the fifth meter, and the only one made of people
+// WORLD DIAL — how far from the world that happened
 // ═════════════════════════════════════════════════════════════════════════════
 /**
- * Public mood as a body of water rather than a bar.
+ * One arc, one number, one word.
  *
- * The level is how the room feels, the colour runs from grief-red through a muted
- * neutral to elated-green, and the chop is how divided they are — a country that agrees
- * on a decision lies flat, one that is tearing itself apart will not settle. A bar can
- * carry the level; only the surface can carry the disagreement, and the disagreement is
- * the interesting half.
+ * Replaces a labelled track with a needle and a caption. The arc sweeps out from top
+ * centre — right when the world came out better than history, left when worse — so the
+ * direction alone carries the sign before the number is read.
  */
-export const MoodTide = memo(function MoodTide({
-  width, mood, unrest, isDark,
-}: {
-  width: number; mood: SharedValue<number>; unrest: SharedValue<number>; isDark: boolean;
-}) {
-  const H = 58;
-  const clock = useSharedValue(0);
+export const WorldDial = memo(function WorldDial({
+  size, wellbeing, tone, isDark,
+}: { size: number; wellbeing: number; tone: string; isDark: boolean }) {
+  const sweep = useSharedValue(0);
 
   useMemo(() => {
-    clock.value = withRepeat(withTiming(1, { duration: 4200, easing: Easing.linear }), -1, false);
-  }, [clock]);
+    sweep.value = withTiming(Math.max(-1, Math.min(1, wellbeing / 140)), {
+      duration: 900, easing: Easing.out(Easing.cubic),
+    });
+  }, [wellbeing, sweep]);
 
-  const surface = useDerivedValue(() => {
-    'worklet';
-    const level = H - (mood.value / 100) * H;
-    // Always visibly moving. At zero unrest the old amplitude was 1.5px, which on a 58px
-    // band is a straight line — the tide read as a flat brown puddle rather than as a
-    // room full of people who have not settled.
-    const amp = 3.5 + unrest.value * 7;
+  const cx = size / 2;
+  const cy = size / 2;
+  const R = size / 2 - 9;
+  const SPAN = 132;
+
+  const track = useMemo(() => {
     const p = Skia.Path.Make();
-    p.moveTo(0, H);
-    p.lineTo(0, level);
-    // Two summed sines at different rates: one wave alone reads as a loop, two never
-    // quite repeat inside the time anyone looks at it.
-    const steps = 28;
-    for (let i = 0; i <= steps; i++) {
-      const x = (i / steps) * width;
-      const a = (i / steps) * TAU * 1.6 + clock.value * TAU;
-      const b = (i / steps) * TAU * 2.7 - clock.value * TAU * 0.7;
-      p.lineTo(x, level + Math.sin(a) * amp + Math.sin(b) * amp * 0.55);
-    }
-    p.lineTo(width, H);
-    p.close();
+    p.addArc({ x: cx - R, y: cy - R, width: R * 2, height: R * 2 }, -90 - SPAN, SPAN * 2);
+    return p;
+  }, [size]);
+
+  const arc = useDerivedValue(() => {
+    'worklet';
+    const p = Skia.Path.Make();
+    p.addArc({ x: cx - R, y: cy - R, width: R * 2, height: R * 2 }, -90, sweep.value * SPAN);
     return p;
   });
 
-  // A real rounded-rect object: `clip` takes Skia geometry, and a plain literal with rx
-  // and ry on it slips past the union's type check while clipping to a square.
-  const clip = useMemo(
-    () => Skia.RRectXY(Skia.XYWHRect(0, 0, width, H), 11, 11),
-    [width],
-  );
-
-  // Pushed away from the muddy grey that sat in the middle of the old ramp: at fifty the
-  // room is uneasy, not neutral, and it should look it.
-  const tint = useDerivedValue(() =>
-    interpolateColor(mood.value, [0, 25, 50, 75, 100], [BAD, '#C7623A', '#B08A5A', '#4FB185', GOOD]));
-  const glowOpacity = useDerivedValue(() => 0.4 + unrest.value * 0.35);
-
   return (
-    <Canvas style={{ width, height: H }}>
-      <RoundedRect x={0} y={0} width={width} height={H} r={11}
-        color={isDark ? 'rgba(255,255,255,0.035)' : 'rgba(0,0,0,0.025)'} />
-      <Group clip={clip}>
-        <Path path={surface} color={tint} opacity={glowOpacity}>
-          <BlurMask blur={11} style="normal" />
-        </Path>
-        <Path path={surface} color={tint} opacity={0.72} />
-        {/* The waterline itself, drawn crisp on top of the soft body. */}
-        <Path path={surface} style="stroke" strokeWidth={2.2} color={tint} />
-      </Group>
-      {/* Reality, again: half the room content is the neutral the tide is measured from. */}
-      <Rect x={0} y={H / 2} width={width} height={1}
-        color={isDark ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.13)'} />
+    <Canvas style={{ width: size, height: size }} pointerEvents="none">
+      <Path path={track} style="stroke" strokeWidth={7} strokeCap="round"
+        color={isDark ? 'rgba(245,236,215,0.09)' : 'rgba(0,0,0,0.07)'} />
+      <Path path={arc} style="stroke" strokeWidth={10} strokeCap="round" color={tone} opacity={0.5}>
+        <BlurMask blur={12} style="normal" />
+      </Path>
+      <Path path={arc} style="stroke" strokeWidth={5.5} strokeCap="round" color={tone} />
+      {/* Reality: the mark the arc grows away from. */}
+      <Rect x={cx - 1} y={cy - R - 6} width={2} height={11}
+        color={isDark ? 'rgba(245,236,215,0.5)' : 'rgba(0,0,0,0.4)'} />
     </Canvas>
   );
 });
@@ -471,191 +467,101 @@ export const PeasantMarch = memo(function PeasantMarch({
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
-// BRANCH MAP — the shape of the run
+// BRANCH MAP — where you are, and what you gave up
 // ═════════════════════════════════════════════════════════════════════════════
 /**
- * The tree, drawn as a tree: the root on the left, the endings fanning out on the right,
- * the path you actually took lit in gold and everything you passed up left dim.
+ * The road you actually walked, bending the way you chose, with the forks in front of
+ * you still open.
  *
- * This replaces a row of dots that showed how far along you were but never what you gave
- * up. The untaken branches are the point — a player who can see nine other worlds hanging
- * off the choice they just made is a player who will run it again.
+ * It used to draw the whole tree — twelve endpoints crushed into a 96px band, every line
+ * the same grey — which read as a scribble. Then it drew a straight line with a generic
+ * fan on the end, so a player who went left, left, right saw exactly what a player who
+ * went right, right, left saw. The lit path now follows `path`, so the shape of the run
+ * is the shape on screen.
  */
 export const BranchMap = memo(function BranchMap({
-  width, depth, step, isDark,
-}: { width: number; depth: number; step: number; isDark: boolean }) {
-  const H = 64;
+  width, depth, step, path, isDark,
+}: {
+  width: number; depth: number; step: number;
+  /** Which option was taken at each decision so far, as an index into that node's list. */
+  path: number[];
+  isDark: boolean;
+}) {
+  const H = 86;
   const progress = useSharedValue(0);
   const pulse = useSharedValue(0);
 
   useMemo(() => {
     progress.value = withTiming(depth ? step / depth : 0, {
-      duration: 700, easing: Easing.out(Easing.cubic),
+      duration: 760, easing: Easing.out(Easing.cubic),
     });
   }, [step, depth, progress]);
 
   useMemo(() => {
-    pulse.value = withRepeat(withTiming(1, { duration: 2600, easing: Easing.inOut(Easing.sin) }), -1, false);
+    pulse.value = withRepeat(withTiming(1, { duration: 2400, easing: Easing.inOut(Easing.sin) }), -1, false);
   }, [pulse]);
 
-  const PAD = 14;
+  const PAD = 16;
   const usable = width - PAD * 2;
   const midY = H / 2;
   const stepX = usable / Math.max(1, depth);
 
-  // The whole tree was drawn here before: twelve endpoints crushed into a 96px band,
-  // every line the same grey. It read as a scribble. This is a "you are here" map
-  // instead — the road behind you lit, the forks ahead of you open, and nothing drawn
-  // that the player cannot count at a glance.
   const { travelled, ahead, nodes } = useMemo(() => {
     const done = Skia.Path.Make();
     const open = Skia.Path.Make();
-    const dots: { x: number; y: number; done: boolean }[] = [];
+    const dots: { x: number; y: number }[] = [];
 
-    done.moveTo(PAD, midY);
-    for (let i = 0; i <= depth; i++) {
-      const x = PAD + i * stepX;
-      done.lineTo(x, midY);
-      dots.push({ x, y: midY, done: i <= step });
-    }
+    const SPREAD = H * 0.3;
+    let y = midY;
+    done.moveTo(PAD, y);
+    dots.push({ x: PAD, y });
 
-    // The choices waiting at the node you are standing on.
-    if (step < depth) {
-      const from = PAD + step * stepX;
-      const to = from + stepX;
-      for (const dy of [-H * 0.3, 0, H * 0.3]) {
-        open.moveTo(from, midY);
-        open.cubicTo(from + stepX * 0.45, midY, to - stepX * 0.45, midY + dy, to, midY + dy);
+    for (let i = 0; i < depth; i++) {
+      const x0 = PAD + i * stepX;
+      const x1 = PAD + (i + 1) * stepX;
+      // Later decisions move the line less — the first choice is the one that swings it.
+      const spread = SPREAD / Math.pow(1.7, i);
+      const count = i === 0 ? 3 : 2;
+
+      if (i < step) {
+        const idx = path[i] ?? 0;
+        const dir = (idx / (count - 1)) * 2 - 1;
+        const ny = y + dir * spread;
+        done.cubicTo(x0 + stepX * 0.45, y, x1 - stepX * 0.45, ny, x1, ny);
+        dots.push({ x: x1, y: ny });
+        y = ny;
+      } else if (i === step) {
+        for (let k = 0; k < count; k++) {
+          const dir = (k / (count - 1)) * 2 - 1;
+          const ny = y + dir * spread;
+          open.moveTo(x0, y);
+          open.cubicTo(x0 + stepX * 0.45, y, x1 - stepX * 0.45, ny, x1, ny);
+        }
       }
     }
     return { travelled: done, ahead: open, nodes: dots };
-  }, [width, depth, step]);
+  }, [width, depth, step, path.join(',')]);
 
   const end = useDerivedValue(() => Math.max(0.001, progress.value));
-  // A slow glimmer running the road already walked, so a finished stretch still feels live.
-  const glow = useDerivedValue(() => 0.4 + Math.sin(pulse.value * Math.PI * 2) * 0.18);
+  const glow = useDerivedValue(() => 0.42 + Math.sin(pulse.value * Math.PI * 2) * 0.16);
 
   return (
     <Canvas style={{ width, height: H }}>
-      <Path path={travelled} style="stroke" strokeWidth={2} strokeCap="round"
-        color={isDark ? 'rgba(245,236,215,0.16)' : 'rgba(0,0,0,0.14)'} />
-
-      {/* The forks you have not taken. Dashed so they read as possibility, not as path. */}
+      {/* The forks you have not taken. Brighter than the road, because they are the live
+          question and the road behind you is settled. */}
       <Path path={ahead} style="stroke" strokeWidth={1.6} strokeCap="round"
-        color={isDark ? 'rgba(245,236,215,0.3)' : 'rgba(0,0,0,0.22)'} />
+        color={isDark ? 'rgba(245,236,215,0.34)' : 'rgba(0,0,0,0.26)'} />
 
-      <Path path={travelled} style="stroke" strokeWidth={7} strokeCap="round"
+      <Path path={travelled} style="stroke" strokeWidth={8} strokeCap="round"
         color={GOLD} start={0} end={end} opacity={glow}>
-        <BlurMask blur={8} style="normal" />
+        <BlurMask blur={9} style="normal" />
       </Path>
       <Path path={travelled} style="stroke" strokeWidth={3} strokeCap="round"
         color={GOLD} start={0} end={end} />
 
       {nodes.map((n, i) => (
-        <Circle key={i} cx={n.x} cy={n.y} r={n.done ? 5 : 3.5}
-          color={n.done ? IVORY : (isDark ? 'rgba(245,236,215,0.3)' : 'rgba(0,0,0,0.2)')} />
+        <Circle key={i} cx={n.x} cy={n.y} r={4.5} color={IVORY} />
       ))}
-      {nodes.filter(n => n.done).map((n, i) => (
-        <Circle key={`g${i}`} cx={n.x} cy={n.y} r={7} color={GOLD} opacity={0.5}>
-          <BlurMask blur={6} style="normal" />
-        </Circle>
-      ))}
-    </Canvas>
-  );
-});
-
-// ═════════════════════════════════════════════════════════════════════════════
-// WORLD RADAR — your four numbers against the real ones
-// ═════════════════════════════════════════════════════════════════════════════
-/**
- * The ending's summary: a ghost quadrilateral at reality, yours drawn over it, and the
- * gap between them as a glow. Four numbers in a row can say the same thing, but the
- * shape says it in one look — a world that traded lives for freedom is a lopsided
- * diamond, and you recognise the silhouette before you read the labels.
- */
-export const WorldRadar = memo(function WorldRadar({
-  size, values, isDark,
-}: { size: number; values: number[]; isDark: boolean }) {
-  const R = size / 2 - 22;
-  const cx = size / 2;
-  const cy = size / 2;
-  const reveal = useSharedValue(0);
-
-  useMemo(() => {
-    reveal.value = withTiming(1, { duration: 900, easing: Easing.out(Easing.cubic) });
-  }, [reveal, values]);
-
-  const pointAt = (i: number, r: number) => {
-    const a = -Math.PI / 2 + (i / 4) * TAU;
-    return { x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r };
-  };
-
-  const ghost = useMemo(() => {
-    const p = Skia.Path.Make();
-    for (let i = 0; i < 4; i++) {
-      const { x, y } = pointAt(i, R * 0.5);
-      i === 0 ? p.moveTo(x, y) : p.lineTo(x, y);
-    }
-    p.close();
-    return p;
-  }, [R, size]);
-
-  const shape = useDerivedValue(() => {
-    'worklet';
-    const p = Skia.Path.Make();
-    for (let i = 0; i < 4; i++) {
-      const a = -Math.PI / 2 + (i / 4) * TAU;
-      // Everything eases out from reality rather than from zero, so the reveal reads as
-      // the world pulling away from the one that happened.
-      const v = 0.5 + ((values[i] / 100) - 0.5) * reveal.value;
-      const r = R * v;
-      const x = cx + Math.cos(a) * r;
-      const y = cy + Math.sin(a) * r;
-      i === 0 ? p.moveTo(x, y) : p.lineTo(x, y);
-    }
-    p.close();
-    return p;
-  });
-
-  const grid = isDark ? 'rgba(245,236,215,0.13)' : 'rgba(0,0,0,0.12)';
-
-  return (
-    <Canvas style={{ width: size, height: size }}>
-      {[1, 0.75, 0.5, 0.25].map((f, i) => {
-        const p = Skia.Path.Make();
-        for (let k = 0; k < 4; k++) {
-          const { x, y } = pointAt(k, R * f);
-          k === 0 ? p.moveTo(x, y) : p.lineTo(x, y);
-        }
-        p.close();
-        return <Path key={i} path={p} style="stroke" strokeWidth={1} color={grid} />;
-      })}
-      {[0, 1, 2, 3].map(i => {
-        const { x, y } = pointAt(i, R);
-        const p = Skia.Path.Make();
-        p.moveTo(cx, cy);
-        p.lineTo(x, y);
-        return <Path key={`a${i}`} path={p} style="stroke" strokeWidth={1} color={grid} />;
-      })}
-
-      {/* Reality, dashed and unglamorous. It is the thing being argued with. */}
-      <Path path={ghost} style="stroke" strokeWidth={1.4} color={isDark ? '#8A7E6B' : '#9A8E7B'} />
-
-      <Path path={shape} opacity={0.4}>
-        <SweepGradient c={vec(cx, cy)} colors={[...METER_HUES, METER_HUES[0]]} />
-        <BlurMask blur={13} style="normal" />
-      </Path>
-      <Path path={shape} opacity={0.22}>
-        <SweepGradient c={vec(cx, cy)} colors={[...METER_HUES, METER_HUES[0]]} />
-      </Path>
-      <Path path={shape} style="stroke" strokeWidth={2}>
-        <SweepGradient c={vec(cx, cy)} colors={[...METER_HUES, METER_HUES[0]]} />
-      </Path>
-
-      {[0, 1, 2, 3].map(i => {
-        const { x, y } = pointAt(i, R + 11);
-        return <Circle key={`d${i}`} cx={x} cy={y} r={3} color={METER_HUES[i]} />;
-      })}
     </Canvas>
   );
 });
@@ -730,6 +636,221 @@ export const BranchingPulse = memo(function BranchingPulse({
     </Canvas>
   );
 });
+
+// ═════════════════════════════════════════════════════════════════════════════
+// CHOICE AURA — the light that travels a card's edge
+// ═════════════════════════════════════════════════════════════════════════════
+/**
+ * A sweep gradient rotating inside the card's own outline, so a band of light runs the
+ * border continuously.
+ *
+ * The card underneath stays flat and quiet: this is the only thing on it that moves
+ * until you touch it, which is what makes three of them feel like live options rather
+ * than three paragraphs with buttons. The chosen one flares; the others go dark.
+ */
+export const ChoiceAura = memo(function ChoiceAura({
+  width, height, radius, tone, active, chosen,
+}: {
+  width: number; height: number; radius: number;
+  tone: string; active: boolean; chosen: boolean;
+}) {
+  const spin = useSharedValue(0);
+  const lift = useSharedValue(0);
+
+  useMemo(() => {
+    spin.value = withRepeat(withTiming(1, { duration: 4200, easing: Easing.linear }), -1, false);
+  }, [spin]);
+
+  useMemo(() => {
+    lift.value = withTiming(chosen ? 1 : active ? 0.42 : 0.1, { duration: 320 });
+  }, [active, chosen, lift]);
+
+  const outline = useMemo(() => {
+    const p = Skia.Path.Make();
+    p.addRRect(Skia.RRectXY(Skia.XYWHRect(1, 1, width - 2, height - 2), radius, radius));
+    return p;
+  }, [width, height, radius]);
+
+  const transform = useDerivedValue(() => [{ rotate: spin.value * Math.PI * 2 }]);
+  const opacity = useDerivedValue(() => lift.value);
+  const glowW = useDerivedValue(() => 2 + lift.value * 5);
+
+  return (
+    <Canvas style={{ position: 'absolute', left: 0, top: 0, width, height }} pointerEvents="none">
+      <Group opacity={opacity}>
+        <Group origin={vec(width / 2, height / 2)} transform={transform}>
+          <Path path={outline} style="stroke" strokeWidth={glowW}>
+            <SweepGradient c={vec(width / 2, height / 2)}
+              colors={[`${tone}00`, tone, `${tone}00`, `${tone}00`, `${tone}88`, `${tone}00`]} />
+            <BlurMask blur={7} style="normal" />
+          </Path>
+          <Path path={outline} style="stroke" strokeWidth={1.4}>
+            <SweepGradient c={vec(width / 2, height / 2)}
+              colors={[`${tone}00`, tone, `${tone}00`, `${tone}00`, `${tone}AA`, `${tone}00`]} />
+          </Path>
+        </Group>
+      </Group>
+    </Canvas>
+  );
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// RISK DIAL — the number the decision actually turns on
+// ═════════════════════════════════════════════════════════════════════════════
+/**
+ * Risk, given the size it deserves.
+ *
+ * It used to be a 78px track in the corner under a label, competing with two lines of
+ * prose. It is the one figure that changes what a player does, so it is now the largest
+ * thing on the card after the verb.
+ */
+export const RiskDial = memo(function RiskDial({
+  size, risk, delay,
+}: { size: number; risk: number; delay: number }) {
+  const fill = useSharedValue(0);
+
+  useMemo(() => {
+    fill.value = withDelay(delay, withTiming(Math.max(0, Math.min(100, risk)) / 100, {
+      duration: 780, easing: Easing.out(Easing.cubic),
+    }));
+  }, [risk, delay, fill]);
+
+  const cx = size / 2;
+  const cy = size / 2;
+  const R = size / 2 - 4;
+  const tone = risk >= 66 ? '#D9603F' : risk >= 33 ? GOLD : '#3FA97A';
+
+  const ring = useMemo(() => {
+    const p = Skia.Path.Make();
+    p.addArc({ x: cx - R, y: cy - R, width: R * 2, height: R * 2 }, -90, 360);
+    return p;
+  }, [size]);
+
+  return (
+    <Canvas style={{ width: size, height: size }} pointerEvents="none">
+      <Path path={ring} style="stroke" strokeWidth={3} color={`${tone}22`} />
+      <Path path={ring} style="stroke" strokeWidth={5} strokeCap="round" color={tone}
+        start={0} end={fill} opacity={0.55}>
+        <BlurMask blur={7} style="normal" />
+      </Path>
+      <Path path={ring} style="stroke" strokeWidth={3} strokeCap="round" color={tone}
+        start={0} end={fill} />
+    </Canvas>
+  );
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SCENE WIPE — time moving between one decision and the next
+// ═════════════════════════════════════════════════════════════════════════════
+/**
+ * A band of light crossing the screen as the scene changes.
+ *
+ * The old transition was a cross-fade, which reads as a screen being replaced. This
+ * reads as time passing over the same world — brighter, quicker, and it gives the cut a
+ * direction, which a fade never has.
+ */
+export const SceneWipe = memo(function SceneWipe({
+  width, height, nonce,
+}: { width: number; height: number; nonce: number }) {
+  const t = useSharedValue(0);
+
+  useMemo(() => {
+    if (!nonce) return;
+    t.value = 0;
+    t.value = withTiming(1, { duration: 620, easing: Easing.inOut(Easing.cubic) });
+  }, [nonce, t]);
+
+  const BAND = width * 0.5;
+  const x = useDerivedValue(() => interpolate(t.value, [0, 1], [-BAND, width + BAND]));
+  const opacity = useDerivedValue(() => interpolate(t.value, [0, 0.2, 0.75, 1], [0, 1, 1, 0]));
+
+  if (!nonce) return null;
+
+  return (
+    <Canvas style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Group opacity={opacity}>
+        <Rect x={x} y={-height * 0.2} width={BAND} height={height * 1.4}
+          origin={vec(width / 2, height / 2)} transform={[{ rotate: 0.12 }]}>
+          <LinearGradient start={vec(0, 0)} end={vec(BAND, 0)}
+            colors={[`${GOLD}00`, `${GOLD}30`, `${IVORY}66`, `${GOLD}30`, `${GOLD}00`]} />
+        </Rect>
+      </Group>
+    </Canvas>
+  );
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// CHANGE BARS — the four numbers, said plainly
+// ═════════════════════════════════════════════════════════════════════════════
+/**
+ * What each meter did, against the world that happened.
+ *
+ * This replaces a radar and a line chart. Both were abstract: the radar had four
+ * unlabelled axes and asked the player to remember which corner meant lives, and the
+ * trajectory drew two lines that on most runs are almost flat. Neither answered the only
+ * question the screen is for — what did I change?
+ *
+ * A bar growing out of a centre line does answer it. Reality is the line. Right is
+ * better, left is worse, and the length is how much.
+ */
+export const ChangeBars = memo(function ChangeBars({
+  width, values, baseline, hues, isDark,
+}: {
+  width: number; values: number[]; baseline: number; hues: string[]; isDark: boolean;
+}) {
+  const ROW = 34;
+  const H = ROW * values.length;
+  const grow = useSharedValue(0);
+
+  useMemo(() => {
+    grow.value = 0;
+    grow.value = withTiming(1, { duration: 1000, easing: Easing.out(Easing.cubic) });
+  }, [grow, values.join(',')]);
+
+  const cx = width / 2;
+  const half = width / 2 - 6;
+
+  return (
+    <Canvas style={{ width, height: H }}>
+      {/* Reality, floor to ceiling. Everything is measured off this. */}
+      <Rect x={cx - 0.75} y={2} width={1.5} height={H - 4}
+        color={isDark ? 'rgba(245,236,215,0.34)' : 'rgba(0,0,0,0.26)'} />
+
+      {values.map((v, i) => (
+        <ChangeBar key={i} y={i * ROW + ROW / 2} delta={(v - baseline) / baseline}
+          cx={cx} half={half} hue={hues[i]} grow={grow} />
+      ))}
+    </Canvas>
+  );
+});
+
+function ChangeBar({ y, delta, cx, half, hue, grow }: {
+  y: number; delta: number; cx: number; half: number; hue: string; grow: SharedValue<number>;
+}) {
+  const BAR_H = 13;
+  const target = Math.max(-1, Math.min(1, delta)) * half;
+
+  const x = useDerivedValue(() => (target >= 0 ? cx : cx + target * grow.value));
+  const w = useDerivedValue(() => Math.max(1.5, Math.abs(target) * grow.value));
+  const specX = useDerivedValue(() => x.value + 2);
+  const specW = useDerivedValue(() => Math.max(0, w.value - 4));
+
+  return (
+    <Group>
+      <RoundedRect x={x} y={y - BAR_H / 2} width={w} height={BAR_H} r={BAR_H / 2}
+        color={hue} opacity={0.5}>
+        <BlurMask blur={9} style="normal" />
+      </RoundedRect>
+      <RoundedRect x={x} y={y - BAR_H / 2} width={w} height={BAR_H} r={BAR_H / 2}>
+        <LinearGradient start={vec(0, y - BAR_H / 2)} end={vec(0, y + BAR_H / 2)}
+          colors={[`${hue}FF`, hue, `${hue}99`]} />
+      </RoundedRect>
+      {/* Gloss along the top of the bar. */}
+      <RoundedRect x={specX} y={y - BAR_H / 2 + 1.6} width={specW}
+        height={BAR_H * 0.32} r={BAR_H * 0.16} color="#FFFFFF" opacity={0.38} />
+    </Group>
+  );
+}
 
 // ═════════════════════════════════════════════════════════════════════════════
 // CROWD OPINION — what the people actually think of you
@@ -1012,91 +1133,6 @@ export const RarityAura = memo(function RarityAura({
           <BlurMask blur={rare ? 16 : 10} style="normal" />
         </Circle>
       </Group>
-    </Canvas>
-  );
-});
-
-// ═════════════════════════════════════════════════════════════════════════════
-// TRAJECTORY — the arc of the whole run
-// ═════════════════════════════════════════════════════════════════════════════
-/**
- * Two lines over the run: where the world stood after each decision, and where the
- * people stood. A run that recovered from a catastrophic second act reads completely
- * differently from one that coasted to the same place, and the end-state numbers cannot
- * tell those apart — only the shape can.
- */
-export const TrajectoryCurve = memo(function TrajectoryCurve({
-  width, history, isDark,
-}: { width: number; history: { world: number; mood: number }[]; isDark: boolean }) {
-  const H = 86;
-  const PAD = 12;
-  const draw = useSharedValue(0);
-
-  useMemo(() => {
-    draw.value = 0;
-    draw.value = withTiming(1, { duration: 1100, easing: Easing.out(Easing.cubic) });
-  }, [draw, history.length]);
-
-  const { worldPath, moodPath, fill, dots } = useMemo(() => {
-    const n = Math.max(1, history.length - 1);
-    const stepX = (width - PAD * 2) / n;
-    // World runs -140…+140 and mood 0…100, so each is drawn against its own midpoint.
-    // They share a meaningful centre — reality — rather than a scale.
-    const yW = (v: number) => PAD + (1 - (Math.max(-140, Math.min(140, v)) + 140) / 280) * (H - PAD * 2);
-    const yM = (v: number) => PAD + (1 - Math.max(0, Math.min(100, v)) / 100) * (H - PAD * 2);
-
-    const mk = (f: (v: number) => number, key: 'world' | 'mood') => {
-      const p = Skia.Path.Make();
-      history.forEach((h, i) => {
-        const x = PAD + i * stepX;
-        const y = f(h[key]);
-        if (i === 0) { p.moveTo(x, y); return; }
-        // Smoothed with horizontal control points: a polyline of three points reads as
-        // a chart, a curve reads as a story.
-        const px = PAD + (i - 1) * stepX;
-        const py = f(history[i - 1][key]);
-        p.cubicTo(px + stepX / 2, py, x - stepX / 2, y, x, y);
-      });
-      return p;
-    };
-
-    const w = mk(yW, 'world');
-    const area = w.copy();
-    area.lineTo(PAD + n * stepX, H);
-    area.lineTo(PAD, H);
-    area.close();
-
-    return {
-      worldPath: w,
-      moodPath: mk(yM, 'mood'),
-      fill: area,
-      dots: history.map((h, i) => ({ x: PAD + i * stepX, y: yW(h.world) })),
-    };
-  }, [history, width]);
-
-  const grid = isDark ? 'rgba(245,236,215,0.12)' : 'rgba(0,0,0,0.1)';
-
-  return (
-    <Canvas style={{ width, height: H }}>
-      <Rect x={PAD} y={H / 2} width={width - PAD * 2} height={1} color={grid} />
-
-      <Path path={fill} opacity={0.16}>
-        <LinearGradient start={vec(0, 0)} end={vec(0, H)} colors={[GOLD, `${GOLD}00`]} />
-      </Path>
-
-      <Path path={moodPath} style="stroke" strokeWidth={1.8} strokeCap="round"
-        color={PURPLE} start={0} end={draw} opacity={0.85} />
-
-      <Path path={worldPath} style="stroke" strokeWidth={4} strokeCap="round"
-        color={GOLD} start={0} end={draw} opacity={0.5}>
-        <BlurMask blur={7} style="normal" />
-      </Path>
-      <Path path={worldPath} style="stroke" strokeWidth={2.2} strokeCap="round"
-        color={GOLD} start={0} end={draw} />
-
-      {dots.map((d, i) => (
-        <Circle key={i} cx={d.x} cy={d.y} r={3.2} color={IVORY} />
-      ))}
     </Canvas>
   );
 });

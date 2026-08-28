@@ -39,8 +39,9 @@ import {
 } from 'react-native-reanimated';
 
 import {
-  BranchMap, ConsequenceBloom, CrowdOpinion, DivergenceField, ForkMark, PeasantMarch,
-  RarityAura, SkiaMeter, SocietyImpact, TrajectoryCurve, VerdictSeal, WorldRadar,
+  BranchMap, ChoiceAura, ConsequenceBloom, CrowdOpinion, DivergenceField, ForkMark, PeasantMarch,
+  RiskDial, SceneWipe, ChangeBars, WorldDial,
+  RarityAura, SkiaMeter, SocietyImpact, VerdictSeal,
   METER_WIDTH,
 } from './ParallelCanvas';
 import { useLanguage } from '../context/LanguageContext';
@@ -245,6 +246,7 @@ const L: Record<Lang, Record<string, string>> = {
     yourVerdict: 'How you ruled', society: 'What it cost society',
     opinion: 'What people made of you', record: 'The record',
     realWorld2: 'History', yourWorld2: 'You', voicesCount: 'voices',
+    whatChanged: 'What you changed', worse: 'Worse', better: 'Better',
     gradeS: 'Masterful', gradeA: 'Wise', gradeB: 'Competent', gradeC: 'Costly', gradeD: 'Ruinous',
     elated: 'Elated', hopeful: 'Hopeful', relieved: 'Relieved', defiant: 'Defiant', uneasy: 'Uneasy',
     resigned: 'Resigned', afraid: 'Afraid', angry: 'Angry', betrayed: 'Betrayed', grieving: 'Grieving',
@@ -269,6 +271,7 @@ const L: Record<Lang, Record<string, string>> = {
     yourVerdict: 'Cum ai condus', society: 'Cât a costat societatea',
     opinion: 'Ce cred oamenii despre tine', record: 'Bilanțul',
     realWorld2: 'Istoria', yourWorld2: 'Tu', voicesCount: 'voci',
+    whatChanged: 'Ce ai schimbat', worse: 'Mai rău', better: 'Mai bine',
     gradeS: 'Magistral', gradeA: 'Înțelept', gradeB: 'Competent', gradeC: 'Costisitor', gradeD: 'Dezastruos',
     elated: 'Exaltați', hopeful: 'Plini de speranță', relieved: 'Ușurați', defiant: 'Sfidători', uneasy: 'Neliniștiți',
     resigned: 'Resemnați', afraid: 'Înspăimântați', angry: 'Furioși', betrayed: 'Trădați', grieving: 'Îndoliați',
@@ -293,6 +296,7 @@ const L: Record<Lang, Record<string, string>> = {
     yourVerdict: 'Votre règne', society: 'Ce que la société a payé',
     opinion: 'Ce qu\'on pense de vous', record: 'Le bilan',
     realWorld2: 'L\'histoire', yourWorld2: 'Vous', voicesCount: 'voix',
+    whatChanged: 'Ce que vous avez changé', worse: 'Pire', better: 'Mieux',
     gradeS: 'Magistral', gradeA: 'Avisé', gradeB: 'Compétent', gradeC: 'Coûteux', gradeD: 'Désastreux',
     elated: 'Exaltés', hopeful: 'Pleins d\'espoir', relieved: 'Soulagés', defiant: 'Défiants', uneasy: 'Inquiets',
     resigned: 'Résignés', afraid: 'Effrayés', angry: 'En colère', betrayed: 'Trahis', grieving: 'En deuil',
@@ -317,6 +321,7 @@ const L: Record<Lang, Record<string, string>> = {
     yourVerdict: 'Wie du regiert hast', society: 'Was es die Gesellschaft kostete',
     opinion: 'Was man von dir hält', record: 'Die Bilanz',
     realWorld2: 'Geschichte', yourWorld2: 'Du', voicesCount: 'Stimmen',
+    whatChanged: 'Was du verändert hast', worse: 'Schlechter', better: 'Besser',
     gradeS: 'Meisterhaft', gradeA: 'Weise', gradeB: 'Solide', gradeC: 'Teuer', gradeD: 'Verheerend',
     elated: 'Begeistert', hopeful: 'Hoffnungsvoll', relieved: 'Erleichtert', defiant: 'Trotzig', uneasy: 'Beunruhigt',
     resigned: 'Resigniert', afraid: 'Verängstigt', angry: 'Wütend', betrayed: 'Verraten', grieving: 'Trauernd',
@@ -341,6 +346,7 @@ const L: Record<Lang, Record<string, string>> = {
     yourVerdict: 'Cómo gobernaste', society: 'Lo que le costó a la sociedad',
     opinion: 'Lo que piensan de ti', record: 'El balance',
     realWorld2: 'La historia', yourWorld2: 'Tú', voicesCount: 'voces',
+    whatChanged: 'Lo que cambiaste', worse: 'Peor', better: 'Mejor',
     gradeS: 'Magistral', gradeA: 'Sabio', gradeB: 'Competente', gradeC: 'Costoso', gradeD: 'Ruinoso',
     elated: 'Eufóricos', hopeful: 'Esperanzados', relieved: 'Aliviados', defiant: 'Desafiantes', uneasy: 'Inquietos',
     resigned: 'Resignados', afraid: 'Asustados', angry: 'Furiosos', betrayed: 'Traicionados', grieving: 'De luto',
@@ -390,8 +396,9 @@ const clamp = (n: number) => Math.max(0, Math.min(100, n));
  * delta stay React Native — Skia text would cost a bundled typeface, font scaling and the
  * five languages this app ships in, for four words.
  */
-function Meter({ k, value, delta, label, isDark }: {
-  k: MeterKey; value: SharedValue<number>; delta: number | null; label: string; isDark: boolean;
+function Meter({ k, value, dominance, delta, label, isDark }: {
+  k: MeterKey; value: SharedValue<number>; dominance: number;
+  delta: number | null; label: string; isDark: boolean;
 }) {
   const color = METER_COLOR[k];
   const floatY = useRef(new Animated.Value(0)).current;
@@ -412,7 +419,7 @@ function Meter({ k, value, delta, label, isDark }: {
   return (
     <View style={m.wrap}>
       <MaterialCommunityIcons name={METER_ICON[k]} size={13} color={color} />
-      <SkiaMeter value={value} hue={color} isDark={isDark} />
+      <SkiaMeter value={value} dominance={dominance} hue={color} isDark={isDark} />
       <Text style={[m.label, { color: isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.45)' }]} numberOfLines={1}>
         {label}
       </Text>
@@ -478,19 +485,30 @@ const a_ = StyleSheet.create({
 // ═════════════════════════════════════════════════════════════════════════════
 // FACTS — the constraints you are deciding under
 // ═════════════════════════════════════════════════════════════════════════════
+/**
+ * The constraints you are deciding under, as chips rather than rows.
+ *
+ * This was a stacked list of label-over-value pairs — four sentences the player had to
+ * read before reaching the actual decision. The value is the part that matters and the
+ * label is only there to say what it counts, so the value now leads at full size with
+ * the label small beneath it, and they sit side by side to be scanned rather than read.
+ */
 function FactStrip({ facts, isDark, gold }: { facts: Fact[]; isDark: boolean; gold: string }) {
   if (!facts?.length) return null;
   return (
-    <View style={[f_.wrap, { borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.09)' }]}>
+    <View style={f_.wrap}>
       {facts.map((f, i) => (
-        <View key={i} style={[f_.cell, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]}>
-          {/* Stacked, not side by side. Sharing a row meant a long value squeezed the
-              label down to "P…" — the facts are what the player decides on, so neither
-              half may be the one that gets cut. */}
-          <Text style={[f_.label, { color: isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.42)' }]}>
+        <View
+          key={i}
+          style={[f_.chip, {
+            borderColor: isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.07)',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.028)' : 'rgba(0,0,0,0.018)',
+          }]}
+        >
+          <Text style={[f_.value, { color: gold }]}>{f.value}</Text>
+          <Text style={[f_.label, { color: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.38)' }]}>
             {f.label}
           </Text>
-          <Text style={[f_.value, { color: gold }]}>{f.value}</Text>
         </View>
       ))}
     </View>
@@ -498,10 +516,10 @@ function FactStrip({ facts, isDark, gold }: { facts: Fact[]; isDark: boolean; go
 }
 
 const f_ = StyleSheet.create({
-  wrap: { borderWidth: 1, borderRadius: 11, paddingHorizontal: 13, paddingVertical: 4, marginBottom: 18 },
-  cell: { paddingVertical: 9 },
-  label: { fontSize: 9.5, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 3 },
-  value: { fontSize: 13.5, fontWeight: '800', lineHeight: 18 },
+  wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
+  chip: { flexGrow: 1, flexBasis: '44%', borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
+  value: { fontSize: 14.5, fontWeight: '800', lineHeight: 19, marginBottom: 3 },
+  label: { fontSize: 9, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase', lineHeight: 12 },
 });
 
 const m = StyleSheet.create({
@@ -702,6 +720,14 @@ const st_ = StyleSheet.create({
   alt: { flex: 1, fontSize: 14.5, fontWeight: '800', lineHeight: 20, fontVariant: ['tabular-nums'] },
 });
 
+/**
+ * One option, with the risk given the weight it earns.
+ *
+ * The risk used to be a 78px track in the corner, under a label, losing to two lines of
+ * prose. It is the only figure on the card that changes what anyone does, so it is now
+ * the second thing the eye lands on after the verb — a dial with the number inside it.
+ * The prose came down to the action and one line of consequence to make room.
+ */
 function ChoiceCard({ choice, onPick, disabled, exiting, chosen, showEffects, gold, theme, isDark, delay, riskLabel }: {
   choice: Choice; onPick: () => void; disabled: boolean; exiting: boolean; chosen: boolean;
   showEffects: boolean; gold: string; theme: any; isDark: boolean; delay: number;
@@ -709,6 +735,7 @@ function ChoiceCard({ choice, onPick, disabled, exiting, chosen, showEffects, go
 }) {
   const enter = useRef(new Animated.Value(0)).current;
   const exit = useRef(new Animated.Value(0)).current;
+  const [box, setBox] = useState({ w: 0, h: 0 });
 
   useEffect(() => {
     Animated.spring(enter, {
@@ -719,15 +746,15 @@ function ChoiceCard({ choice, onPick, disabled, exiting, chosen, showEffects, go
   useEffect(() => {
     if (!exiting) return;
     Animated.timing(exit, {
-      toValue: 1, duration: 340, easing: Easing.in(Easing.cubic), useNativeDriver: true,
+      toValue: 1, duration: 380, easing: Easing.in(Easing.cubic), useNativeDriver: true,
     }).start();
   }, [exiting, exit]);
 
-  // The chosen card swells and holds; the other slides off. The asymmetry is the point —
+  // The chosen card swells and holds; the others slide off. The asymmetry is the point —
   // you should feel which door you walked through.
   const scale = Animated.multiply(
     enter.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1] }),
-    exit.interpolate({ inputRange: [0, 1], outputRange: [1, chosen ? 1.04 : 0.9] }),
+    exit.interpolate({ inputRange: [0, 1], outputRange: [1, chosen ? 1.05 : 0.9] }),
   );
   const translateX = exit.interpolate({ inputRange: [0, 1], outputRange: [0, chosen ? 0 : -W] });
   const opacity = Animated.multiply(
@@ -735,50 +762,59 @@ function ChoiceCard({ choice, onPick, disabled, exiting, chosen, showEffects, go
     exit.interpolate({ inputRange: [0, 1], outputRange: [1, chosen ? 1 : 0] }),
   );
 
+  const risk = typeof choice.risk === 'number' ? choice.risk : 50;
+  const riskTone = risk >= 66 ? '#D9603F' : risk >= 33 ? gold : '#3FA97A';
+
   return (
     <Animated.View style={{ opacity, transform: [{ scale }, { translateX }] }}>
       <Pressable
         onPress={onPick}
         disabled={disabled}
         accessibilityRole="button"
-        accessibilityLabel={choice.label}
+        accessibilityLabel={`${choice.label}. ${riskLabel} ${risk}.`}
+        onLayout={(e) => {
+          const { width, height } = e.nativeEvent.layout;
+          setBox(b => (b.w === width && b.h === height ? b : { w: width, h: height }));
+        }}
         style={({ pressed }) => [
           cc.card,
           {
-            borderColor: chosen ? gold : (isDark ? 'rgba(255,255,255,0.11)' : 'rgba(0,0,0,0.1)'),
-            backgroundColor: chosen ? gold + '14' : (isDark ? 'rgba(255,255,255,0.035)' : 'rgba(0,0,0,0.025)'),
-            opacity: pressed ? 0.85 : 1,
+            backgroundColor: chosen
+              ? gold + '14'
+              : (isDark ? 'rgba(255,255,255,0.035)' : 'rgba(0,0,0,0.022)'),
+            opacity: pressed ? 0.9 : 1,
           },
         ]}
       >
-        <Text style={[cc.label, { color: theme.text }]}>{choice.label}</Text>
-        <Text style={[cc.detail, { color: theme.subtext }]}>{choice.detail}</Text>
+        {box.w > 0 && (
+          <ChoiceAura
+            width={box.w} height={box.h} radius={17}
+            tone={chosen ? gold : riskTone}
+            active={!disabled}
+            chosen={chosen}
+          />
+        )}
 
-        {/* What this commits, and how likely it is to go wrong. Shown to everyone —
-            it is the tension of the decision, not a spoiler of the meter maths. */}
-        {(!!choice.outcome?.value || typeof choice.risk === 'number') && (
+        <View style={cc.head}>
+          <View style={cc.headText}>
+            <Text style={[cc.label, { color: theme.text }]}>{choice.label}</Text>
+            <Text style={[cc.detail, { color: theme.subtext }]}>{choice.detail}</Text>
+          </View>
+
+          {/* The dial, and the number inside it. */}
+          <View style={cc.riskWrap}>
+            <RiskDial size={RISK_SIZE} risk={risk} delay={delay + 200} />
+            <View style={cc.riskInner} pointerEvents="none">
+              <Text style={[cc.riskNum, { color: riskTone }]}>{risk}</Text>
+            </View>
+            <Text style={[cc.riskCap, { color: theme.subtext }]}>{riskLabel}</Text>
+          </View>
+        </View>
+
+        {!!choice.outcome?.value && (
           <View style={[cc.footer, { borderTopColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]}>
-            {!!choice.outcome?.value && (
-              <View style={cc.outcome}>
-                <Text style={[cc.outLabel, { color: theme.subtext }]}>
-                  {choice.outcome.label}
-                </Text>
-                <Text style={[cc.outValue, { color: theme.text }]}>
-                  {choice.outcome.value}
-                </Text>
-              </View>
-            )}
-            {typeof choice.risk === 'number' && (
-              <View style={cc.risk}>
-                <Text style={[cc.riskLabel, { color: theme.subtext }]}>{riskLabel}</Text>
-                <View style={[cc.riskTrack, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)' }]}>
-                  <View style={[cc.riskFill, {
-                    width: `${Math.max(4, Math.min(100, choice.risk))}%`,
-                    backgroundColor: choice.risk >= 66 ? '#D9603F' : choice.risk >= 33 ? gold : '#3FA97A',
-                  }]} />
-                </View>
-              </View>
-            )}
+            <Text style={[cc.outLabel, { color: theme.subtext }]}>{choice.outcome.label}</Text>
+            <Text style={[cc.outValue, { color: theme.text }]}>{choice.outcome.value}</Text>
           </View>
         )}
 
@@ -799,18 +835,27 @@ function ChoiceCard({ choice, onPick, disabled, exiting, chosen, showEffects, go
   );
 }
 
+const RISK_SIZE = 52;
+
 const cc = StyleSheet.create({
-  card: { borderWidth: 1, borderRadius: 15, padding: 15, marginBottom: 11 },
-  label: { fontSize: 16.5, fontWeight: '700', letterSpacing: -0.25, marginBottom: 4 },
+  card: { borderRadius: 17, padding: 16, marginBottom: 12, overflow: 'hidden' },
+
+  head: { flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
+  headText: { flex: 1 },
+  label: { fontSize: 17.5, fontWeight: '800', letterSpacing: -0.3, marginBottom: 5 },
   detail: { fontSize: 13, lineHeight: 18.5 },
-  footer: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 12, paddingTop: 11, borderTopWidth: StyleSheet.hairlineWidth },
-  outcome: { flex: 1 },
+
+  riskWrap: { width: RISK_SIZE, alignItems: 'center' },
+  riskInner: {
+    position: 'absolute', top: 0, left: 0, width: RISK_SIZE, height: RISK_SIZE,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  riskNum: { fontSize: 18, fontWeight: '900', fontVariant: ['tabular-nums'] },
+  riskCap: { fontSize: 8, fontWeight: '800', letterSpacing: 0.8, textTransform: 'uppercase', marginTop: 3 },
+
+  footer: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginTop: 13, paddingTop: 11, borderTopWidth: StyleSheet.hairlineWidth },
   outLabel: { fontSize: 9, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase' },
-  outValue: { fontSize: 13.5, fontWeight: '800', marginTop: 2, lineHeight: 18 },
-  risk: { width: 78 },
-  riskLabel: { fontSize: 9, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 4, textAlign: 'right' },
-  riskTrack: { height: 4, borderRadius: 2, overflow: 'hidden' },
-  riskFill: { height: 4, borderRadius: 2 },
+  outValue: { flex: 1, fontSize: 13.5, fontWeight: '800' },
 
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 11 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 3, borderWidth: 1, borderRadius: 7, paddingHorizontal: 7, paddingVertical: 3 },
@@ -849,47 +894,36 @@ function WorldBand({ meters, label, t, theme, isDark }: {
 }) {
   const w = wellbeing(meters);
   const band = bandFor(w);
-  // -200…+200 onto 0…1, clamped: past ±140 the needle would leave the track and the
-  // difference stops being legible anyway.
-  const pos = Math.max(0, Math.min(1, (w + 140) / 280));
-  const slide = useRef(new Animated.Value(pos)).current;
-
-  useEffect(() => {
-    Animated.spring(slide, { toValue: pos, tension: 46, friction: 9, useNativeDriver: false }).start();
-  }, [pos, slide]);
 
   return (
-    <View style={[wb.wrap, { borderColor: band.color + '3A', backgroundColor: band.color + '0E' }]}>
-      <Text style={[wb.kicker, { color: theme.subtext }]}>{label}</Text>
-      <Text style={[wb.band, { color: band.color }]}>{t[band.key]}</Text>
-
-      <View style={[wb.track, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]}>
-        {/* Reality is the centre line, not zero on the left — the whole bar is a
-            comparison, so the thing being compared to has to be visible. */}
-        <View style={[wb.centre, { backgroundColor: isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.26)' }]} />
-        <Animated.View
-          style={[
-            wb.needle,
-            {
-              backgroundColor: band.color,
-              left: slide.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }),
-            },
-          ]}
-        />
+    <View style={[wb.wrap, { borderColor: band.color + '2E', backgroundColor: band.color + '0C' }]}>
+      <View style={wb.dialWrap}>
+        <WorldDial size={WB_DIAL} wellbeing={w} tone={band.color} isDark={isDark} />
+        <View style={wb.dialInner} pointerEvents="none">
+          <Text style={[wb.value, { color: band.color }]}>{w > 0 ? `+${w}` : w}</Text>
+        </View>
       </View>
-      <Text style={[wb.value, { color: band.color }]}>{w > 0 ? `+${w}` : w}</Text>
+      <View style={wb.text}>
+        <Text style={[wb.kicker, { color: theme.subtext }]}>{label}</Text>
+        <Text style={[wb.band, { color: band.color }]}>{t[band.key]}</Text>
+      </View>
     </View>
   );
 }
 
+const WB_DIAL = 74;
+
 const wb = StyleSheet.create({
-  wrap: { borderWidth: 1, borderRadius: 13, paddingHorizontal: 15, paddingVertical: 13, marginBottom: 16 },
-  kicker: { fontSize: 9, fontWeight: '800', letterSpacing: 1.4, textTransform: 'uppercase' },
-  band: { fontSize: 17, fontWeight: '800', letterSpacing: -0.2, marginTop: 3, marginBottom: 10 },
-  track: { height: 5, borderRadius: 3, position: 'relative', justifyContent: 'center' },
-  centre: { position: 'absolute', left: '50%', width: 1.5, height: 11, borderRadius: 1, marginLeft: -0.75 },
-  needle: { position: 'absolute', width: 3, height: 15, borderRadius: 2, marginLeft: -1.5 },
-  value: { fontSize: 11, fontWeight: '800', textAlign: 'right', marginTop: 7, fontVariant: ['tabular-nums'] },
+  wrap: {
+    flexDirection: 'row', alignItems: 'center', gap: 16,
+    borderWidth: 1, borderRadius: 15, paddingHorizontal: 16, paddingVertical: 14, marginBottom: 16,
+  },
+  dialWrap: { width: WB_DIAL, height: WB_DIAL },
+  dialInner: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+  value: { fontSize: 21, fontWeight: '900', fontVariant: ['tabular-nums'] },
+  text: { flex: 1 },
+  kicker: { fontSize: 8.5, fontWeight: '800', letterSpacing: 1.3, textTransform: 'uppercase', marginBottom: 4 },
+  band: { fontSize: 19, fontWeight: '800', letterSpacing: -0.3, lineHeight: 24 },
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -963,54 +997,89 @@ const mb = StyleSheet.create({
  * is set small and the quote large and serif, so a screen of three of them reads as
  * testimony rather than notifications.
  */
+/**
+ * One voice, as a bill nailed to the town board.
+ *
+ * The square in a medieval town is where you found out what had happened: notices went
+ * up on a wall, people read them out to those who could not. These are those notices —
+ * pinned, tilted a degree or two, on paper that has been out in the weather. It is a
+ * better home for a stranger's opinion than a chat bubble, which says "a message to
+ * you" when the point is that none of this was addressed to you at all.
+ */
 function VoiceCard({ voice, delay, t, theme, isDark }: {
   voice: Reaction; delay: number; t: Record<string, string>; theme: any; isDark: boolean;
 }) {
   const enter = useRef(new Animated.Value(0)).current;
   const meta = moodMeta(voice.mood);
+  // Each bill hangs a little differently, but always the same way for the same speaker.
+  const tilt = useMemo(() => {
+    let h = 0;
+    for (let i = 0; i < voice.who.length; i++) h = (h * 31 + voice.who.charCodeAt(i)) % 1000;
+    return ((h % 5) - 2) * 0.42;
+  }, [voice.who]);
 
   useEffect(() => {
     Animated.spring(enter, {
-      toValue: 1, tension: 54, friction: 11, delay, useNativeDriver: true,
+      toValue: 1, tension: 46, friction: 9, delay, useNativeDriver: true,
     }).start();
   }, [enter, delay]);
+
+  const paper = isDark ? '#1A1610' : '#F6EFDC';
+  const ink = isDark ? '#E8DCC0' : '#2E2718';
 
   return (
     <Animated.View
       style={{
         opacity: enter,
         transform: [
-          { translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) },
-          { scale: enter.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) },
+          // Swings down from the pin rather than sliding in, like a sheet just hung.
+          { translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [-14, 0] }) },
+          { rotate: `${tilt}deg` },
+          { scale: enter.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1] }) },
         ],
       }}
     >
-      <View style={[vc.card, {
-        borderColor: meta.color + '30',
-        backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.022)',
-      }]}>
-        <View style={[vc.spine, { backgroundColor: meta.color }]} />
-        <View style={vc.body}>
-          <View style={vc.head}>
-            <MaterialCommunityIcons name={meta.icon} size={13} color={meta.color} />
-            <Text style={[vc.mood, { color: meta.color }]}>{t[voice.mood] ?? voice.mood}</Text>
-            <Text style={[vc.who, { color: theme.subtext }]} numberOfLines={1}>{voice.who}</Text>
-          </View>
-          <Text style={[vc.quote, { color: theme.text }]}>“{voice.quote}”</Text>
+      <View style={[vc.bill, { backgroundColor: paper, borderColor: meta.color + '3A' }]}>
+        {/* The nail. */}
+        <View style={[vc.pin, { backgroundColor: meta.color }]} />
+        <View style={[vc.pinHole, { backgroundColor: isDark ? '#0B0910' : '#D8CFB6' }]} />
+
+        <View style={vc.head}>
+          <MaterialCommunityIcons name={meta.icon} size={12} color={meta.color} />
+          <Text style={[vc.mood, { color: meta.color }]}>{t[voice.mood] ?? voice.mood}</Text>
         </View>
+
+        <Text style={[vc.quote, { color: ink }]}>“{voice.quote}”</Text>
+
+        <View style={[vc.rule, { backgroundColor: meta.color + '30' }]} />
+        <Text style={[vc.who, { color: isDark ? 'rgba(232,220,192,0.55)' : 'rgba(46,39,24,0.55)' }]}>
+          {voice.who}
+        </Text>
       </View>
     </Animated.View>
   );
 }
 
 const vc = StyleSheet.create({
-  card: { flexDirection: 'row', borderWidth: 1, borderRadius: 13, marginBottom: 10, overflow: 'hidden' },
-  spine: { width: 3 },
-  body: { flex: 1, paddingHorizontal: 13, paddingVertical: 12 },
-  head: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 7 },
-  mood: { fontSize: 9.5, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' },
-  who: { flex: 1, fontSize: 11, textAlign: 'right' },
+  bill: {
+    borderWidth: 1, borderRadius: 3, paddingHorizontal: 15, paddingTop: 20, paddingBottom: 13,
+    marginBottom: 14, marginHorizontal: 4,
+    // Paper sits on the board, not in it.
+    shadowColor: '#000', shadowOpacity: 0.34, shadowRadius: 7, shadowOffset: { width: 0, height: 4 },
+  },
+  pin: {
+    position: 'absolute', top: 7, alignSelf: 'center', left: '50%', marginLeft: -3.5,
+    width: 7, height: 7, borderRadius: 4,
+  },
+  pinHole: {
+    position: 'absolute', top: 9, alignSelf: 'center', left: '50%', marginLeft: -1.5,
+    width: 3, height: 3, borderRadius: 2,
+  },
+  head: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 7 },
+  mood: { fontSize: 9, fontWeight: '900', letterSpacing: 1.2, textTransform: 'uppercase' },
   quote: { fontSize: 15.5, lineHeight: 23, fontFamily: SERIF, fontStyle: 'italic' },
+  rule: { height: StyleSheet.hairlineWidth, marginTop: 11, marginBottom: 7 },
+  who: { fontSize: 10.5, letterSpacing: 0.3 },
 });
 
 /**
@@ -1150,6 +1219,8 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
   const [standing, setStanding] = useState<Record<string, number>>({});
   const [actorDeltas, setActorDeltas] = useState<Record<string, number>>({});
   const [route, setRoute] = useState<string[]>([]);
+  /** Which option was taken at each decision, so the map can bend the way you went. */
+  const [routeIdx, setRouteIdx] = useState<number[]>([]);
   const [pickedId, setPickedId] = useState<string | null>(null);
   const [wasNew, setWasNew] = useState(false);
 
@@ -1164,6 +1235,8 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
   ]);
   // `nonce` and not a boolean: two bad choices running must flash twice.
   const [flash, setFlash] = useState({ net: 0, nonce: 0 });
+  /** Bumped whenever time moves, so the light crosses the screen once per cut. */
+  const [wipe, setWipe] = useState(0);
   // Every voice the run has shown, counted by mood. The crowd at the end is built from
   // these exact quotes rather than from the averaged bar — an average is the one thing
   // that hides a country split down the middle.
@@ -1206,7 +1279,7 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
 
   useEffect(() => {
     if (!visible) return;
-    setPhase('intro'); setNodeId(''); setRoute([]); setPickedId(null); setWasNew(false);
+    setPhase('intro'); setNodeId(''); setRoute([]); setRouteIdx([]); setPickedId(null); setWasNew(false);
     setMeters({ stability: BASELINE, lives: BASELINE, progress: BASELINE, freedom: BASELINE });
     setDeltas(null);
     setActorDeltas({});
@@ -1215,6 +1288,7 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
     setPublicMood(MOOD_BASELINE); setMoodDelta(0);
     setHistory([{ world: 0, mood: MOOD_BASELINE }]);
     setFlash({ net: 0, nonce: 0 });
+    setWipe(0);
     setMoodTally({});
     for (const k of METERS) meterSV[k].value = BASELINE;
     moodSV.value = MOOD_BASELINE;
@@ -1298,9 +1372,11 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
     if (!choice) return;
     haptic('light');
     setReacting(null);
-    Animated.timing(bodyFade, { toValue: 0, duration: 180, useNativeDriver: true }).start(() => {
+    setWipe(n => n + 1);
+    Animated.timing(bodyFade, { toValue: 0, duration: 220, useNativeDriver: true }).start(() => {
       const target = byId[choice.next];
       setRoute(r => [...r, choice.id]);
+      setRouteIdx(r => [...r, Math.max(0, (node?.choices ?? []).findIndex(c => c.id === choice.id))]);
       setPickedId(null);
       setDeltas(null);
       setActorDeltas({});
@@ -1323,6 +1399,19 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
     });
   }, [reacting, byId, bodyFade, discovered, eventId, isPro, meters, publicMood]);
 
+  // How far each meter has run away from the other three, 0-1. Drives the burn on the
+  // bars: a world that bought progress by spending everything else says so before the
+  // player has read a label.
+  const dominance = useMemo(() => {
+    const out = {} as Record<MeterKey, number>;
+    for (const k of METERS) {
+      const others = METERS.filter(o => o !== k).map(o => meters[o]);
+      const avg = others.reduce((a, b) => a + b, 0) / others.length;
+      out[k] = Math.max(0, Math.min(1, (meters[k] - avg) / 30));
+    }
+    return out;
+  }, [meters]);
+
   if (!universe) return null;
 
   const divergence = Math.round(
@@ -1344,6 +1433,7 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
         />
         <DivergenceField width={W} height={H} divergence={divergenceSV} isDark={isDark} />
         <ConsequenceBloom width={W} height={H} net={flash.net} nonce={flash.nonce} />
+        <SceneWipe width={W} height={H} nonce={wipe} />
 
         <Pressable onPress={() => { haptic('light'); onClose(); }} hitSlop={14}
           accessibilityRole="button" accessibilityLabel={t.done}
@@ -1401,8 +1491,8 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
             <>
               <View style={g.metersRow}>
                 {METERS.map(k => (
-                  <Meter key={k} k={k} value={meterSV[k]} delta={deltas?.[k] ?? null}
-                    label={t[k]} isDark={isDark} />
+                  <Meter key={k} k={k} value={meterSV[k]} dominance={dominance[k]}
+                    delta={deltas?.[k] ?? null} label={t[k]} isDark={isDark} />
                 ))}
               </View>
 
@@ -1428,7 +1518,7 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
               </Text>
 
               <View style={g.stage}>
-                <BranchMap width={W - 44} depth={depth} step={step} isDark={isDark} />
+                <BranchMap width={W - 44} depth={depth} step={step} path={routeIdx} isDark={isDark} />
                 <Animated.View style={{ opacity: bodyFade }}>
                   <YearMark year={node.year} gold={gold} />
                   <Text style={[g.nodeTitle, { color: theme.text }]}>{node.title}</Text>
@@ -1549,23 +1639,44 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
                 </View>
               )}
 
-              <View style={{ alignItems: 'center', marginBottom: 8 }}>
-                <WorldRadar size={Math.min(W - 90, 240)} values={METERS.map(k => meters[k])} isDark={isDark} />
-              </View>
-
-              <View style={[g.trajectoryBox, { borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.09)' }]}>
-                <Text style={[g.divergeLabel, { color: theme.subtext }]}>{t.trajectory}</Text>
-                <TrajectoryCurve width={W - 44 - 26} history={history} isDark={isDark} />
-                <View style={g.legendRow}>
-                  <View style={g.legendKey}>
-                    <View style={[g.legendSwatch, { backgroundColor: gold }]} />
-                    <Text style={[g.legendText, { color: theme.subtext }]}>{t.yourWorld}</Text>
-                  </View>
-                  <View style={g.legendKey}>
-                    <View style={[g.legendSwatch, { backgroundColor: '#7B5EA7' }]} />
-                    <Text style={[g.legendText, { color: theme.subtext }]}>{t.mood}</Text>
-                  </View>
+              {/* What each meter did, against the world that happened. Replaces a radar
+                  with four unlabelled axes and a trajectory that is near-flat on most
+                  runs — neither answered "what did I change?", which is the only
+                  question this screen exists to answer. */}
+              <Text style={[g.actLabel, { color: theme.subtext }]}>{t.whatChanged}</Text>
+              <View style={g.changeWrap}>
+                <View style={g.changeLabels}>
+                  {METERS.map(k => (
+                    <View key={k} style={g.changeRow}>
+                      <MaterialCommunityIcons name={METER_ICON[k]} size={13} color={METER_COLOR[k]} />
+                      <Text style={[g.changeName, { color: theme.subtext }]} numberOfLines={1}>{t[k]}</Text>
+                    </View>
+                  ))}
                 </View>
+                <ChangeBars
+                  width={W - 44 - 108}
+                  values={METERS.map(k => meters[k])}
+                  baseline={BASELINE}
+                  hues={METERS.map(k => METER_COLOR[k])}
+                  isDark={isDark}
+                />
+                <View style={g.changeLabels}>
+                  {METERS.map(k => {
+                    const d = meters[k] - BASELINE;
+                    return (
+                      <View key={k} style={g.changeRowRight}>
+                        <Text style={[g.changeDelta, { color: d === 0 ? theme.subtext : d > 0 ? METER_COLOR[k] : '#D9603F' }]}>
+                          {d > 0 ? `+${d}` : d}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+              <View style={g.changeAxis}>
+                <Text style={[g.changeAxisText, { color: theme.subtext }]}>{t.worse}</Text>
+                <Text style={[g.changeAxisText, { color: theme.subtext }]}>{t.realWorld2}</Text>
+                <Text style={[g.changeAxisText, { color: theme.subtext, textAlign: 'right' }]}>{t.better}</Text>
               </View>
 
               <CollectionGrid endings={endings} discovered={discovered} gold={gold}
@@ -1574,7 +1685,7 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
 
               {(isPro || runsLeft > 0) ? (
                 <Pressable onPress={() => {
-                  setPhase('intro'); setRoute([]); setNodeId('');
+                  setPhase('intro'); setRoute([]); setRouteIdx([]); setNodeId('');
                   setMeters({ stability: BASELINE, lives: BASELINE, progress: BASELINE, freedom: BASELINE });
                   setStanding(Object.fromEntries((universe.actors ?? []).map(a => [a.id, a.start])));
                   setActorDeltas({});
@@ -1748,7 +1859,6 @@ const g = StyleSheet.create({
   realityText: { fontSize: 15, lineHeight: 23 },
 
   metersRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 },
-  actorBox: { borderWidth: 1, borderRadius: 11, paddingHorizontal: 13, paddingVertical: 7, marginBottom: 18 },
 
   statsTable: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 13, paddingBottom: 4, marginBottom: 26 },
   statsHead: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, paddingVertical: 9, borderBottomWidth: StyleSheet.hairlineWidth },
@@ -1782,17 +1892,21 @@ const g = StyleSheet.create({
   statLabel: { fontSize: 8.5, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase', marginTop: 3 },
 
   divergeBox: { borderWidth: 1, borderRadius: 13, padding: 15, marginBottom: 24 },
-  trajectoryBox: { borderWidth: 1, borderRadius: 13, paddingHorizontal: 12, paddingTop: 13, paddingBottom: 11, marginBottom: 24 },
-  legendRow: { flexDirection: 'row', gap: 16, marginTop: 8 },
-  legendKey: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  legendSwatch: { width: 10, height: 2.5, borderRadius: 2 },
-  legendText: { fontSize: 10.5 },
   divergeLabel: { fontSize: 9.5, fontWeight: '800', letterSpacing: 1.3, textTransform: 'uppercase' },
   divergeVal: { fontSize: 30, fontWeight: '900', fontVariant: ['tabular-nums'], marginTop: 3, marginBottom: 9 },
   divergeTrack: { height: 6, borderRadius: 3, overflow: 'hidden' },
   divergeFill: { height: 6, borderRadius: 3 },
 
   epitaph: { fontSize: 18, fontFamily: SERIF, fontStyle: 'italic', lineHeight: 27, textAlign: 'center', marginBottom: 28 },
+
+  changeWrap: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  changeLabels: { width: 92, justifyContent: 'space-around', alignSelf: 'stretch' },
+  changeRow: { flexDirection: 'row', alignItems: 'center', gap: 5, height: 34 },
+  changeRowRight: { height: 34, justifyContent: 'center' },
+  changeName: { flex: 1, fontSize: 9.5, fontWeight: '700', letterSpacing: 0.4, textTransform: 'uppercase' },
+  changeDelta: { fontSize: 13, fontWeight: '900', fontVariant: ['tabular-nums'], textAlign: 'right' },
+  changeAxis: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, marginBottom: 24, paddingHorizontal: 4 },
+  changeAxisText: { flex: 1, fontSize: 8.5, fontWeight: '800', letterSpacing: 0.9, textTransform: 'uppercase' },
 
   actLabel: {
     fontSize: 9.5, fontWeight: '800', letterSpacing: 1.6, textTransform: 'uppercase',
