@@ -23,6 +23,8 @@ import { usePaywallStore } from '../store/usePaywallStore';
 import { getEventId, useSavedStore } from '../store/useSavedStore';
 import { noteStoryFinishedAndCheck } from '../utils/review';
 import { LongReadSection } from './LongReadSection';
+import ParallelUniverse from './ParallelUniverse';
+import ParallelEntryCard from './ParallelEntryCard';
 import { QuizSection } from './QuizSection';
 import RelatedEvents from './RelatedEvents';
 import ReviewPromptModal from './ReviewPromptModal';
@@ -313,6 +315,7 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
   const [eventStack, setEventStack] = useState<any[]>([]);
   const currentEvent = eventStack.length > 0 ? eventStack[eventStack.length - 1] : event;
 
+  const [parallelOpen, setParallelOpen] = useState(false);
   const [galleryIndex, setGalleryIndex] = useState(0);
   const [viewerVisible, setViewerVisible] = useState(false);
   const [viewerStartIndex, setViewerStartIndex] = useState(0);
@@ -483,6 +486,8 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
       is_pro: isPro,
     });
   };
+
+  const openParallel = () => setParallelOpen(true);
 
   const handleLongReadUnlock = () => {
     analytics.capture('deep_dive_gate_hit', { event_id: eventId });
@@ -665,6 +670,15 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
                 onTeaserSeen={handleLongReadTeaserSeen}
               />
 
+              {/* Parallel Universes — the branching what-if game, when this event has one */}
+              <ParallelEntryCard
+                event={currentEvent}
+                language={language}
+                theme={theme}
+                isDark={isDark}
+                onOpen={openParallel}
+              />
+
               {/* Quiz */}
               <QuizSection eventId={eventId} language={language} theme={theme} isDark={isDark} />
 
@@ -765,6 +779,12 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
       {viewerVisible && gallery.length > 0 && (
         <ImageViewer images={gallery} initialIndex={viewerStartIndex} onClose={() => setViewerVisible(false)} />
       )}
+      <ParallelUniverse
+        visible={parallelOpen}
+        onClose={() => setParallelOpen(false)}
+        event={currentEvent}
+      />
+
       <SharePickerModal
         visible={sharePickerVisible}
         event={currentEvent}
