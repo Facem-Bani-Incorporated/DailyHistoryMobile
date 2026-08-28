@@ -148,6 +148,14 @@ function pickUniverse(raw: string | null | undefined, lang: string): Universe | 
 
 const clamp = (n: number) => Math.max(0, Math.min(100, n));
 
+/** Shared empty array for the collection selector.
+ *
+ *  Zustand compares selector results with Object.is, so `s.discovered[id] ?? []` returns
+ *  a brand-new array on every call for an event with no discoveries yet — a different
+ *  reference each render, which re-renders forever. Selecting the raw value (stable:
+ *  either undefined or the same array) and defaulting outside the selector is the fix. */
+const NO_ENDINGS: string[] = [];
+
 // ═════════════════════════════════════════════════════════════════════════════
 // WORLD METERS — four bars that trade against each other
 // ═════════════════════════════════════════════════════════════════════════════
@@ -477,7 +485,7 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
     [universe],
   );
 
-  const discovered = useParallelStore(s => s.discovered[eventId] ?? []);
+  const discovered = useParallelStore(s => s.discovered[eventId]) ?? NO_ENDINGS;
   const runsLeft = useParallelStore(s => s.runsLeft(isPro));
 
   const [phase, setPhase] = useState<'intro' | 'play' | 'end'>('intro');

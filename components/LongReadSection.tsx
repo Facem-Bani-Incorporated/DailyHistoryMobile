@@ -117,6 +117,13 @@ const L: Record<Lang, Record<string, string>> = {
   },
 };
 
+/** Group digits without Intl. `toLocaleString(locale)` throws a RangeError on a Hermes
+ *  build without full ICU data, and a word count is not worth a crash in the reader. */
+function groupDigits(n: number, lang: string): string {
+  const sep = lang === 'en' ? ',' : lang === 'fr' ? ' ' : '.';
+  return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, sep);
+}
+
 /** Roman numerals for chapter markers. Chapters cap at 7, so a small table is enough. */
 const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'];
 
@@ -197,7 +204,7 @@ function LongReadSectionInner({
         <Text style={[s.label, { color: gold }]}>{t.label}</Text>
       </View>
       <Text style={[s.meta, { color: theme.subtext }]}>
-        {wordCount.toLocaleString(lang)} {t.words} · {chapterTitles.length} {t.chapters}
+        {groupDigits(wordCount, lang)} {t.words} · {chapterTitles.length} {t.chapters}
         {' · '}{minutes} {t.minRead}
         {sourceCount > 0 ? ` · ${sourceCount} ${t.sources}` : ''}
       </Text>
