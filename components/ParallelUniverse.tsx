@@ -233,6 +233,116 @@ function Meter({ k, value, delta, label, isDark }: {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
+// DIVERGENCE FIELD — the other timelines, drifting past
+// ═════════════════════════════════════════════════════════════════════════════
+/**
+ * Sixteen motes drifting on their own loops behind the whole screen. Slow, low
+ * contrast, never in step with each other — the point is a room that feels alive at
+ * the edge of vision, not a particle effect anyone should notice.
+ *
+ * Positions are computed once from a fixed pattern rather than randomised per render,
+ * so the field is stable across re-renders and nothing recalculates while you play.
+ */
+const MOTES = Array.from({ length: 16 }, (_, i) => ({
+  x: ((i * 137) % 100) / 100,
+  y: ((i * 61) % 100) / 100,
+  size: 1.6 + ((i * 7) % 5) * 0.5,
+  dur: 7000 + ((i * 991) % 6000),
+  rise: 26 + ((i * 13) % 40),
+}));
+
+function DivergenceField({ color }: { color: string }) {
+  const drift = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.timing(drift, { toValue: 1, duration: 9000, easing: Easing.linear, useNativeDriver: true }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [drift]);
+
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      {MOTES.map((mo, i) => {
+        // Each mote rides the one shared clock at its own phase, so sixteen dots cost
+        // one driver rather than sixteen.
+        const phase = i / MOTES.length;
+        const y = drift.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0, -mo.rise],
+        });
+        const opacity = drift.interpolate({
+          inputRange: [0, phase, Math.min(1, phase + 0.5), 1],
+          outputRange: [0.08, 0.34, 0.08, 0.08],
+          extrapolate: 'clamp',
+        });
+        return (
+          <Animated.View
+            key={i}
+            style={{
+              position: 'absolute',
+              left: `${mo.x * 100}%`,
+              top: `${mo.y * 100}%`,
+              width: mo.size,
+              height: mo.size,
+              borderRadius: mo.size,
+              backgroundColor: color,
+              opacity,
+              transform: [{ translateY: y }],
+            }}
+          />
+        );
+      })}
+    </View>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// FORK — three paths opening out of one, drawn on the intro
+// ═════════════════════════════════════════════════════════════════════════════
+function ForkReveal({ gold, isDark }: { gold: string; isDark: boolean }) {
+  const grow = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(grow, {
+      toValue: 1, duration: 1100, easing: Easing.out(Easing.cubic), useNativeDriver: true,
+    }).start();
+  }, [grow]);
+
+  const H = 84;
+  const stem = grow.interpolate({ inputRange: [0, 0.45, 1], outputRange: [0, 1, 1] });
+  const arms = grow.interpolate({ inputRange: [0, 0.45, 1], outputRange: [0, 0, 1] });
+  const ghost = isDark ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.14)';
+
+  return (
+    <View style={{ height: H, alignItems: 'center', justifyContent: 'flex-start', marginBottom: 18 }} pointerEvents="none">
+      {/* One line up to the fork… */}
+      <Animated.View style={{
+        width: 2, height: H * 0.42, backgroundColor: gold, borderRadius: 1,
+        transform: [{ scaleY: stem }, { translateY: H * 0.21 }],
+      }} />
+      {/* …then three, the middle one still gold because it is the one you are on. */}
+      <View style={{ flexDirection: 'row', gap: 46, marginTop: -1 }}>
+        {[ghost, gold, ghost].map((c, i) => (
+          <Animated.View
+            key={i}
+            style={{
+              width: 2, height: H * 0.5, backgroundColor: c, borderRadius: 1,
+              transform: [
+                { scaleY: arms },
+                { translateY: H * 0.25 },
+                { rotate: `${(i - 1) * 17}deg` },
+              ],
+            }}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
 // FACTIONS — the political board, not four abstract meters
 // ═════════════════════════════════════════════════════════════════════════════
 function ActorRow({ actor, value, delta, isDark, gold }: {
@@ -459,6 +569,86 @@ const r_ = StyleSheet.create({
 // ═════════════════════════════════════════════════════════════════════════════
 // CHOICE CARD
 // ═════════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════════
+// YEAR — rolls over when the scene jumps forward
+// ═════════════════════════════════════════════════════════════════════════════
+function YearMark({ year, gold }: { year: string; gold: string }) {
+  const roll = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    roll.setValue(0);
+    Animated.timing(roll, {
+      toValue: 1, duration: 420, easing: Easing.out(Easing.cubic), useNativeDriver: true,
+    }).start();
+  }, [year, roll]);
+
+  // Drops in from above rather than fading: the tree moves forward in time on every
+  // decision, and the year should feel like it advanced, not like it swapped.
+  const translateY = roll.interpolate({ inputRange: [0, 1], outputRange: [-12, 0] });
+
+  return (
+    <Animated.Text style={[g.year, { color: gold, opacity: roll, transform: [{ translateY }] }]}>
+      {year}
+    </Animated.Text>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// STAT ROW — reality struck out, your world landing on top of it
+// ═════════════════════════════════════════════════════════════════════════════
+function StatRow({ stat, index, gold, theme, isDark }: {
+  stat: Stat; index: number; gold: string; theme: any; isDark: boolean;
+}) {
+  const enter = useRef(new Animated.Value(0)).current;
+  const land = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    // The row arrives, then your figure lands on it a beat later. Staggered down the
+    // table so the comparison reads one line at a time instead of all at once.
+    Animated.sequence([
+      Animated.timing(enter, {
+        toValue: 1, duration: 300, delay: 90 + index * 110,
+        easing: Easing.out(Easing.cubic), useNativeDriver: true,
+      }),
+      Animated.spring(land, { toValue: 1, tension: 90, friction: 7, useNativeDriver: true }),
+    ]).start();
+  }, [enter, land, index]);
+
+  const rowOpacity = enter;
+  const rowSlide = enter.interpolate({ inputRange: [0, 1], outputRange: [14, 0] });
+  const altScale = land.interpolate({ inputRange: [0, 1], outputRange: [1.5, 1] });
+  const altOpacity = land;
+
+  return (
+    <Animated.View
+      style={[
+        st_.row,
+        index > 0 && {
+          borderTopWidth: StyleSheet.hairlineWidth,
+          borderTopColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)',
+        },
+        { opacity: rowOpacity, transform: [{ translateY: rowSlide }] },
+      ]}
+    >
+      <Text style={[st_.label, { color: theme.text }]} numberOfLines={2}>{stat.label}</Text>
+      <Text style={[st_.real, { color: theme.subtext }]} numberOfLines={2}>{stat.real}</Text>
+      <Animated.Text
+        style={[st_.alt, { color: gold, opacity: altOpacity, transform: [{ scale: altScale }] }]}
+        numberOfLines={2}
+      >
+        {stat.alt}
+      </Animated.Text>
+    </Animated.View>
+  );
+}
+
+const st_ = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9 },
+  label: { flex: 1, fontSize: 12, fontWeight: '600', lineHeight: 16 },
+  real: { width: 72, textAlign: 'right', fontSize: 11.5, lineHeight: 15, textDecorationLine: 'line-through' },
+  alt: { width: 72, textAlign: 'right', fontSize: 12.5, fontWeight: '800', lineHeight: 16 },
+});
+
 function ChoiceCard({ choice, onPick, disabled, exiting, chosen, showEffects, gold, theme, isDark, delay, riskLabel }: {
   choice: Choice; onPick: () => void; disabled: boolean; exiting: boolean; chosen: boolean;
   showEffects: boolean; gold: string; theme: any; isDark: boolean; delay: number;
@@ -714,6 +904,7 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
           colors={isDark ? ['#12101A', '#08070A'] : ['#FFFDF7', '#F2EFE6']}
           style={StyleSheet.absoluteFill}
         />
+        <DivergenceField color={gold} />
 
         <Pressable onPress={() => { haptic('light'); onClose(); }} hitSlop={14}
           accessibilityRole="button" accessibilityLabel={t.done}
@@ -727,6 +918,8 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
           {/* ── INTRO ───────────────────────────────────────────────── */}
           {phase === 'intro' && (
             <>
+              <ForkReveal gold={gold} isDark={isDark} />
+
               <Text style={[g.pivotYear, { color: theme.subtext }]}>{universe.pivotYear}</Text>
               <Text style={[g.title, { color: theme.text }]}>{universe.pivotTitle}</Text>
 
@@ -795,7 +988,7 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
               <View style={g.stage}>
                 <Spine steps={step} total={4} gold={gold} isDark={isDark} />
                 <Animated.View style={{ opacity: bodyFade, paddingLeft: 30 }}>
-                  <Text style={[g.year, { color: gold }]}>{node.year}</Text>
+                  <YearMark year={node.year} gold={gold} />
                   <Text style={[g.nodeTitle, { color: theme.text }]}>{node.title}</Text>
                   <Text style={[g.nodeText, { color: theme.text }]}>{node.text}</Text>
 
@@ -847,14 +1040,7 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
                     <Text style={[g.statsCol, { color: gold }]}>{t.yourWorld}</Text>
                   </View>
                   {node.stats.map((st, i) => (
-                    <View key={i} style={[g.statsRow, i > 0 && {
-                      borderTopWidth: StyleSheet.hairlineWidth,
-                      borderTopColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)',
-                    }]}>
-                      <Text style={[g.statsLabel, { color: theme.text }]} numberOfLines={2}>{st.label}</Text>
-                      <Text style={[g.statsReal, { color: theme.subtext }]} numberOfLines={2}>{st.real}</Text>
-                      <Text style={[g.statsAlt, { color: gold }]} numberOfLines={2}>{st.alt}</Text>
-                    </View>
+                    <StatRow key={i} stat={st} index={i} gold={gold} theme={theme} isDark={isDark} />
                   ))}
                 </View>
               )}
@@ -1009,10 +1195,6 @@ const g = StyleSheet.create({
   statsTable: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 13, paddingBottom: 4, marginBottom: 26 },
   statsHead: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, paddingVertical: 9, borderBottomWidth: StyleSheet.hairlineWidth },
   statsCol: { width: 72, textAlign: 'right', fontSize: 8.5, fontWeight: '800', letterSpacing: 0.7, textTransform: 'uppercase' },
-  statsRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9 },
-  statsLabel: { flex: 1, fontSize: 12, fontWeight: '600', lineHeight: 16 },
-  statsReal: { width: 72, textAlign: 'right', fontSize: 11.5, lineHeight: 15, textDecorationLine: 'line-through' },
-  statsAlt: { width: 72, textAlign: 'right', fontSize: 12.5, fontWeight: '800', lineHeight: 16 },
   stepLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 14 },
 
   stage: { position: 'relative' },
