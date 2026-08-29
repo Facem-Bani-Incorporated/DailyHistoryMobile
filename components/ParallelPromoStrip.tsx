@@ -30,35 +30,35 @@ const L: Record<Lang, Record<string, string>> = {
   en: {
     badge: 'NEW',
     title: 'Change one decision. See what happens.',
-    meta: '3 decisions · {n} endings',
+    meta: '{n} endings to find',
     found: 'found',
     play: 'Play',
   },
   ro: {
     badge: 'NOU',
     title: 'Schimbă o decizie. Vezi ce iese.',
-    meta: '3 decizii · {n} finaluri',
+    meta: '{n} finaluri de găsit',
     found: 'găsite',
     play: 'Joacă',
   },
   fr: {
     badge: 'NOUVEAU',
     title: 'Changez une décision. Voyez la suite.',
-    meta: '3 décisions · {n} fins',
+    meta: '{n} fins à trouver',
     found: 'trouvées',
     play: 'Jouer',
   },
   de: {
     badge: 'NEU',
     title: 'Ändere eine Entscheidung. Sieh, was folgt.',
-    meta: '3 Entscheidungen · {n} Enden',
+    meta: '{n} Enden zu finden',
     found: 'gefunden',
     play: 'Spielen',
   },
   es: {
     badge: 'NUEVO',
     title: 'Cambia una decisión. Mira qué pasa.',
-    meta: '3 decisiones · {n} finales',
+    meta: '{n} finales por descubrir',
     found: 'encontrados',
     play: 'Jugar',
   },
@@ -96,13 +96,15 @@ function ParallelPromoStripInner({ events, language, theme, isDark }: Props) {
   const eventId = String(found?.event?.id ?? '');
   const discovered = useDiscovered(eventId).length;
 
+  const open_ = () => { haptic('medium'); setOpen(true); };
+
   // Nothing to promote on a day with no game — a dead strip is worse than no strip.
   if (!found) return null;
 
   return (
     <>
       <Pressable
-        onPress={() => { haptic('medium'); setOpen(true); }}
+        onPress={open_}
         accessibilityRole="button"
         accessibilityLabel={t.title}
         style={({ pressed }) => [s.wrap, { transform: [{ scale: pressed ? 0.99 : 1 }] }]}
@@ -134,6 +136,32 @@ function ParallelPromoStripInner({ events, language, theme, isDark }: Props) {
             <Text style={[s.title, { color: theme.text }]} numberOfLines={2}>
               {t.title}
             </Text>
+
+            {/* An actual button, with its own handler.
+                The whole card has always been pressable, but a card that only looks like
+                a headline gives a thumb nothing to aim at, and a tap that lands on the
+                artwork or in the padding reads as the feature being broken. This is the
+                target people are looking for, and it opens the game on its own rather
+                than relying on the press bubbling out of the card. */}
+            <View style={s.ctaRow}>
+              <Pressable
+                onPress={open_}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel={t.play}
+                style={({ pressed }) => [
+                  s.cta,
+                  { backgroundColor: gold, opacity: pressed ? 0.85 : 1 },
+                ]}
+              >
+                <Text style={s.ctaText}>{t.play}</Text>
+                <MaterialCommunityIcons name="arrow-right" size={13} color="#1A1408" />
+              </Pressable>
+
+              <Text style={[s.meta, { color: theme.subtext }]} numberOfLines={1}>
+                {t.meta.replace('{n}', String(found.endings))}
+              </Text>
+            </View>
           </View>
         </LinearGradient>
       </Pressable>
@@ -165,6 +193,13 @@ const s = StyleSheet.create({
   body: { flex: 1, justifyContent: 'center' },
 
   topRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 7 },
+  ctaRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 11 },
+  cta: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    borderRadius: 999, paddingHorizontal: 13, paddingVertical: 6.5,
+  },
+  ctaText: { fontSize: 12.5, fontWeight: '900', letterSpacing: 0.3, color: '#1A1408' },
+  meta: { flex: 1, fontSize: 11, letterSpacing: 0.1 },
   badge: { borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2.5 },
   badgeText: { fontSize: 9, fontWeight: '900', letterSpacing: 1.1, color: '#1A1408' },
   found: { fontSize: 11 },

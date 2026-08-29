@@ -40,7 +40,7 @@ import {
 
 import {
   BranchMap, ConsequenceBloom, CrowdOpinion, DivergenceField, ForkMark, PeasantMarch,
-  NeonFrame, Nail, PinnedNote, RiskDial, SceneWipe, ChangeBars, WoodWall, WorldDial,
+  NeonFrame, Nail, PinnedNote, SceneWipe, ChangeBars, WoodWall, WorldDial,
   RarityAura, SkiaMeter, SocietyImpact, VerdictSeal,
   METER_WIDTH,
 } from './ParallelCanvas';
@@ -237,7 +237,7 @@ const L: Record<Lang, Record<string, string>> = {
     noRuns: 'You have used today\'s run', proUnlimited: 'PRO plays as often as it likes',
     getPro: 'Unlock unlimited runs', locked: 'Come back tomorrow',
     preview: 'PRO sees the cost before choosing', already: 'Found before',
-    firstTime: 'New timeline', risk: 'Risk',
+    firstTime: 'New timeline', risk: 'Risk', riskLow: 'Low risk', riskMid: 'Fair risk', riskHigh: 'High risk',
     voices: 'What people are saying', mood: 'Public mood', onward: 'Live with it',
     legacyTitle: 'How they remember it', trajectory: 'How it went',
     worldNow: 'The world you made', noVoices: 'The news has not travelled yet',
@@ -262,7 +262,7 @@ const L: Record<Lang, Record<string, string>> = {
     noRuns: 'Ți-ai folosit rularea de azi', proUnlimited: 'PRO joacă oricât vrea',
     getPro: 'Deblochează rulări nelimitate', locked: 'Revino mâine',
     preview: 'PRO vede costul înainte să aleagă', already: 'Găsită deja',
-    firstTime: 'Cronologie nouă', risk: 'Risc',
+    firstTime: 'Cronologie nouă', risk: 'Risc', riskLow: 'Risc mic', riskMid: 'Risc mediu', riskHigh: 'Risc mare',
     voices: 'Ce se spune în epocă', mood: 'Starea de spirit', onward: 'Trăiește cu asta',
     legacyTitle: 'Cum își amintesc', trajectory: 'Cum a mers',
     worldNow: 'Lumea pe care ai făcut-o', noVoices: 'Vestea nu a ajuns încă departe',
@@ -287,7 +287,7 @@ const L: Record<Lang, Record<string, string>> = {
     noRuns: 'Vous avez utilisé votre tour du jour', proUnlimited: 'PRO joue autant qu\'il veut',
     getPro: 'Débloquer les parties illimitées', locked: 'Revenez demain',
     preview: 'PRO voit le coût avant de choisir', already: 'Déjà trouvée',
-    firstTime: 'Nouvelle chronologie', risk: 'Risque',
+    firstTime: 'Nouvelle chronologie', risk: 'Risque', riskLow: 'Risque faible', riskMid: 'Risque moyen', riskHigh: 'Risque élevé',
     voices: 'Ce que l\'on dit', mood: 'Humeur publique', onward: 'Vivre avec',
     legacyTitle: 'Ce qu\'on en retient', trajectory: 'Comment ça a tourné',
     worldNow: 'Le monde que vous avez fait', noVoices: 'La nouvelle n\'a pas encore voyagé',
@@ -312,7 +312,7 @@ const L: Record<Lang, Record<string, string>> = {
     noRuns: 'Dein heutiger Durchgang ist verbraucht', proUnlimited: 'PRO spielt so oft es will',
     getPro: 'Unbegrenzte Durchgänge freischalten', locked: 'Komm morgen wieder',
     preview: 'PRO sieht die Kosten vor der Wahl', already: 'Schon gefunden',
-    firstTime: 'Neue Zeitlinie', risk: 'Risiko',
+    firstTime: 'Neue Zeitlinie', risk: 'Risiko', riskLow: 'Geringes Risiko', riskMid: 'Mittleres Risiko', riskHigh: 'Hohes Risiko',
     voices: 'Was die Leute sagen', mood: 'Stimmung im Volk', onward: 'Damit leben',
     legacyTitle: 'Wie man sich erinnert', trajectory: 'Wie es lief',
     worldNow: 'Die Welt, die du gemacht hast', noVoices: 'Die Nachricht ist noch nicht weit gekommen',
@@ -337,7 +337,7 @@ const L: Record<Lang, Record<string, string>> = {
     noRuns: 'Ya usaste tu partida de hoy', proUnlimited: 'PRO juega cuantas veces quiera',
     getPro: 'Desbloquear partidas ilimitadas', locked: 'Vuelve mañana',
     preview: 'PRO ve el coste antes de elegir', already: 'Ya encontrada',
-    firstTime: 'Cronología nueva', risk: 'Riesgo',
+    firstTime: 'Cronología nueva', risk: 'Riesgo', riskLow: 'Riesgo bajo', riskMid: 'Riesgo medio', riskHigh: 'Riesgo alto',
     voices: 'Lo que dice la gente', mood: 'Ánimo público', onward: 'Vive con ello',
     legacyTitle: 'Cómo lo recuerdan', trajectory: 'Cómo fue',
     worldNow: 'El mundo que hiciste', noVoices: 'La noticia aún no ha viajado',
@@ -721,21 +721,49 @@ const st_ = StyleSheet.create({
 });
 
 /**
- * One option: what you do, what it costs, and how likely it is to go wrong.
+ * Risk as a colour, on a ramp rather than in three buckets.
  *
- * Everything else has been taken off it. The card used to carry a verb, a line of prose
- * explaining the trade-off, a labelled outcome and a risk track in the corner — four
- * blocks of text where the player is making one decision. What is left is the action at
- * full size, the one concrete number it commits, and risk as the headline.
- *
- * The frame is a neon tube (`NeonFrame`), lit in the risk's own colour: green for a safe
- * move, gold for a gamble, red for a reckless one. So the card announces its danger
- * before a word of it is read, and the border is doing work instead of spinning.
+ * Three fixed tones meant 32 and 65 lit the same green and 65 and 66 looked like
+ * different worlds. The tube is now the only reading of danger on the card, so it has to
+ * move with the number: green at 0, amber through the middle, red at 100.
  */
-function ChoiceCard({ choice, onPick, disabled, exiting, chosen, showEffects, gold, theme, isDark, delay, riskLabel }: {
+const RISK_STOPS: { at: number; rgb: [number, number, number] }[] = [
+  { at: 0,   rgb: [63, 224, 138] },
+  { at: 50,  rgb: [255, 193, 77] },
+  { at: 100, rgb: [255, 92, 61] },
+];
+
+function riskTone(risk: number): string {
+  const r = Math.max(0, Math.min(100, Number.isFinite(risk) ? risk : 50));
+  let lo = RISK_STOPS[0];
+  let hi = RISK_STOPS[RISK_STOPS.length - 1];
+  for (const s of RISK_STOPS) {
+    if (s.at <= r) lo = s;
+    if (s.at >= r) { hi = s; break; }
+  }
+  if (hi.at === lo.at) return `rgb(${lo.rgb.join(',')})`;
+  const k = (r - lo.at) / (hi.at - lo.at);
+  const mix = lo.rgb.map((c, i) => Math.round(c + (hi.rgb[i] - c) * k));
+  return `rgb(${mix.join(',')})`;
+}
+
+/**
+ * One option: a button that says what you do, and how badly it can go.
+ *
+ * It had accumulated a circular gauge, a committed value, a line of prose about the
+ * trade-off and a row of chips — five things to read before making one decision, times
+ * three cards on screen. What is left is the action and its risk, and the frame carries
+ * the warning: the neon tube runs the whole outline in the risk's own colour, so which
+ * option is the reckless one is answered before a word of it is read.
+ *
+ * The effect chips stay for PRO, because they are the preview that is paid for, and they
+ * are numbers rather than prose — they sit at the end of the risk line instead of on a
+ * row of their own.
+ */
+function ChoiceCard({ choice, onPick, disabled, exiting, chosen, showEffects, gold, theme, isDark, delay, t }: {
   choice: Choice; onPick: () => void; disabled: boolean; exiting: boolean; chosen: boolean;
   showEffects: boolean; gold: string; theme: any; isDark: boolean; delay: number;
-  riskLabel: string;
+  t: Record<string, string>;
 }) {
   const enter = useRef(new Animated.Value(0)).current;
   const exit = useRef(new Animated.Value(0)).current;
@@ -767,10 +795,11 @@ function ChoiceCard({ choice, onPick, disabled, exiting, chosen, showEffects, go
   );
 
   const risk = typeof choice.risk === 'number' ? choice.risk : 50;
-  const tone = risk >= 66 ? '#FF5C3D' : risk >= 33 ? '#FFC14D' : '#3FE08A';
+  const tone = riskTone(risk);
+  const word = risk >= 66 ? t.riskHigh : risk >= 33 ? t.riskMid : t.riskLow;
 
   return (
-    <Animated.View style={{ opacity, transform: [{ scale }, { translateX }], marginBottom: 22 }}>
+    <Animated.View style={{ opacity, transform: [{ scale }, { translateX }], marginBottom: 20 }}>
       {/* The tube is positioned against THIS view, which carries no padding and no style
           of its own. An absolutely-positioned child is laid out against its parent's
           padding edge, so measuring the padded card itself put the frame a padding's
@@ -785,7 +814,7 @@ function ChoiceCard({ choice, onPick, disabled, exiting, chosen, showEffects, go
           <NeonFrame
             width={box.w} height={box.h} radius={CARD_R}
             tone={chosen ? gold : tone}
-            intensity={chosen ? 1 : disabled ? 0.3 : 0.9}
+            intensity={chosen ? 1 : disabled ? 0.3 : 1}
           />
         )}
 
@@ -793,7 +822,7 @@ function ChoiceCard({ choice, onPick, disabled, exiting, chosen, showEffects, go
           onPress={onPick}
           disabled={disabled}
           accessibilityRole="button"
-          accessibilityLabel={`${choice.label}. ${riskLabel} ${risk}.`}
+          accessibilityLabel={`${choice.label}. ${word}, ${risk}.`}
           style={({ pressed }) => [
             cc.card,
             {
@@ -802,68 +831,47 @@ function ChoiceCard({ choice, onPick, disabled, exiting, chosen, showEffects, go
             },
           ]}
         >
-        <View style={cc.head}>
           <Text style={[cc.label, { color: theme.text }]}>{choice.label}</Text>
 
-          <View style={cc.riskWrap}>
-            <RiskDial size={RISK_SIZE} risk={risk} delay={delay + 200} />
-            <View style={cc.riskInner} pointerEvents="none">
-              <Text style={[cc.riskNum, { color: tone }]}>{risk}</Text>
-            </View>
-            <Text style={[cc.riskCap, { color: theme.subtext }]}>{riskLabel}</Text>
-          </View>
-        </View>
+          <View style={cc.riskRow}>
+            <View style={[cc.dot, { backgroundColor: tone }]} />
+            <Text style={[cc.riskWord, { color: tone }]}>{word}</Text>
+            <Text style={[cc.riskNum, { color: tone }]}>{risk}</Text>
 
-        {/* The one concrete thing this commits. Kept because it is a fact; the sentence
-            of prose that used to sit above it was not. */}
-        {!!choice.outcome?.value && (
-          <View style={cc.outcome}>
-            <Text style={[cc.outValue, { color: tone }]}>{choice.outcome.value}</Text>
-            <Text style={[cc.outLabel, { color: theme.subtext }]}>{choice.outcome.label}</Text>
-          </View>
-        )}
-
-        {showEffects && (
-          <View style={cc.chips}>
-            {METERS.filter(k => choice.effects[k] !== 0).map(k => (
-              <View key={k} style={[cc.chip, { borderColor: METER_COLOR[k] + '55', backgroundColor: METER_COLOR[k] + '14' }]}>
-                <MaterialCommunityIcons name={METER_ICON[k]} size={10} color={METER_COLOR[k]} />
-                <Text style={[cc.chipText, { color: METER_COLOR[k] }]}>
-                  {choice.effects[k] > 0 ? `+${choice.effects[k]}` : choice.effects[k]}
-                </Text>
+            {showEffects && (
+              <View style={cc.chips}>
+                {METERS.filter(k => choice.effects[k] !== 0).map(k => (
+                  <View key={k} style={[cc.chip, { borderColor: METER_COLOR[k] + '55', backgroundColor: METER_COLOR[k] + '14' }]}>
+                    <MaterialCommunityIcons name={METER_ICON[k]} size={10} color={METER_COLOR[k]} />
+                    <Text style={[cc.chipText, { color: METER_COLOR[k] }]}>
+                      {choice.effects[k] > 0 ? `+${choice.effects[k]}` : choice.effects[k]}
+                    </Text>
+                  </View>
+                ))}
               </View>
-            ))}
+            )}
           </View>
-        )}
         </Pressable>
       </View>
     </Animated.View>
   );
 }
 
-const RISK_SIZE = 54;
 const CARD_R = 18;
 
 const cc = StyleSheet.create({
-  card: { borderRadius: CARD_R, paddingHorizontal: 18, paddingVertical: 17 },
+  card: { borderRadius: CARD_R, paddingHorizontal: 20, paddingVertical: 18 },
 
-  head: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  label: { flex: 1, fontSize: 19, fontWeight: '800', letterSpacing: -0.4, lineHeight: 25 },
+  label: { fontSize: 20, fontWeight: '800', letterSpacing: -0.4, lineHeight: 26 },
 
-  riskWrap: { width: RISK_SIZE, alignItems: 'center' },
-  riskInner: {
-    position: 'absolute', top: 0, left: 0, width: RISK_SIZE, height: RISK_SIZE,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  riskNum: { fontSize: 19, fontWeight: '900', fontVariant: ['tabular-nums'] },
-  riskCap: { fontSize: 7.5, fontWeight: '800', letterSpacing: 0.9, textTransform: 'uppercase', marginTop: 3 },
+  riskRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 13 },
+  dot: { width: 8, height: 8, borderRadius: 4 },
+  riskWord: { fontSize: 11, fontWeight: '900', letterSpacing: 1.1, textTransform: 'uppercase' },
+  riskNum: { fontSize: 13, fontWeight: '900', fontVariant: ['tabular-nums'] },
 
-  outcome: { marginTop: 13 },
-  outValue: { fontSize: 15, fontWeight: '800', lineHeight: 20 },
-  outLabel: { fontSize: 8.5, fontWeight: '700', letterSpacing: 0.7, textTransform: 'uppercase', marginTop: 2 },
-
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 3, borderWidth: 1, borderRadius: 7, paddingHorizontal: 7, paddingVertical: 3 },
+  // Pushed to the far end of the risk line, so a PRO card is the same shape as a free one.
+  chips: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 5 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 3, borderWidth: 1, borderRadius: 7, paddingHorizontal: 6, paddingVertical: 2.5 },
   chipText: { fontSize: 11, fontWeight: '800', fontVariant: ['tabular-nums'] },
 });
 
@@ -1595,7 +1603,7 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
                           exiting={!!pickedId}
                           chosen={pickedId === c.id}
                           showEffects={isPro}
-                          riskLabel={t.risk}
+                          t={t}
                           gold={gold} theme={theme} isDark={isDark}
                         />
                       ))}

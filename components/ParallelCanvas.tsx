@@ -21,7 +21,7 @@ import {
   BlurMask, Canvas, Circle, Fill, Group, LinearGradient, Path, RadialGradient,
   Rect, RoundedRect, Skia, SweepGradient, Turbulence, vec,
 } from '@shopify/react-native-skia';
-import { memo, useMemo } from 'react';
+import { memo, useEffect, useMemo } from 'react';
 import { StyleSheet } from 'react-native';
 import {
   Easing, interpolate, interpolateColor, useDerivedValue, useSharedValue,
@@ -61,7 +61,7 @@ export const DivergenceField = memo(function DivergenceField({
 }: { width: number; height: number; divergence: SharedValue<number>; isDark: boolean }) {
   const clock = useSharedValue(0);
 
-  useMemo(() => {
+  useEffect(() => {
     clock.value = withRepeat(withTiming(1, { duration: 24000, easing: Easing.linear }), -1, false);
   }, [clock]);
 
@@ -221,11 +221,11 @@ export const SkiaMeter = memo(function SkiaMeter({
   const burn = useSharedValue(0);
   const pulse = useSharedValue(0);
 
-  useMemo(() => {
+  useEffect(() => {
     burn.value = withTiming(Math.max(0, Math.min(1, dominance)), { duration: 700 });
   }, [dominance, burn]);
 
-  useMemo(() => {
+  useEffect(() => {
     pulse.value = withRepeat(withTiming(1, { duration: 1300, easing: Easing.inOut(Easing.sin) }), -1, true);
   }, [pulse]);
 
@@ -278,7 +278,7 @@ export const WorldDial = memo(function WorldDial({
 }: { size: number; wellbeing: number; tone: string; isDark: boolean }) {
   const sweep = useSharedValue(0);
 
-  useMemo(() => {
+  useEffect(() => {
     sweep.value = withTiming(Math.max(-1, Math.min(1, wellbeing / 140)), {
       duration: 900, easing: Easing.out(Easing.cubic),
     });
@@ -344,7 +344,7 @@ export const PeasantMarch = memo(function PeasantMarch({
   const COUNT = 11;
   const clock = useSharedValue(0);
 
-  useMemo(() => {
+  useEffect(() => {
     clock.value = withRepeat(withTiming(1, { duration: 6000, easing: Easing.linear }), -1, false);
   }, [clock]);
 
@@ -491,13 +491,13 @@ export const BranchMap = memo(function BranchMap({
   const progress = useSharedValue(0);
   const pulse = useSharedValue(0);
 
-  useMemo(() => {
+  useEffect(() => {
     progress.value = withTiming(depth ? step / depth : 0, {
       duration: 760, easing: Easing.out(Easing.cubic),
     });
   }, [step, depth, progress]);
 
-  useMemo(() => {
+  useEffect(() => {
     pulse.value = withRepeat(withTiming(1, { duration: 2400, easing: Easing.inOut(Easing.sin) }), -1, false);
   }, [pulse]);
 
@@ -582,7 +582,7 @@ export const BranchingPulse = memo(function BranchingPulse({
 }: { width: number; height: number; isDark: boolean }) {
   const run = useSharedValue(0);
 
-  useMemo(() => {
+  useEffect(() => {
     run.value = withRepeat(
       withSequence(
         withTiming(1, { duration: 2100, easing: Easing.inOut(Easing.cubic) }),
@@ -666,13 +666,13 @@ export const NeonFrame = memo(function NeonFrame({
   const breathe = useSharedValue(0);
   const level = useSharedValue(intensity);
 
-  useMemo(() => {
+  useEffect(() => {
     breathe.value = withRepeat(
       withTiming(1, { duration: 2800, easing: Easing.inOut(Easing.sin) }), -1, true,
     );
   }, [breathe]);
 
-  useMemo(() => {
+  useEffect(() => {
     level.value = withTiming(intensity, { duration: 300 });
   }, [intensity, level]);
 
@@ -708,51 +708,6 @@ export const NeonFrame = memo(function NeonFrame({
         <Path path={outline} style="stroke" strokeWidth={1.4} color="#FFFFFF" opacity={core} />
         <Path path={outline} style="stroke" strokeWidth={2.4} color={tone} opacity={useDerivedValue(() => core.value * 0.55)} />
       </Group>
-    </Canvas>
-  );
-});
-
-// ═════════════════════════════════════════════════════════════════════════════
-// RISK DIAL — the number the decision actually turns on
-// ═════════════════════════════════════════════════════════════════════════════
-/**
- * Risk, given the size it deserves.
- *
- * It used to be a 78px track in the corner under a label, competing with two lines of
- * prose. It is the one figure that changes what a player does, so it is now the largest
- * thing on the card after the verb.
- */
-export const RiskDial = memo(function RiskDial({
-  size, risk, delay,
-}: { size: number; risk: number; delay: number }) {
-  const fill = useSharedValue(0);
-
-  useMemo(() => {
-    fill.value = withDelay(delay, withTiming(Math.max(0, Math.min(100, risk)) / 100, {
-      duration: 780, easing: Easing.out(Easing.cubic),
-    }));
-  }, [risk, delay, fill]);
-
-  const cx = size / 2;
-  const cy = size / 2;
-  const R = size / 2 - 4;
-  const tone = risk >= 66 ? '#D9603F' : risk >= 33 ? GOLD : '#3FA97A';
-
-  const ring = useMemo(() => {
-    const p = Skia.Path.Make();
-    p.addArc({ x: cx - R, y: cy - R, width: R * 2, height: R * 2 }, -90, 360);
-    return p;
-  }, [size]);
-
-  return (
-    <Canvas style={{ width: size, height: size }} pointerEvents="none">
-      <Path path={ring} style="stroke" strokeWidth={3} color={`${tone}22`} />
-      <Path path={ring} style="stroke" strokeWidth={5} strokeCap="round" color={tone}
-        start={0} end={fill} opacity={0.55}>
-        <BlurMask blur={7} style="normal" />
-      </Path>
-      <Path path={ring} style="stroke" strokeWidth={3} strokeCap="round" color={tone}
-        start={0} end={fill} />
     </Canvas>
   );
 });
@@ -820,7 +775,7 @@ export const ChangeBars = memo(function ChangeBars({
   const H = ROW * values.length;
   const grow = useSharedValue(0);
 
-  useMemo(() => {
+  useEffect(() => {
     grow.value = 0;
     grow.value = withTiming(1, { duration: 1000, easing: Easing.out(Easing.cubic) });
   }, [grow, values.join(',')]);
@@ -1112,7 +1067,7 @@ export const CrowdOpinion = memo(function CrowdOpinion({
   const H = rows * (R * 2 + GAP) + 6;
 
   const progress = useSharedValue(0);
-  useMemo(() => {
+  useEffect(() => {
     progress.value = 0;
     progress.value = withTiming(1, { duration: 260 + present.length * 190, easing: Easing.out(Easing.cubic) });
   }, [progress, total, present.length]);
@@ -1193,7 +1148,7 @@ export const VerdictSeal = memo(function VerdictSeal({
   const sweep = useSharedValue(0);
   const strike = useSharedValue(0);
 
-  useMemo(() => {
+  useEffect(() => {
     sweep.value = 0;
     strike.value = 0;
     sweep.value = withTiming(1, { duration: 1150, easing: Easing.out(Easing.cubic) });
@@ -1255,7 +1210,7 @@ export const SocietyImpact = memo(function SocietyImpact({
   const FLOOR = H - 16;
   const grow = useSharedValue(0);
 
-  useMemo(() => {
+  useEffect(() => {
     grow.value = 0;
     grow.value = withTiming(1, { duration: 1000, easing: Easing.out(Easing.cubic) });
   }, [grow, values]);
@@ -1328,7 +1283,7 @@ export const RarityAura = memo(function RarityAura({
   const rare = rarity === 'rare';
   const uncommon = rarity === 'uncommon';
 
-  useMemo(() => {
+  useEffect(() => {
     spin.value = withRepeat(
       withTiming(1, { duration: rare ? 4200 : 9000, easing: Easing.linear }), -1, false,
     );
@@ -1365,7 +1320,7 @@ export const ForkMark = memo(function ForkMark({ width, isDark }: { width: numbe
   const H = 74;
   const draw = useSharedValue(0);
 
-  useMemo(() => {
+  useEffect(() => {
     draw.value = withRepeat(
       withSequence(
         withTiming(1, { duration: 1700, easing: Easing.out(Easing.cubic) }),
