@@ -982,6 +982,7 @@ function MoodBar({ value, unrest, delta, label, moodLabel, moodColor, width, the
 }) {
   const floatY = useRef(new Animated.Value(0)).current;
   const floatOp = useRef(new Animated.Value(0)).current;
+  const pop = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (!delta) return;
@@ -993,14 +994,23 @@ function MoodBar({ value, unrest, delta, label, moodLabel, moodColor, width, the
       ]),
       Animated.timing(floatOp, { toValue: 0, duration: 460, useNativeDriver: true }),
     ]).start();
-  }, [delta, floatY, floatOp]);
+
+    // The word itself takes the hit. The crowd below is already reacting, and a label
+    // that sits perfectly still through it reads as a caption rather than a reading.
+    pop.setValue(0);
+    Animated.spring(pop, { toValue: 1, tension: 150, friction: 5, useNativeDriver: true }).start();
+  }, [delta, floatY, floatOp, pop]);
+
+  const popScale = pop.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 1.16, 1] });
 
   return (
     <View style={[mb.wrap, { borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.09)' }]}>
       <View style={mb.head}>
         <Text style={[mb.label, { color: theme.subtext }]}>{label}</Text>
         <View style={mb.right}>
-          <Text style={[mb.mood, { color: moodColor }]}>{moodLabel}</Text>
+          <Animated.Text style={[mb.mood, { color: moodColor, transform: [{ scale: popScale }] }]}>
+            {moodLabel}
+          </Animated.Text>
           {!!delta && (
             <Animated.Text
               style={[

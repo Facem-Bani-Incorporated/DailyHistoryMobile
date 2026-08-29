@@ -324,144 +324,258 @@ export const WorldDial = memo(function WorldDial({
  * A crowd crossing the screen, and the way it moves is the reading.
  *
  * Content: they stroll, upright, warm-lit, well spaced.
- * Uneasy: the pace picks up, the light goes amber, the gaps close.
- * Furious: they run, pitchforks up, and the ground turns red under them.
+ * Uneasy: the pace picks up, the cloth goes grey-green, the gaps close.
+ * Furious: they run leaning into it, arms up, pitchforks and torches out.
  *
- * This replaced a coloured band with a wave on it. A bar can carry a number; it cannot
- * carry the difference between a country walking home and a country coming for you, and
- * that difference is the only thing this meter was ever trying to say.
+ * The figures are a port of the `animatie_tarani` artboard, which is DOM — around forty
+ * absolutely-positioned divs per peasant. Thirteen of those is five hundred native views
+ * animating under a scrolling screen, so the same drawing is rebuilt here as Skia
+ * geometry: the crowd is laid out once per layer and every shape is filed into the path
+ * for its colour, so the whole march is eleven draw calls however many people are in it.
  *
- * The whole crowd is one path rebuilt each frame — twelve figures at twelve transforms
- * would be twelve draw calls for something that sits under a scrolling screen.
+ * What the port keeps is what survives at this size: the three-palette mood ramp, the
+ * straw hats, the three depth rows, the gait, the lean, and the props coming up as the
+ * crowd turns. The artboard's faces — brows, three cross-fading mouths, pupils — are
+ * drawn at 1680×720, where a head is 46px. Here it is under five, so they were left out
+ * rather than rendered as mud.
  */
+const MARCH_H = 96;
+const MARCH_COUNT = 13;
+const ROW_SCALE = [0.62, 0.8, 1];
+const ROW_GROUND = [MARCH_H * 0.55, MARCH_H * 0.75, MARCH_H * 0.99];
+
+type Pt = { x: number; y: number };
+type Seed = { row: number; start: number; gait: number; carry: number; jitter: number };
+
+/** A limb: a filled capsule, because the artboard's limbs are divs with a border-radius
+ *  of half their width, and that is exactly what a capsule is. */
+function capsule(p: any, a: Pt, b: Pt, r: number) {
+  'worklet';
+  p.addCircle(a.x, a.y, r);
+  p.addCircle(b.x, b.y, r);
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const L = Math.hypot(dx, dy) || 1;
+  const nx = (-dy / L) * r, ny = (dx / L) * r;
+  p.addPoly(
+    [{ x: a.x + nx, y: a.y + ny }, { x: b.x + nx, y: b.y + ny },
+     { x: b.x - nx, y: b.y - ny }, { x: a.x - nx, y: a.y - ny }],
+    true,
+  );
+}
+
+/**
+ * One colour's worth of crowd.
+ *
+ * Every layer walks the same thirteen people through the same arithmetic and keeps only
+ * the shapes that are its own colour. Laying out all eleven layers in one pass and
+ * handing back an object of paths would save that repetition, but a shared value holding
+ * a bag of Skia host objects is not a shape react-native-skia documents, and this runs
+ * on a screen that is expensive to reach and test. The arithmetic is a few hundred
+ * multiplications per layer; the certainty is worth more than the microseconds.
+ */
+function marchLayer(
+  layer: string, m: number, u: number, width: number, seeds: Seed[],
+) {
+  'worklet';
+  const p = Skia.Path.Make();
+  const rage = Math.max(0, Math.min(1, m - 1));
+  const rageS = rage * rage * (3 - 2 * rage);
+  const worry = Math.max(0, Math.min(1, 1 - Math.abs(m - 1)));
+  const span = width + 90;
+
+  for (let i = 0; i < seeds.length; i++) {
+    const sd = seeds[i];
+    const s = ROW_SCALE[sd.row];
+    const loops = sd.row === 2 ? 1.25 : 1;
+    const gy = ROW_GROUND[sd.row];
+    const px = ((((sd.start + u * loops * sd.gait) % 1) + 1) % 1) * span - 45;
+
+    if (layer === 'shade') {
+      p.addOval({ x: px - 9 * s, y: gy - 2 * s, width: 18 * s, height: 4 * s });
+      continue;
+    }
+
+    // Gait. The back rows take shorter, quicker steps, which is what sells the depth.
+    const ph = ((u * (52 + sd.row * 14) * sd.gait + sd.start * 3.7) % 1) * Math.PI * 2;
+    const sw = (0.46 + m * 0.2) * (1 + sd.jitter * 0.12);
+    const bob = -(0.9 + 0.9 * Math.cos(ph * 2)) - m * 0.35;
+    const lean = ((3 + m * 8) * Math.PI) / 180;
+    const cosL = Math.cos(lean), sinL = Math.sin(lean);
+
+    // Local space has the feet at the origin and up as -y; this puts a local point on
+    // the canvas, leaned about the feet, bobbed, scaled for its row.
+    const P = (x: number, y: number): Pt => {
+      const yy = y + bob;
+      return { x: px + s * (x * cosL - yy * sinL), y: gy + s * (x * sinL + yy * cosL) };
+    };
+
+    const hipY = -17, shoulderY = -30;
+
+    if (layer === 'legs' || layer === 'far' || layer === 'boot') {
+      const thigh = 9, shin = 8;
+      const legAng = [sw * Math.sin(ph), -sw * Math.sin(ph)];
+      const kneeAng = [-0.5 * (0.5 + 0.5 * Math.cos(ph)), -0.5 * (0.5 - 0.5 * Math.cos(ph))];
+      for (let k = 0; k < 2; k++) {
+        const a1 = legAng[k];
+        const knee = { x: Math.sin(a1) * thigh, y: hipY + Math.cos(a1) * thigh };
+        const a2 = a1 + kneeAng[k];
+        const foot = { x: knee.x + Math.sin(a2) * shin, y: knee.y + Math.cos(a2) * shin };
+        const limbLayer = k === 0 ? 'legs' : 'far';
+        if (layer === limbLayer) {
+          capsule(p, P(0, hipY), P(knee.x, knee.y), 1.7 * s);
+          capsule(p, P(knee.x, knee.y), P(foot.x, foot.y), 1.5 * s);
+        }
+        const bootLayer = k === 0 ? 'boot' : 'far';
+        if (layer === bootLayer) {
+          capsule(p, P(foot.x, foot.y), P(foot.x + 2.4, foot.y + 0.2), 1.6 * s);
+        }
+      }
+    }
+
+    if (layer === 'torso') {
+      capsule(p, P(0, -32), P(0, -17), 5.3 * s);
+    }
+
+    if (layer === 'far' || layer === 'arms' || layer === 'skin'
+        || layer === 'wood' || layer === 'metal' || layer === 'flame') {
+      const upper = 8, fore = 7;
+      const swingA = 0.52 + m * 0.22;
+      const rearA = -swingA * Math.sin(ph) * (1 - rageS) - (2.5 + 0.35 * Math.sin(ph * 3)) * rageS;
+      const frontA = swingA * Math.sin(ph) * (1 - Math.max(rageS, worry * 0.6))
+        - (2.35 + 0.2 * Math.sin(ph)) * rageS - 0.9 * worry * 0.6;
+
+      const elbowOf = (a: number) => ({ x: Math.sin(a) * upper, y: shoulderY + Math.cos(a) * upper });
+      const handOf = (a: number, e: Pt) => ({ x: e.x + Math.sin(a - 0.3) * fore, y: e.y + Math.cos(a - 0.3) * fore });
+
+      if (layer === 'far') {
+        const eR = elbowOf(rearA), hR = handOf(rearA, eR);
+        capsule(p, P(0, shoulderY), P(eR.x, eR.y), 1.35 * s);
+        capsule(p, P(eR.x, eR.y), P(hR.x, hR.y), 1.2 * s);
+      }
+
+      const eF = elbowOf(frontA), hF = handOf(frontA, eF);
+      if (layer === 'arms') {
+        capsule(p, P(0, shoulderY), P(eF.x, eF.y), 1.5 * s);
+        capsule(p, P(eF.x, eF.y), P(hF.x, hF.y), 1.35 * s);
+      }
+      if (layer === 'skin') {
+        const hand = P(hF.x, hF.y);
+        p.addCircle(hand.x, hand.y, 1.5 * s);
+        const head = P(0, -38);
+        p.addCircle(head.x, head.y, 4.4 * s);
+      }
+
+      // What the hand is carrying, once there is anger to carry it.
+      if (sd.carry !== 2 && rageS > 0.02) {
+        const L = 15 * rageS;
+        const tip = { x: hF.x + Math.sin(frontA - 0.25) * -L, y: hF.y + Math.cos(frontA - 0.25) * -L };
+        if (layer === 'wood') capsule(p, P(hF.x, hF.y), P(tip.x, tip.y), 0.85 * s);
+        if (layer === 'metal' && sd.carry === 0) {
+          // Pitchfork: a crossbar and three tines.
+          const bx = tip.x, by = tip.y;
+          capsule(p, P(bx - 2.6, by + 0.6), P(bx + 2.6, by + 0.6), 0.7 * s);
+          for (let k = -1; k <= 1; k++) {
+            capsule(p, P(bx + k * 2.4, by + 0.6), P(bx + k * 2.4, by - 3.2), 0.6 * s);
+          }
+        }
+        if (layer === 'flame' && sd.carry === 1) {
+          // Two flickers a beat apart, so no two fires agree.
+          const fl = 0.5 + 0.5 * Math.sin(u * 130 + i * 2.1);
+          const f = P(tip.x, tip.y - 1.5);
+          p.addOval({
+            x: f.x - (2.6 + fl * 0.7) * s, y: f.y - (5.4 + fl * 1.8) * s,
+            width: (5.2 + fl * 1.4) * s, height: (7 + fl * 2.2) * s,
+          });
+        }
+      }
+    }
+
+    if (layer === 'hat') {
+      const brim = P(0, -41.4);
+      p.addOval({ x: brim.x - 8.2 * s, y: brim.y - 1.9 * s, width: 16.4 * s, height: 3.8 * s });
+      capsule(p, P(0, -45), P(0, -42), 3.2 * s);
+    }
+  }
+
+  return p;
+}
+
 export const PeasantMarch = memo(function PeasantMarch({
   width, mood, unrest, isDark,
 }: {
   width: number; mood: SharedValue<number>; unrest: SharedValue<number>; isDark: boolean;
 }) {
-  const H = 92;
-  const GROUND = H - 22;
-  const COUNT = 11;
   const clock = useSharedValue(0);
 
   useEffect(() => {
-    clock.value = withRepeat(withTiming(1, { duration: 6000, easing: Easing.linear }), -1, false);
+    clock.value = withRepeat(withTiming(1, { duration: 7200, easing: Easing.linear }), -1, false);
   }, [clock]);
 
-  // Each walker gets its own lane, phase and gait so the crowd never marches in step.
-  const seeds = useMemo(
-    () => Array.from({ length: COUNT }, (_, i) => ({
-      phase: (i * 0.173 + (i % 3) * 0.06) % 1,
-      lane: ((i * 7) % 5) - 2,          // -2..2, slight depth
-      gait: 0.9 + ((i * 11) % 7) / 10,
-      scale: 0.86 + ((i * 5) % 4) / 10,
+  // Row, starting offset and gait are fixed per person, so nobody ever falls into step
+  // with their neighbour and the crowd never reads as a repeating tile.
+  const seeds = useMemo<Seed[]>(
+    () => Array.from({ length: MARCH_COUNT }, (_, i) => ({
+      row: i % 3,
+      start: ((i / MARCH_COUNT) + (i % 3) * 0.135 + ((i * 37) % 11) * 0.006) % 1,
+      gait: 0.9 + ((i * 11) % 7) / 11,
+      carry: i % 3,                       // 0 pitchfork · 1 torch · 2 bare fist
+      jitter: ((i * 17) % 9) / 9,
     })),
     [],
   );
 
-  const crowd = useDerivedValue(() => {
-    'worklet';
-    const m = mood.value;
-    // Below fifty they are hurrying; by twenty they are running.
-    const haste = interpolate(m, [0, 30, 60, 100], [2.6, 1.7, 1.0, 0.75], 'clamp');
-    const angry = interpolate(m, [45, 15], [0, 1], 'clamp');   // 1 = pitchforks up
-    const stride = interpolate(m, [0, 100], [7, 3.4], 'clamp');
+  /** 0 content · 1 uneasy · 2 furious — the artboard's own mood axis, read off the meter. */
+  const temper = useDerivedValue(() => interpolate(mood.value, [100, 55, 10], [0, 1, 2], 'clamp'));
 
-    const p = Skia.Path.Make();
+  // Livelier than the artboard on purpose: this sits in a 96px strip under a scrolling
+  // screen, where a stroll reads as a stall.
+  const dist = useDerivedValue(() => clock.value * (0.95 + 0.62 * temper.value + unrest.value * 0.25));
 
-    for (let i = 0; i < COUNT; i++) {
-      const sd = seeds[i];
-      const t = (clock.value * haste * sd.gait + sd.phase) % 1;
-      const x = -24 + t * (width + 48);
-      const sc = sd.scale;
-      const baseY = GROUND + sd.lane * 2.2;
+  // Written out one by one rather than through a helper: a hook called inside another
+  // function is a rule of hooks away from a bug the day someone makes one conditional.
+  const pShade = useDerivedValue(() => marchLayer('shade', temper.value, dist.value, width, seeds));
+  const pFar = useDerivedValue(() => marchLayer('far', temper.value, dist.value, width, seeds));
+  const pLegs = useDerivedValue(() => marchLayer('legs', temper.value, dist.value, width, seeds));
+  const pBoot = useDerivedValue(() => marchLayer('boot', temper.value, dist.value, width, seeds));
+  const pTorso = useDerivedValue(() => marchLayer('torso', temper.value, dist.value, width, seeds));
+  const pArms = useDerivedValue(() => marchLayer('arms', temper.value, dist.value, width, seeds));
+  const pSkin = useDerivedValue(() => marchLayer('skin', temper.value, dist.value, width, seeds));
+  const pHat = useDerivedValue(() => marchLayer('hat', temper.value, dist.value, width, seeds));
+  const pWood = useDerivedValue(() => marchLayer('wood', temper.value, dist.value, width, seeds));
+  const pMetal = useDerivedValue(() => marchLayer('metal', temper.value, dist.value, width, seeds));
+  const pFlame = useDerivedValue(() => marchLayer('flame', temper.value, dist.value, width, seeds));
 
-      // A running figure bobs harder and leans into it.
-      const step = Math.sin((clock.value * haste * sd.gait * 18 + sd.phase * 6) * Math.PI * 2);
-      const bob = Math.abs(step) * (1 + angry * 1.6) * sc;
-      const y = baseY - bob;
-      const lean = angry * 3 * sc;
-
-      const headR = 3.4 * sc;
-      const shoulder = y - 15 * sc;
-      const hip = y - 6 * sc;
-
-      // Head
-      p.addCircle(x + lean, shoulder - headR - 1.5 * sc, headR);
-      // Spine, leaning forward as they run
-      p.moveTo(x + lean, shoulder);
-      p.lineTo(x, hip);
-      // Legs, swinging out of phase
-      const sw = step * stride * 0.5 * sc;
-      p.moveTo(x, hip);
-      p.lineTo(x - sw, y);
-      p.moveTo(x, hip);
-      p.lineTo(x + sw, y);
-      // Trailing arm
-      p.moveTo(x + lean * 0.8, shoulder - 1 * sc);
-      p.lineTo(x - 4 * sc - sw * 0.4, shoulder + 5 * sc);
-
-      // Raised arm and pitchfork, only once they are angry enough to carry one.
-      if (angry > 0.05) {
-        const armX = x + lean + 5 * sc;
-        const armY = shoulder - 2 * sc - angry * 5 * sc;
-        p.moveTo(x + lean, shoulder - 1 * sc);
-        p.lineTo(armX, armY);
-        const shaftTop = armY - 13 * sc * angry;
-        p.moveTo(armX, armY + 3 * sc);
-        p.lineTo(shaftTop === armY ? armX : armX + 1.5 * sc, shaftTop);
-        // Three tines
-        for (const d of [-2.4, 0, 2.4]) {
-          p.moveTo(armX + 1.5 * sc + d * sc, shaftTop);
-          p.lineTo(armX + 1.5 * sc + d * sc, shaftTop - 4.5 * sc * angry);
-        }
-      }
-    }
-    return p;
-  });
-
-  const tint = useDerivedValue(() =>
-    interpolateColor(mood.value, [0, 22, 50, 78, 100],
-      ['#E0483A', '#D9603F', '#C79A54', '#5CB88C', '#3FA97A']));
-
-  // The ground goes red under a mob. It is the first thing you notice and it is doing the
-  // same job as the colour of the figures, one beat earlier.
-  const heat = useDerivedValue(() => interpolate(mood.value, [40, 8], [0, 1], 'clamp'));
-  const groundOpacity = useDerivedValue(() => 0.1 + heat.value * 0.4);
-  const glowOpacity = useDerivedValue(() => 0.34 + unrest.value * 0.3 + heat.value * 0.25);
-
-  const clip = useMemo(
-    () => Skia.RRectXY(Skia.XYWHRect(0, 0, width, H), 12, 12),
-    [width],
-  );
+  // The artboard's three palettes, crossfaded on the same axis the crowd walks on.
+  const cTunic = useDerivedValue(() => interpolateColor(temper.value, [0, 1, 2], ['#7FB069', '#6C8B77', '#93463A']));
+  const cSleeve = useDerivedValue(() => interpolateColor(temper.value, [0, 1, 2], ['#EAD8B1', '#DDCDAA', '#C9B48D']));
+  const cTrouser = useDerivedValue(() => interpolateColor(temper.value, [0, 1, 2], ['#B08968', '#8E7460', '#5F4235']));
+  const cHat = useDerivedValue(() => interpolateColor(temper.value, [0, 1, 2], ['#E5C67C', '#D2B573', '#B7924F']));
+  const cSkin = useDerivedValue(() => interpolateColor(temper.value, [0, 1, 2], ['#E9B58D', '#E2AC86', '#D89478']));
+  const cBoot = useDerivedValue(() => interpolateColor(temper.value, [0, 1, 2], ['#4E3A2E', '#453227', '#33241B']));
+  const cFar = useDerivedValue(() => interpolateColor(temper.value, [0, 1, 2], ['#6E5B45', '#5C4B3B', '#3E2C22']));
+  const cGround = useDerivedValue(() =>
+    interpolateColor(temper.value, [0, 1, 2],
+      isDark ? ['#1A2418', '#1E1E18', '#2A1512'] : ['#E7EEDF', '#EAE6D8', '#F0DAD2']));
 
   return (
-    <Canvas style={{ width, height: H }}>
-      <RoundedRect x={0} y={0} width={width} height={H} r={12}
-        color={isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.022)'} />
+    <Canvas style={{ width, height: MARCH_H }}>
+      {/* The ground they are on, which reddens as they turn. */}
+      <RoundedRect x={0} y={MARCH_H - 13} width={width} height={13} r={5} color={cGround} />
+      <Path path={pShade} color="rgba(40,30,20,0.16)" />
 
-      <Group clip={clip}>
-        {/* Heat haze on the ground. */}
-        <Rect x={0} y={GROUND - 26} width={width} height={52} opacity={groundOpacity}>
-          <LinearGradient
-            start={vec(0, GROUND - 26)} end={vec(0, GROUND + 26)}
-            colors={['#E0483A00', '#E0483A80', '#E0483A00']}
-          />
-        </Rect>
+      <Path path={pFar} color={cFar} />
+      <Path path={pLegs} color={cTrouser} />
+      <Path path={pBoot} color={cBoot} />
+      <Path path={pTorso} color={cTunic} />
+      <Path path={pArms} color={cSleeve} />
+      <Path path={pSkin} color={cSkin} />
+      <Path path={pHat} color={cHat} />
 
-        {/* The road they are on. */}
-        <Rect x={0} y={GROUND + 1} width={width} height={1}
-          color={isDark ? 'rgba(245,236,215,0.22)' : 'rgba(0,0,0,0.16)'} />
-
-        {/* Glow first, figures on top — the gloss is a blurred copy underneath, which is
-            cheaper than a shadow and keeps the silhouettes crisp. */}
-        <Path path={crowd} style="stroke" strokeWidth={4.5} strokeCap="round" strokeJoin="round"
-          color={tint} opacity={glowOpacity}>
-          <BlurMask blur={7} style="normal" />
-        </Path>
-        <Path path={crowd} style="stroke" strokeWidth={1.9} strokeCap="round" strokeJoin="round"
-          color={tint} />
-      </Group>
+      <Path path={pWood} color="#8A6740" />
+      <Path path={pMetal} color="#A9B3BA" />
+      <Path path={pFlame} color="#E8642B">
+        <BlurMask blur={2.5} style="normal" />
+      </Path>
     </Canvas>
   );
 });
