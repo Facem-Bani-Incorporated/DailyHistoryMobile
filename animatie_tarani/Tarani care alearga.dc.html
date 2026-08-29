@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet" />
+<script>window.OM_SCENES = '[{"name":"Fericiti","dur":5,"desc":"Taranii alearga relaxati, zambind, cu pas lejer"},{"name":"Ingrijorati","dur":4.5,"desc":"Pasul se grabeste, privirile se intorc peste umar, gurile se strang"},{"name":"Furiosi","dur":5,"desc":"Alearga in sprint, urla, ridica furci si torte aprinse"},{"name":"Revenire","dur":1.5,"desc":"Furia se stinge si mulțimea revine la starea fericita pentru bucla"}]';</script>
+<script>window.OM_PLAYBACK = '{"mode":"loop"}';</script>
+<style>
+  body { margin: 0; background: #14120f; }
+  a { color: oklch(0.72 0.13 55); }
+  a:hover { color: oklch(0.82 0.13 55); }
+</style>
+</helmet>
+<div style="min-height: 100vh; background: #14120f; color: oklch(0.9 0.01 80); font-family: 'Space Grotesk', Helvetica, sans-serif; display: flex; flex-direction: column; gap: 18px; padding: 28px 32px 40px;">
+  <div style="display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap;">
+    <div style="font-size: 22px; font-weight: 600; letter-spacing: -0.01em;">Țărani care aleargă</div>
+    <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: oklch(0.68 0.01 80);">21:9 · 1680×720 · fundal transparent · buclă continuă 16s</div>
+  </div>
+  <div style="position: relative; width: 100%; aspect-ratio: 21 / 9; border-radius: 10px; overflow: hidden; background-color: oklch(0.28 0.005 80); background-image: linear-gradient(45deg, oklch(0.24 0.005 80) 25%, transparent 25%, transparent 75%, oklch(0.24 0.005 80) 75%), linear-gradient(45deg, oklch(0.24 0.005 80) 25%, transparent 25%, transparent 75%, oklch(0.24 0.005 80) 75%); background-size: 28px 28px; background-position: 0 0, 14px 14px;">
+    <x-import component-from-global-scope="TaraniScene" from="./animations-v3.jsx ./tarani.jsx" mood="{{ mood }}" count="{{ count }}" hint-size="100%,100%" style="position: absolute; inset: 0;"></x-import>
+  </div>
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; font-size: 14px; line-height: 1.5; color: oklch(0.74 0.01 80);">
+    <div style="display: flex; flex-direction: column; gap: 6px;">
+      <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: oklch(0.72 0.13 55);">00:00 — 00:05</div>
+      <div style="color: oklch(0.93 0.01 80); font-weight: 600;">1 · Liniștiți și fericiți</div>
+      <div>Pas lejer, corp drept, zâmbet, brațe relaxate. Paletă caldă, pălării de paie.</div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 6px;">
+      <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: oklch(0.72 0.13 55);">00:05 — 00:09.5</div>
+      <div style="color: oklch(0.93 0.01 80); font-weight: 600;">2 · Puțin îngrijorați</div>
+      <div>Cadență mai rapidă, capete întoarse peste umăr, gura strânsă, culori mai reci.</div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 6px;">
+      <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: oklch(0.72 0.13 55);">00:09.5 — 00:16</div>
+      <div style="color: oklch(0.93 0.01 80); font-weight: 600;">3 · Furioși, cu furci și torțe</div>
+      <div>Sprint, aplecare înainte, gura deschisă, furci și torțe cu flacără pâlpâitoare.</div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;mood&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;toate&quot;,&quot;fericiti&quot;,&quot;ingrijorati&quot;,&quot;furiosi&quot;],&quot;default&quot;:&quot;toate&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Animație&quot;},&quot;count&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:11,&quot;min&quot;:1,&quot;max&quot;:16,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Animație&quot;},&quot;motionEditor&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Animație&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      mood: this.props.mood ?? 'toate',
+      count: this.props.count ?? 11,
+    };
+  }
+}
+</script>
+</body>
+</html>
