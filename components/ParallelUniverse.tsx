@@ -97,6 +97,22 @@ type MeterKey = keyof Effects;
 const METERS: MeterKey[] = ['stability', 'lives', 'progress', 'freedom'];
 
 /** Reality is the midpoint. Every meter starts here and the radar compares back to it. */
+/**
+ * ONE SCALE, FOR EVERYTHING THE PLAYER CAN SEE
+ *
+ * Every reading on this screen is a distance from the world that really happened, on the
+ * same hundred points, and every visual draws that distance rather than an absolute:
+ *
+ *   a meter        50 is history; the bar grows out of the centre, either way
+ *   the world      the four meters summed against 50 — ±20 is the band the copy uses
+ *   the crowd      walks on that same sum: +20 content, 0 uneasy, -20 furious
+ *   public mood    50 is history; average valence of the room x MOOD_SCALE per turn
+ *
+ * A choice is authored in the same units: four effects of up to ±30, applied straight to
+ * the meters. So one decision is worth up to a third of a meter's travel and can carry
+ * the crowd from one of its three states to another — which is the point. If a new
+ * visual is added here, it reads a distance from 50; nothing on this screen is a score.
+ */
 const BASELINE = 50;
 
 const METER_COLOR: Record<MeterKey, string> = {
@@ -154,9 +170,13 @@ const moodMeta = (m: string) => MOOD_META[isMood(m) ? m : 'uneasy'];
 
 /** Where public mood starts: reality, like every other meter. */
 const MOOD_BASELINE = 50;
-/** One point of average valence is worth this much on the 0-100 bar. Six keeps a
- *  unanimously furious crowd (-3) at a visible but survivable -18 a turn. */
-const MOOD_SCALE = 6;
+/** One point of average valence is worth this much on the 0-100 bar.
+ *
+ *  Six put a typical mixed room at six or eight points a turn, which is a word that
+ *  rarely changed and a delta nobody noticed. Eight puts a unanimously furious crowd at
+ *  -24 and a divided one around ten — enough that the reading moves when the room does,
+ *  and three turns can still carry it end to end. */
+const MOOD_SCALE = 8;
 
 /**
  * The crowd's temper as one word, read off the bar itself. Needed because the mood meter
@@ -840,9 +860,15 @@ function ChoiceCard({ choice, onPick, disabled, exiting, chosen, showEffects, go
         <Text style={[cc.label, { color: theme.text }]}>{choice.label}</Text>
 
         <View style={cc.foot}>
+          {/* Risk as a word and a level, never as a bare integer.
+              A naked "80" on a card that changes four meters reads as eighty points of
+              something, and then the meters move by fifteen and the card looks like it
+              lied. Nothing on this button is a score. */}
           <View style={[cc.pill, { borderColor: rgba(mix, 0.55), backgroundColor: rgba(mix, 0.14) }]}>
             <Text style={[cc.pillWord, { color: tone }]}>{word}</Text>
-            <Text style={[cc.pillNum, { color: tone }]}>{risk}</Text>
+            <View style={[cc.track, { backgroundColor: rgba(mix, 0.28) }]}>
+              <View style={[cc.trackFill, { width: `${Math.max(6, Math.min(100, risk))}%`, backgroundColor: tone }]} />
+            </View>
           </View>
 
           {showEffects && (
@@ -895,7 +921,8 @@ const cc = StyleSheet.create({
     paddingHorizontal: 11, paddingVertical: 4.5,
   },
   pillWord: { fontSize: 10, fontWeight: '900', letterSpacing: 1 },
-  pillNum: { fontSize: 12.5, fontWeight: '900', fontVariant: ['tabular-nums'] },
+  track: { width: 34, height: 4, borderRadius: 2, overflow: 'hidden' },
+  trackFill: { height: 4, borderRadius: 2 },
 
   chips: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 5 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 3, borderWidth: 1, borderRadius: 7, paddingHorizontal: 6, paddingVertical: 2.5 },
@@ -1353,7 +1380,6 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
   const meterSV: Record<MeterKey, SharedValue<number>> = {
     stability: mStability, lives: mLives, progress: mProgress, freedom: mFreedom,
   };
-  const moodSV = useSharedValue(MOOD_BASELINE);
   // How far the world has moved from the one that really happened. The crowd walks on
   // this, not on the mood tally: a trade that cancels out leaves the mood flat, and the
   // march was stuck at 'uneasy' for entire runs because of it.
@@ -1376,7 +1402,6 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
   }, [meters]);
 
   useEffect(() => {
-    moodSV.value = withTiming(publicMood, EASE);
   }, [publicMood]);
 
 
@@ -1395,7 +1420,6 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
     setMoodTally({});
     for (const k of METERS) meterSV[k].value = BASELINE;
     worldSV.value = 0;
-    moodSV.value = MOOD_BASELINE;
     unrestSV.value = 0;
     divergenceSV.value = 0;
     bodyFade.setValue(1);

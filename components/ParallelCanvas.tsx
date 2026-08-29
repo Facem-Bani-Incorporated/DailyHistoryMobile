@@ -203,7 +203,9 @@ export const ConsequenceBloom = memo(function ConsequenceBloom({
 // ═════════════════════════════════════════════════════════════════════════════
 // WORLD METERS — four bars that trade against each other
 // ═════════════════════════════════════════════════════════════════════════════
-const METER_W = 66;
+const METER_W = 78;
+/** Half the track: the distance one meter can travel either side of history. */
+const HALF_W = METER_W / 2;
 const METER_H = 9;
 
 /**
@@ -229,11 +231,21 @@ export const SkiaMeter = memo(function SkiaMeter({
     pulse.value = withRepeat(withTiming(1, { duration: 1300, easing: Easing.inOut(Easing.sin) }), -1, true);
   }, [pulse]);
 
-  const w = useDerivedValue(() => Math.max(3, (value.value / 100) * METER_W));
+  // The bar grows out of the centre line, not out of the left edge.
+  //
+  // Filling from zero meant the whole track was already 66px of colour before the player
+  // touched anything, and a fifteen-point decision — a big one — moved its edge by ten
+  // pixels inside that. Everything else on this screen reads distance from history; this
+  // now does too, so an untouched meter is an empty track and any move at all is the
+  // only colour in it.
+  const dev = useDerivedValue(() => (value.value - 50) / 50);          // -1 … +1
+  const barW = useDerivedValue(() => Math.max(2, Math.abs(dev.value) * HALF_W));
+  const barX = useDerivedValue(() => (dev.value >= 0 ? HALF_W : HALF_W - barW.value));
   const bloom = useDerivedValue(() =>
-    0.35 + (value.value / 100) * 0.25 + burn.value * (0.35 + pulse.value * 0.4));
+    0.3 + Math.abs(dev.value) * 0.4 + burn.value * (0.35 + pulse.value * 0.4));
   const bloomBlur = useDerivedValue(() => 5 + burn.value * 9);
-  const specW = useDerivedValue(() => Math.max(0, w.value - 3));
+  const specX = useDerivedValue(() => barX.value + 1.5);
+  const specW = useDerivedValue(() => Math.max(0, barW.value - 3));
 
   return (
     <Canvas style={{ width: METER_W, height: METER_H + 12 }}>
@@ -241,19 +253,19 @@ export const SkiaMeter = memo(function SkiaMeter({
         <RoundedRect x={0} y={0} width={METER_W} height={METER_H} r={METER_H / 2}
           color={isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)'} />
 
-        <RoundedRect x={0} y={0} width={w} height={METER_H} r={METER_H / 2}
+        <RoundedRect x={barX} y={0} width={barW} height={METER_H} r={METER_H / 2}
           color={hue} opacity={bloom}>
           <BlurMask blur={bloomBlur} style="normal" />
         </RoundedRect>
 
         {/* The fill: darker at the base, bright at the crown, like a lit tube. */}
-        <RoundedRect x={0} y={0} width={w} height={METER_H} r={METER_H / 2}>
+        <RoundedRect x={barX} y={0} width={barW} height={METER_H} r={METER_H / 2}>
           <LinearGradient start={vec(0, 0)} end={vec(0, METER_H)}
             colors={[`${hue}FF`, hue, `${hue}AA`]} />
         </RoundedRect>
 
         {/* Specular: a thin bright line along the upper third. This is the whole gloss. */}
-        <RoundedRect x={1.5} y={1.2} width={specW} height={METER_H * 0.34}
+        <RoundedRect x={specX} y={1.2} width={specW} height={METER_H * 0.34}
           r={METER_H * 0.17} color="#FFFFFF" opacity={0.42} />
 
         <Rect x={METER_W / 2 - 0.75} y={-2.5} width={1.5} height={METER_H + 5}
