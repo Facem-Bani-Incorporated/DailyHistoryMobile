@@ -39,8 +39,8 @@ import {
 } from 'react-native-reanimated';
 
 import {
-  BranchMap, ChoiceAura, ConsequenceBloom, CrowdOpinion, DivergenceField, ForkMark, PeasantMarch,
-  RiskDial, SceneWipe, ChangeBars, WorldDial,
+  BranchMap, ConsequenceBloom, CrowdOpinion, DivergenceField, ForkMark, PeasantMarch,
+  NeonFrame, Nail, PinnedNote, RiskDial, SceneWipe, ChangeBars, WoodWall, WorldDial,
   RarityAura, SkiaMeter, SocietyImpact, VerdictSeal,
   METER_WIDTH,
 } from './ParallelCanvas';
@@ -49,7 +49,7 @@ import { useRevenueCat } from '../context/RevenueCatContext';
 import { useTheme } from '../context/ThemeContext';
 import * as analytics from '../src/analytics/posthog';
 import { usePaywallStore } from '../store/usePaywallStore';
-import { iconForEnding } from './parallelIcons';
+import { iconsForEndings } from './parallelIcons';
 import { useDiscovered, useParallelStore, useRunsLeft } from '../store/useParallelStore';
 import { haptic } from '../utils/haptics';
 
@@ -721,12 +721,16 @@ const st_ = StyleSheet.create({
 });
 
 /**
- * One option, with the risk given the weight it earns.
+ * One option: what you do, what it costs, and how likely it is to go wrong.
  *
- * The risk used to be a 78px track in the corner, under a label, losing to two lines of
- * prose. It is the only figure on the card that changes what anyone does, so it is now
- * the second thing the eye lands on after the verb — a dial with the number inside it.
- * The prose came down to the action and one line of consequence to make room.
+ * Everything else has been taken off it. The card used to carry a verb, a line of prose
+ * explaining the trade-off, a labelled outcome and a risk track in the corner — four
+ * blocks of text where the player is making one decision. What is left is the action at
+ * full size, the one concrete number it commits, and risk as the headline.
+ *
+ * The frame is a neon tube (`NeonFrame`), lit in the risk's own colour: green for a safe
+ * move, gold for a gamble, red for a reckless one. So the card announces its danger
+ * before a word of it is read, and the border is doing work instead of spinning.
  */
 function ChoiceCard({ choice, onPick, disabled, exiting, chosen, showEffects, gold, theme, isDark, delay, riskLabel }: {
   choice: Choice; onPick: () => void; disabled: boolean; exiting: boolean; chosen: boolean;
@@ -763,58 +767,59 @@ function ChoiceCard({ choice, onPick, disabled, exiting, chosen, showEffects, go
   );
 
   const risk = typeof choice.risk === 'number' ? choice.risk : 50;
-  const riskTone = risk >= 66 ? '#D9603F' : risk >= 33 ? gold : '#3FA97A';
+  const tone = risk >= 66 ? '#FF5C3D' : risk >= 33 ? '#FFC14D' : '#3FE08A';
 
   return (
-    <Animated.View style={{ opacity, transform: [{ scale }, { translateX }] }}>
-      <Pressable
-        onPress={onPick}
-        disabled={disabled}
-        accessibilityRole="button"
-        accessibilityLabel={`${choice.label}. ${riskLabel} ${risk}.`}
+    <Animated.View style={{ opacity, transform: [{ scale }, { translateX }], marginBottom: 22 }}>
+      {/* The tube is positioned against THIS view, which carries no padding and no style
+          of its own. An absolutely-positioned child is laid out against its parent's
+          padding edge, so measuring the padded card itself put the frame a padding's
+          width out of register with the words inside it. */}
+      <View
         onLayout={(e) => {
           const { width, height } = e.nativeEvent.layout;
           setBox(b => (b.w === width && b.h === height ? b : { w: width, h: height }));
         }}
-        style={({ pressed }) => [
-          cc.card,
-          {
-            backgroundColor: chosen
-              ? gold + '14'
-              : (isDark ? 'rgba(255,255,255,0.035)' : 'rgba(0,0,0,0.022)'),
-            opacity: pressed ? 0.9 : 1,
-          },
-        ]}
       >
         {box.w > 0 && (
-          <ChoiceAura
-            width={box.w} height={box.h} radius={17}
-            tone={chosen ? gold : riskTone}
-            active={!disabled}
-            chosen={chosen}
+          <NeonFrame
+            width={box.w} height={box.h} radius={CARD_R}
+            tone={chosen ? gold : tone}
+            intensity={chosen ? 1 : disabled ? 0.3 : 0.9}
           />
         )}
 
+        <Pressable
+          onPress={onPick}
+          disabled={disabled}
+          accessibilityRole="button"
+          accessibilityLabel={`${choice.label}. ${riskLabel} ${risk}.`}
+          style={({ pressed }) => [
+            cc.card,
+            {
+              backgroundColor: isDark ? 'rgba(10,8,16,0.72)' : 'rgba(255,255,255,0.7)',
+              opacity: pressed ? 0.92 : 1,
+            },
+          ]}
+        >
         <View style={cc.head}>
-          <View style={cc.headText}>
-            <Text style={[cc.label, { color: theme.text }]}>{choice.label}</Text>
-            <Text style={[cc.detail, { color: theme.subtext }]}>{choice.detail}</Text>
-          </View>
+          <Text style={[cc.label, { color: theme.text }]}>{choice.label}</Text>
 
-          {/* The dial, and the number inside it. */}
           <View style={cc.riskWrap}>
             <RiskDial size={RISK_SIZE} risk={risk} delay={delay + 200} />
             <View style={cc.riskInner} pointerEvents="none">
-              <Text style={[cc.riskNum, { color: riskTone }]}>{risk}</Text>
+              <Text style={[cc.riskNum, { color: tone }]}>{risk}</Text>
             </View>
             <Text style={[cc.riskCap, { color: theme.subtext }]}>{riskLabel}</Text>
           </View>
         </View>
 
+        {/* The one concrete thing this commits. Kept because it is a fact; the sentence
+            of prose that used to sit above it was not. */}
         {!!choice.outcome?.value && (
-          <View style={[cc.footer, { borderTopColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]}>
+          <View style={cc.outcome}>
+            <Text style={[cc.outValue, { color: tone }]}>{choice.outcome.value}</Text>
             <Text style={[cc.outLabel, { color: theme.subtext }]}>{choice.outcome.label}</Text>
-            <Text style={[cc.outValue, { color: theme.text }]}>{choice.outcome.value}</Text>
           </View>
         )}
 
@@ -830,34 +835,34 @@ function ChoiceCard({ choice, onPick, disabled, exiting, chosen, showEffects, go
             ))}
           </View>
         )}
-      </Pressable>
+        </Pressable>
+      </View>
     </Animated.View>
   );
 }
 
-const RISK_SIZE = 52;
+const RISK_SIZE = 54;
+const CARD_R = 18;
 
 const cc = StyleSheet.create({
-  card: { borderRadius: 17, padding: 16, marginBottom: 12, overflow: 'hidden' },
+  card: { borderRadius: CARD_R, paddingHorizontal: 18, paddingVertical: 17 },
 
-  head: { flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
-  headText: { flex: 1 },
-  label: { fontSize: 17.5, fontWeight: '800', letterSpacing: -0.3, marginBottom: 5 },
-  detail: { fontSize: 13, lineHeight: 18.5 },
+  head: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  label: { flex: 1, fontSize: 19, fontWeight: '800', letterSpacing: -0.4, lineHeight: 25 },
 
   riskWrap: { width: RISK_SIZE, alignItems: 'center' },
   riskInner: {
     position: 'absolute', top: 0, left: 0, width: RISK_SIZE, height: RISK_SIZE,
     alignItems: 'center', justifyContent: 'center',
   },
-  riskNum: { fontSize: 18, fontWeight: '900', fontVariant: ['tabular-nums'] },
-  riskCap: { fontSize: 8, fontWeight: '800', letterSpacing: 0.8, textTransform: 'uppercase', marginTop: 3 },
+  riskNum: { fontSize: 19, fontWeight: '900', fontVariant: ['tabular-nums'] },
+  riskCap: { fontSize: 7.5, fontWeight: '800', letterSpacing: 0.9, textTransform: 'uppercase', marginTop: 3 },
 
-  footer: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginTop: 13, paddingTop: 11, borderTopWidth: StyleSheet.hairlineWidth },
-  outLabel: { fontSize: 9, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase' },
-  outValue: { flex: 1, fontSize: 13.5, fontWeight: '800' },
+  outcome: { marginTop: 13 },
+  outValue: { fontSize: 15, fontWeight: '800', lineHeight: 20 },
+  outLabel: { fontSize: 8.5, fontWeight: '700', letterSpacing: 0.7, textTransform: 'uppercase', marginTop: 2 },
 
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 11 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 3, borderWidth: 1, borderRadius: 7, paddingHorizontal: 7, paddingVertical: 3 },
   chipText: { fontSize: 11, fontWeight: '800', fontVariant: ['tabular-nums'] },
 });
@@ -998,88 +1003,125 @@ const mb = StyleSheet.create({
  * testimony rather than notifications.
  */
 /**
- * One voice, as a bill nailed to the town board.
+ * One voice, as a bill torn off and nailed to the board.
  *
- * The square in a medieval town is where you found out what had happened: notices went
- * up on a wall, people read them out to those who could not. These are those notices —
- * pinned, tilted a degree or two, on paper that has been out in the weather. It is a
- * better home for a stranger's opinion than a chat bubble, which says "a message to
- * you" when the point is that none of this was addressed to you at all.
+ * The paper is drawn in Skia — the edges are genuinely ragged, seeded off the speaker's
+ * name so a given person's note is always torn the same way — and the words are real
+ * <Text> on top of it, so they stay translated, scalable and legible to a screen reader.
+ *
+ * Each sheet hangs at its own angle from a single nail, which is why they are irregular:
+ * nobody lining up notices in a square measured anything.
  */
 function VoiceCard({ voice, delay, t, theme, isDark }: {
   voice: Reaction; delay: number; t: Record<string, string>; theme: any; isDark: boolean;
 }) {
   const enter = useRef(new Animated.Value(0)).current;
+  const swing = useRef(new Animated.Value(0)).current;
   const meta = moodMeta(voice.mood);
-  // Each bill hangs a little differently, but always the same way for the same speaker.
-  const tilt = useMemo(() => {
+  const [box, setBox] = useState({ w: 0, h: 0 });
+
+  // Hang angle and horizontal offset, fixed per speaker.
+  const { tilt, shift } = useMemo(() => {
     let h = 0;
-    for (let i = 0; i < voice.who.length; i++) h = (h * 31 + voice.who.charCodeAt(i)) % 1000;
-    return ((h % 5) - 2) * 0.42;
+    for (let i = 0; i < voice.who.length; i++) h = (h * 31 + voice.who.charCodeAt(i)) % 997;
+    return { tilt: ((h % 9) - 4) * 0.55, shift: ((h % 5) - 2) * 3 };
   }, [voice.who]);
 
   useEffect(() => {
-    Animated.spring(enter, {
-      toValue: 1, tension: 46, friction: 9, delay, useNativeDriver: true,
-    }).start();
-  }, [enter, delay]);
+    Animated.sequence([
+      Animated.timing(enter, {
+        toValue: 1, duration: 260, delay, easing: Easing.out(Easing.quad), useNativeDriver: true,
+      }),
+      // It drops onto the nail and rocks once, the way paper does.
+      Animated.spring(swing, { toValue: 1, tension: 40, friction: 5.5, useNativeDriver: true }),
+    ]).start();
+  }, [enter, swing, delay]);
 
-  const paper = isDark ? '#1A1610' : '#F6EFDC';
-  const ink = isDark ? '#E8DCC0' : '#2E2718';
+  const rock = swing.interpolate({ inputRange: [0, 1], outputRange: [`${tilt - 3.5}deg`, `${tilt}deg`] });
+  const ink = isDark ? '#2B2317' : '#33291A';
 
   return (
     <Animated.View
       style={{
-        opacity: enter,
+        alignSelf: 'stretch',
+        marginBottom: 18,
+        marginHorizontal: 10,
         transform: [
-          // Swings down from the pin rather than sliding in, like a sheet just hung.
-          { translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [-14, 0] }) },
-          { rotate: `${tilt}deg` },
-          { scale: enter.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1] }) },
+          { translateX: shift },
+          { translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [-18, 0] }) },
+          { rotate: rock },
         ],
+        opacity: enter,
       }}
     >
-      <View style={[vc.bill, { backgroundColor: paper, borderColor: meta.color + '3A' }]}>
-        {/* The nail. */}
-        <View style={[vc.pin, { backgroundColor: meta.color }]} />
-        <View style={[vc.pinHole, { backgroundColor: isDark ? '#0B0910' : '#D8CFB6' }]} />
+      <View
+        style={vc.sheet}
+        onLayout={(e) => {
+          const { width, height } = e.nativeEvent.layout;
+          setBox(b => (b.w === width && b.h === height ? b : { w: width, h: height }));
+        }}
+      >
+        {box.w > 0 && (
+          <PinnedNote width={box.w} height={box.h} seed={voice.who} tone={meta.color} isDark={isDark} />
+        )}
 
-        <View style={vc.head}>
-          <MaterialCommunityIcons name={meta.icon} size={12} color={meta.color} />
-          <Text style={[vc.mood, { color: meta.color }]}>{t[voice.mood] ?? voice.mood}</Text>
+        <View style={vc.nail} pointerEvents="none">
+          <Nail size={14} tone={meta.color} />
         </View>
 
-        <Text style={[vc.quote, { color: ink }]}>“{voice.quote}”</Text>
+        {/* Padding lives inside, so the sheet this measures is the sheet the paper is
+            drawn to — an absolutely-positioned child is laid out against the padding
+            edge, not the border edge. */}
+        <View style={vc.pad}>
+          <View style={vc.head}>
+            <MaterialCommunityIcons name={meta.icon} size={12} color={meta.color} />
+            <Text style={[vc.mood, { color: meta.color }]}>{t[voice.mood] ?? voice.mood}</Text>
+          </View>
 
-        <View style={[vc.rule, { backgroundColor: meta.color + '30' }]} />
-        <Text style={[vc.who, { color: isDark ? 'rgba(232,220,192,0.55)' : 'rgba(46,39,24,0.55)' }]}>
-          {voice.who}
-        </Text>
+          <Text style={[vc.quote, { color: ink }]}>“{voice.quote}”</Text>
+          <Text style={[vc.who, { color: 'rgba(51,41,26,0.6)' }]}>— {voice.who}</Text>
+        </View>
       </View>
     </Animated.View>
   );
 }
 
 const vc = StyleSheet.create({
-  bill: {
-    borderWidth: 1, borderRadius: 3, paddingHorizontal: 15, paddingTop: 20, paddingBottom: 13,
-    marginBottom: 14, marginHorizontal: 4,
-    // Paper sits on the board, not in it.
-    shadowColor: '#000', shadowOpacity: 0.34, shadowRadius: 7, shadowOffset: { width: 0, height: 4 },
-  },
-  pin: {
-    position: 'absolute', top: 7, alignSelf: 'center', left: '50%', marginLeft: -3.5,
-    width: 7, height: 7, borderRadius: 4,
-  },
-  pinHole: {
-    position: 'absolute', top: 9, alignSelf: 'center', left: '50%', marginLeft: -1.5,
-    width: 3, height: 3, borderRadius: 2,
-  },
-  head: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 7 },
+  sheet: {},
+  pad: { paddingHorizontal: 16, paddingTop: 22, paddingBottom: 14 },
+  nail: { position: 'absolute', top: -1, alignSelf: 'center', left: '50%', marginLeft: -7 },
+  head: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 8 },
   mood: { fontSize: 9, fontWeight: '900', letterSpacing: 1.2, textTransform: 'uppercase' },
   quote: { fontSize: 15.5, lineHeight: 23, fontFamily: SERIF, fontStyle: 'italic' },
-  rule: { height: StyleSheet.hairlineWidth, marginTop: 11, marginBottom: 7 },
-  who: { fontSize: 10.5, letterSpacing: 0.3 },
+  who: { fontSize: 10.5, letterSpacing: 0.3, marginTop: 9, textAlign: 'right' },
+});
+
+/**
+ * The board itself: planks behind, notices on top.
+ *
+ * Wraps whatever voices it is given so the wall runs continuously behind them instead of
+ * each note carrying its own scrap of background.
+ */
+function NoticeBoard({ children, isDark }: { children: React.ReactNode; isDark: boolean }) {
+  const [box, setBox] = useState({ w: 0, h: 0 });
+
+  return (
+    <View
+      style={nb.wrap}
+      onLayout={(e) => {
+        const { width, height } = e.nativeEvent.layout;
+        setBox(b => (b.w === width && b.h === height ? b : { w: width, h: height }));
+      }}
+    >
+      {box.w > 0 && <WoodWall width={box.w} height={box.h} isDark={isDark} />}
+      <View style={nb.inner}>{children}</View>
+    </View>
+  );
+}
+
+const nb = StyleSheet.create({
+  wrap: { borderRadius: 6, overflow: 'hidden', marginBottom: 20 },
+  inner: { paddingHorizontal: 8, paddingTop: 16, paddingBottom: 4 },
 });
 
 /**
@@ -1115,10 +1157,14 @@ function ReactionWave({ choice, t, gold, theme, isDark, onward }: {
       </View>
 
       {voices.length
-        ? voices.map((v, i) => (
-            <VoiceCard key={`${v.who}-${i}`} voice={v} delay={280 + i * 260}
-              t={t} theme={theme} isDark={isDark} />
-          ))
+        ? (
+          <NoticeBoard isDark={isDark}>
+            {voices.map((v, i) => (
+              <VoiceCard key={`${v.who}-${i}`} voice={v} delay={280 + i * 260}
+                t={t} theme={theme} isDark={isDark} />
+            ))}
+          </NoticeBoard>
+        )
         : <Text style={[rw.silent, { color: theme.subtext }]}>{t.noVoices}</Text>}
 
       <Animated.View style={{ opacity: btn, transform: [{ translateY: btn.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }] }}>
@@ -1155,10 +1201,12 @@ function LegacyVoices({ voices, label, t, gold, theme, isDark }: {
         <MaterialCommunityIcons name="account-voice" size={14} color={gold} />
         <Text style={[rw.headText, { color: gold }]}>{label}</Text>
       </View>
-      {voices.map((v, i) => (
-        <VoiceCard key={`${v.who}-${i}`} voice={v} delay={160 + i * 200}
-          t={t} theme={theme} isDark={isDark} />
-      ))}
+      <NoticeBoard isDark={isDark}>
+        {voices.map((v, i) => (
+          <VoiceCard key={`${v.who}-${i}`} voice={v} delay={160 + i * 200}
+            t={t} theme={theme} isDark={isDark} />
+        ))}
+      </NoticeBoard>
     </View>
   );
 }
@@ -1191,6 +1239,11 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
     [universe],
   );
   const enIndex = useMemo(() => englishIndex(event?.parallelUniverse), [event?.parallelUniverse]);
+  // Assigned for the whole grid at once so no two worlds wear the same symbol.
+  const endingIcons = useMemo(
+    () => iconsForEndings(eventId, endings.map(e => ({ id: e.id, english: enIndex[e.id] ?? '' }))),
+    [eventId, endings, enIndex],
+  );
 
   // How many decisions a run takes, walked off the tree rather than assumed. The shape
   // has changed twice — 2-wide, then 3/2, now 3/3/2 — and a screen reading "Decision 3
@@ -1460,7 +1513,7 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
               <CollectionGrid
                 endings={endings} discovered={discovered} gold={gold}
                 theme={theme} isDark={isDark} t={t}
-                eventId={eventId} enIndex={enIndex}
+                icons={endingIcons}
               />
 
               {(isPro || runsLeft > 0) ? (
@@ -1681,7 +1734,7 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
 
               <CollectionGrid endings={endings} discovered={discovered} gold={gold}
                 theme={theme} isDark={isDark} t={t} highlight={node.id}
-                eventId={eventId} enIndex={enIndex} />
+                icons={endingIcons} />
 
               {(isPro || runsLeft > 0) ? (
                 <Pressable onPress={() => {
@@ -1762,10 +1815,10 @@ function RarityBadge({ rarity, label, color, isNew, newLabel }: {
  * are lit gold and raised; the rest sit back, dim and slightly sunk, so the grid reads as
  * a shelf with gaps in it.
  */
-function CollectionGrid({ endings, discovered, gold, theme, isDark, highlight, eventId, enIndex }: {
+function CollectionGrid({ endings, discovered, gold, theme, isDark, highlight, icons }: {
   endings: Node[]; discovered: string[]; gold: string; theme: any; isDark: boolean;
   t: Record<string, string>; highlight?: string;
-  eventId: string; enIndex: Record<string, string>;
+  icons: Record<string, any>;
 }) {
   return (
     <View style={g.collection}>
@@ -1773,7 +1826,7 @@ function CollectionGrid({ endings, discovered, gold, theme, isDark, highlight, e
         {endings.map((e, i) => (
           <CollectionSlot
             key={e.id}
-            icon={iconForEnding(eventId, e.id, enIndex[e.id] ?? '')}
+            icon={icons[e.id]}
             found={discovered.includes(e.id)}
             here={highlight === e.id}
             rare={e.rarity === 'rare'}

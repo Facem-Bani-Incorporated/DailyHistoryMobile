@@ -638,57 +638,75 @@ export const BranchingPulse = memo(function BranchingPulse({
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
-// CHOICE AURA — the light that travels a card's edge
+// NEON FRAME — the card's own light
 // ═════════════════════════════════════════════════════════════════════════════
 /**
- * A sweep gradient rotating inside the card's own outline, so a band of light runs the
- * border continuously.
+ * A neon tube bent into the card's outline.
  *
- * The card underneath stays flat and quiet: this is the only thing on it that moves
- * until you touch it, which is what makes three of them feel like live options rather
- * than three paragraphs with buttons. The chosen one flares; the others go dark.
+ * Replaces a sweep gradient that rotated a bright arc around the border. That drew the
+ * eye to the movement instead of to the card, and on three cards at once it was three
+ * things spinning at different phases — busy, and it never once told the player anything.
+ *
+ * Real neon is three layers, and it is the layering that sells it: a wide saturated
+ * bloom, a tighter halo, and a hot near-white core where the gas actually burns. The
+ * whole thing breathes very slightly and does nothing else.
  */
-export const ChoiceAura = memo(function ChoiceAura({
-  width, height, radius, tone, active, chosen,
+export const NeonFrame = memo(function NeonFrame({
+  width, height, radius, tone, intensity = 1,
 }: {
-  width: number; height: number; radius: number;
-  tone: string; active: boolean; chosen: boolean;
+  width: number; height: number; radius: number; tone: string;
+  /** 1 for a live option, lower for one that is dimmed or already spent. */
+  intensity?: number;
 }) {
-  const spin = useSharedValue(0);
-  const lift = useSharedValue(0);
+  // The bloom reaches past the card, and Skia clips at the canvas edge — the same trap
+  // that left square shadows under the feed cards. Derived, so it cannot drift.
+  const OUTER_BLUR = 16;
+  const SPILL = Math.ceil(OUTER_BLUR * 2 + 6);
+
+  const breathe = useSharedValue(0);
+  const level = useSharedValue(intensity);
 
   useMemo(() => {
-    spin.value = withRepeat(withTiming(1, { duration: 4200, easing: Easing.linear }), -1, false);
-  }, [spin]);
+    breathe.value = withRepeat(
+      withTiming(1, { duration: 2800, easing: Easing.inOut(Easing.sin) }), -1, true,
+    );
+  }, [breathe]);
 
   useMemo(() => {
-    lift.value = withTiming(chosen ? 1 : active ? 0.42 : 0.1, { duration: 320 });
-  }, [active, chosen, lift]);
+    level.value = withTiming(intensity, { duration: 300 });
+  }, [intensity, level]);
 
   const outline = useMemo(() => {
     const p = Skia.Path.Make();
-    p.addRRect(Skia.RRectXY(Skia.XYWHRect(1, 1, width - 2, height - 2), radius, radius));
+    p.addRRect(Skia.RRectXY(Skia.XYWHRect(0, 0, width, height), radius, radius));
     return p;
   }, [width, height, radius]);
 
-  const transform = useDerivedValue(() => [{ rotate: spin.value * Math.PI * 2 }]);
-  const opacity = useDerivedValue(() => lift.value);
-  const glowW = useDerivedValue(() => 2 + lift.value * 5);
+  // A real tube flickers a little; a perfectly steady glow reads as a border.
+  const bloom = useDerivedValue(() => level.value * (0.42 + breathe.value * 0.16));
+  const halo = useDerivedValue(() => level.value * (0.6 + breathe.value * 0.12));
+  const core = useDerivedValue(() => level.value * (0.85 + breathe.value * 0.15));
 
   return (
-    <Canvas style={{ position: 'absolute', left: 0, top: 0, width, height }} pointerEvents="none">
-      <Group opacity={opacity}>
-        <Group origin={vec(width / 2, height / 2)} transform={transform}>
-          <Path path={outline} style="stroke" strokeWidth={glowW}>
-            <SweepGradient c={vec(width / 2, height / 2)}
-              colors={[`${tone}00`, tone, `${tone}00`, `${tone}00`, `${tone}88`, `${tone}00`]} />
-            <BlurMask blur={7} style="normal" />
-          </Path>
-          <Path path={outline} style="stroke" strokeWidth={1.4}>
-            <SweepGradient c={vec(width / 2, height / 2)}
-              colors={[`${tone}00`, tone, `${tone}00`, `${tone}00`, `${tone}AA`, `${tone}00`]} />
-          </Path>
-        </Group>
+    <Canvas
+      style={{
+        position: 'absolute',
+        left: -SPILL, top: -SPILL,
+        width: width + SPILL * 2, height: height + SPILL * 2,
+      }}
+      pointerEvents="none"
+    >
+      <Group transform={[{ translateX: SPILL, translateY: SPILL }]}>
+        <Path path={outline} style="stroke" strokeWidth={7} color={tone} opacity={bloom}>
+          <BlurMask blur={OUTER_BLUR} style="normal" />
+        </Path>
+        <Path path={outline} style="stroke" strokeWidth={3.4} color={tone} opacity={halo}>
+          <BlurMask blur={5} style="normal" />
+        </Path>
+        {/* The burning core. Whiter than the tone, which is what stops neon reading as
+            a coloured line and makes it read as light. */}
+        <Path path={outline} style="stroke" strokeWidth={1.4} color="#FFFFFF" opacity={core} />
+        <Path path={outline} style="stroke" strokeWidth={2.4} color={tone} opacity={useDerivedValue(() => core.value * 0.55)} />
       </Group>
     </Canvas>
   );
@@ -851,6 +869,205 @@ function ChangeBar({ y, delta, cx, half, hue, grow }: {
     </Group>
   );
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+// THE TOWN BOARD — planks, nails, and whatever got pinned up today
+// ═════════════════════════════════════════════════════════════════════════════
+/**
+ * The wall the notices hang on: rough vertical planks, seams between them, grain, and
+ * the odd knot.
+ *
+ * The voices were on flat cards before, which made a stranger's opinion look like a
+ * notification. In a medieval town the square is where you found out what had happened —
+ * bills went up on a board and whoever could read read them aloud. Giving them the actual
+ * wall does more for that idea than any amount of styling on a rectangle.
+ *
+ * Everything is seeded off the plank index, so the wall is identical between renders and
+ * never shimmers as the list re-lays out.
+ */
+export const WoodWall = memo(function WoodWall({
+  width, height, isDark,
+}: { width: number; height: number; isDark: boolean }) {
+  const PLANK = 58;
+  const count = Math.max(1, Math.ceil(width / PLANK) + 1);
+
+  // Two woods: a dark oiled oak at night, a sun-bleached pine by day.
+  const base = isDark ? '#241B12' : '#B99A6E';
+  const dark = isDark ? '#160F09' : '#8F7148';
+  const light = isDark ? '#33261A' : '#D4B98C';
+
+  const planks = useMemo(
+    () => Array.from({ length: count }, (_, i) => {
+      const seed = (i * 2654435761) % 1000;
+      return {
+        x: i * PLANK,
+        // No two boards the same width; a wall of equal planks reads as wallpaper.
+        w: PLANK * (0.82 + (seed % 40) / 100),
+        shade: (seed % 7) / 22,
+        knot: seed % 5 === 0 ? { y: 0.12 + (seed % 60) / 100, r: 4 + (seed % 3) } : null,
+        grain: Array.from({ length: 3 }, (_, g) => ({
+          x: 0.2 + ((seed + g * 137) % 60) / 100,
+          y: ((seed + g * 71) % 90) / 100,
+          len: 0.18 + ((seed + g * 31) % 40) / 100,
+        })),
+      };
+    }),
+    [count, PLANK],
+  );
+
+  return (
+    <Canvas style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Rect x={0} y={0} width={width} height={height} color={base} />
+
+      {planks.map((pl, i) => (
+        <Group key={i}>
+          {/* The board face: lit down the middle, shadowed at both edges. */}
+          <Rect x={pl.x} y={0} width={pl.w} height={height}>
+            <LinearGradient
+              start={vec(pl.x, 0)} end={vec(pl.x + pl.w, 0)}
+              colors={[dark, light, base, dark]}
+              positions={[0, 0.18, 0.7, 1]}
+            />
+          </Rect>
+          <Rect x={pl.x} y={0} width={pl.w} height={height} color={dark} opacity={pl.shade} />
+
+          {/* The gap between boards. */}
+          <Rect x={pl.x + pl.w - 1} y={0} width={2} height={height} color="#000000" opacity={0.42} />
+
+          {pl.grain.map((g, k) => (
+            <Rect
+              key={k}
+              x={pl.x + pl.w * g.x}
+              y={height * g.y}
+              width={1}
+              height={height * g.len}
+              color={dark}
+              opacity={0.3}
+            />
+          ))}
+
+          {pl.knot && (
+            <Group>
+              <Circle cx={pl.x + pl.w * 0.5} cy={height * pl.knot.y} r={pl.knot.r} color={dark} opacity={0.75} />
+              <Circle cx={pl.x + pl.w * 0.5} cy={height * pl.knot.y} r={pl.knot.r * 1.9}
+                style="stroke" strokeWidth={1} color={dark} opacity={0.4} />
+            </Group>
+          )}
+        </Group>
+      ))}
+
+      {/* Light falls from above, as it would on a wall in a square. */}
+      <Rect x={0} y={0} width={width} height={height} opacity={isDark ? 0.5 : 0.28}>
+        <LinearGradient
+          start={vec(0, 0)} end={vec(0, height)}
+          colors={['#00000000', '#00000055', '#000000AA']}
+        />
+      </Rect>
+    </Canvas>
+  );
+});
+
+/**
+ * One sheet of paper, torn by hand and nailed up.
+ *
+ * The edges are perturbed off a hash of the speaker, so every note is a different shape
+ * but the same speaker always gets the same one — a sheet that re-tore itself on each
+ * render would be unbearable. Drawn in Skia because a torn edge is a path, and put behind
+ * real <Text> because the quote has to stay selectable, scalable and translated.
+ */
+export const PinnedNote = memo(function PinnedNote({
+  width, height, seed, tone, isDark,
+}: { width: number; height: number; seed: string; tone: string; isDark: boolean }) {
+  const SPILL = 18;
+
+  const rnd = useMemo(() => {
+    let h = 2166136261;
+    for (let i = 0; i < seed.length; i++) {
+      h ^= seed.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    let v = Math.abs(h);
+    // A tiny deterministic generator: same speaker, same tear, every time.
+    return () => {
+      v = (v * 1103515245 + 12345) & 0x7fffffff;
+      return v / 0x7fffffff;
+    };
+  }, [seed]);
+
+  const { paper, shadow } = useMemo(() => {
+    const r = rnd;
+    const p = Skia.Path.Make();
+    const jitter = (n: number) => (r() - 0.5) * n;
+
+    // Walk the four edges, wobbling as it goes. The top edge stays calmest — that is
+    // the edge under the nail, the one that would be cut rather than torn.
+    const steps = 7;
+    p.moveTo(jitter(3), jitter(2));
+    for (let i = 1; i <= steps; i++) p.lineTo((width / steps) * i, jitter(2.4));
+    for (let i = 1; i <= steps; i++) p.lineTo(width + jitter(5), (height / steps) * i);
+    for (let i = steps - 1; i >= 0; i--) p.lineTo((width / steps) * i, height + jitter(5));
+    for (let i = steps - 1; i >= 0; i--) p.lineTo(jitter(5), (height / steps) * i);
+    p.close();
+
+    const sh = p.copy();
+    return { paper: p, shadow: sh };
+  }, [width, height, rnd]);
+
+  // Old paper, warmer where it has been handled.
+  const sheet = isDark ? '#E4D6B4' : '#F4EAD2';
+
+  return (
+    <Canvas
+      style={{
+        position: 'absolute',
+        left: -SPILL, top: -SPILL,
+        width: width + SPILL * 2, height: height + SPILL * 2,
+      }}
+      pointerEvents="none"
+    >
+      <Group transform={[{ translateX: SPILL, translateY: SPILL }]}>
+        {/* The sheet lifts off the board, so it casts. */}
+        <Group transform={[{ translateX: 2, translateY: 5 }]}>
+          <Path path={shadow} color="#000000" opacity={0.45}>
+            <BlurMask blur={7} style="normal" />
+          </Path>
+        </Group>
+
+        <Path path={paper} color={sheet} />
+        {/* Foxing: the paper darkens towards its edges the way old stock does. */}
+        <Path path={paper} opacity={0.5}>
+          <LinearGradient
+            start={vec(0, 0)} end={vec(width, height)}
+            colors={['#00000000', '#8A6A3A22', '#6B4E2833']}
+          />
+        </Path>
+        <Path path={paper} style="stroke" strokeWidth={1} color={tone} opacity={0.28} />
+      </Group>
+    </Canvas>
+  );
+});
+
+/** The nail holding a sheet to the board: a head, its shadow, and a point of light. */
+export const Nail = memo(function Nail({ size, tone }: { size: number; tone: string }) {
+  const c = size / 2;
+  return (
+    <Canvas style={{ width: size, height: size }} pointerEvents="none">
+      <Circle cx={c} cy={c + 1.5} r={size * 0.32} color="#000000" opacity={0.5}>
+        <BlurMask blur={2.5} style="normal" />
+      </Circle>
+      <Circle cx={c} cy={c} r={size * 0.3}>
+        <LinearGradient
+          start={vec(c - size * 0.3, c - size * 0.3)}
+          end={vec(c + size * 0.3, c + size * 0.3)}
+          colors={['#9A9089', '#4A423C', '#2A2420']}
+        />
+      </Circle>
+      {/* The glint that makes it read as metal rather than a dot. */}
+      <Circle cx={c - size * 0.09} cy={c - size * 0.09} r={size * 0.08} color="#E8E2D8" opacity={0.85} />
+      <Circle cx={c} cy={c} r={size * 0.3} style="stroke" strokeWidth={0.6} color={tone} opacity={0.35} />
+    </Canvas>
+  );
+});
 
 // ═════════════════════════════════════════════════════════════════════════════
 // CROWD OPINION — what the people actually think of you

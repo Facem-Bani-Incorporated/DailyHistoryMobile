@@ -113,16 +113,44 @@ function hash(s: string): number {
   return Math.abs(h);
 }
 
-/**
- * The icon for one ending.
- *
- * `english` is the ending's own English title and verdict; when nothing in it matches a
- * keyword the icon falls out of a hash of the event and ending together — so the grid is
- * still varied, and two events never open with the same row of symbols.
- */
-export function iconForEnding(eventId: string, endingId: string, english: string): Icon {
+/** The icon one ending would take on its own, ignoring what its neighbours took. */
+function preferredIcon(eventId: string, endingId: string, english: string): Icon {
   for (const [re, icon] of KEYWORDS) {
     if (re.test(english)) return icon;
   }
   return ENDING_ICONS[hash(`${eventId}:${endingId}`) % ENDING_ICONS.length];
+}
+
+/**
+ * Icons for a whole event's endings at once, all different.
+ *
+ * They have to be assigned together rather than one at a time: eight endings of the same
+ * story tend to share vocabulary, so picking independently gave two flames and two
+ * candles in the same grid — and a grid with repeats reads as a placeholder, which is
+ * exactly what the question marks it replaced looked like.
+ *
+ * A taken symbol sends the next claimant probing forward through the list from its own
+ * hash, so the substitute is still stable for that ending and still unrelated to its
+ * neighbours.
+ */
+export function iconsForEndings(
+  eventId: string,
+  endings: { id: string; english: string }[],
+): Record<string, Icon> {
+  const used = new Set<Icon>();
+  const out: Record<string, Icon> = {};
+
+  for (const e of endings) {
+    let icon = preferredIcon(eventId, e.id, e.english);
+    if (used.has(icon)) {
+      const start = hash(`${eventId}:${e.id}:alt`) % ENDING_ICONS.length;
+      for (let i = 0; i < ENDING_ICONS.length; i++) {
+        const cand = ENDING_ICONS[(start + i) % ENDING_ICONS.length];
+        if (!used.has(cand)) { icon = cand; break; }
+      }
+    }
+    used.add(icon);
+    out[e.id] = icon;
+  }
+  return out;
 }
