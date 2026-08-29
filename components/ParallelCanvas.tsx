@@ -501,9 +501,11 @@ function marchLayer(
 }
 
 export const PeasantMarch = memo(function PeasantMarch({
-  width, mood, unrest, isDark,
+  width, world, unrest, isDark,
 }: {
-  width: number; mood: SharedValue<number>; unrest: SharedValue<number>; isDark: boolean;
+  /** How far the world sits from the one that really happened: the sum of the four
+   *  meters against their baseline, negative for worse. */
+  width: number; world: SharedValue<number>; unrest: SharedValue<number>; isDark: boolean;
 }) {
   const clock = useSharedValue(0);
 
@@ -524,8 +526,18 @@ export const PeasantMarch = memo(function PeasantMarch({
     [],
   );
 
-  /** 0 content · 1 uneasy · 2 furious — the artboard's own mood axis, read off the meter. */
-  const temper = useDerivedValue(() => interpolate(mood.value, [100, 55, 10], [0, 1, 2], 'clamp'));
+  /**
+   * 0 content · 1 uneasy · 2 furious — the artboard's own three states, read off how the
+   * world compares to history.
+   *
+   * This used to hang off the public-mood tally, which needed 100 for content and 10 for
+   * furious and started every run at 50. Two of the three states were unreachable in
+   * practice and the crowd spent whole runs stuck mid-way between them. The bands the
+   * rest of the screen already speaks in are ±20, so those are the ends here: twenty
+   * points better than history and they are walking home content, twenty worse and they
+   * are coming for you.
+   */
+  const temper = useDerivedValue(() => interpolate(world.value, [20, 0, -20], [0, 1, 2], 'clamp'));
 
   // Livelier than the artboard on purpose: this sits in a 96px strip under a scrolling
   // screen, where a stroll reads as a stall.

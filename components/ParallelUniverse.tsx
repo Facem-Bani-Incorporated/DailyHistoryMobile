@@ -975,9 +975,9 @@ const wb = StyleSheet.create({
  * which is why it can fall while every other meter rises — a decision can be correct and
  * still be hated, and that gap is the most interesting thing the game has to say.
  */
-function MoodBar({ value, unrest, delta, label, moodLabel, moodColor, width, theme, isDark }: {
-  value: SharedValue<number>; unrest: SharedValue<number>; delta: number | null;
-  label: string; moodLabel: string; moodColor: string; width: number;
+function MoodBar({ world, unrest, delta, label, moodLabel, moodColor, bandColor, width, theme, isDark }: {
+  world: SharedValue<number>; unrest: SharedValue<number>; delta: number | null;
+  label: string; moodLabel: string; moodColor: string; bandColor: string; width: number;
   theme: any; isDark: boolean;
 }) {
   const floatY = useRef(new Animated.Value(0)).current;
@@ -1004,7 +1004,7 @@ function MoodBar({ value, unrest, delta, label, moodLabel, moodColor, width, the
   const popScale = pop.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 1.16, 1] });
 
   return (
-    <View style={[mb.wrap, { borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.09)' }]}>
+    <View style={[mb.wrap, { borderColor: bandColor + '55', backgroundColor: bandColor + '0D' }]}>
       <View style={mb.head}>
         <Text style={[mb.label, { color: theme.subtext }]}>{label}</Text>
         <View style={mb.right}>
@@ -1023,7 +1023,7 @@ function MoodBar({ value, unrest, delta, label, moodLabel, moodColor, width, the
           )}
         </View>
       </View>
-      <PeasantMarch width={width} mood={value} unrest={unrest} isDark={isDark} />
+      <PeasantMarch width={width} world={world} unrest={unrest} isDark={isDark} />
     </View>
   );
 }
@@ -1354,6 +1354,10 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
     stability: mStability, lives: mLives, progress: mProgress, freedom: mFreedom,
   };
   const moodSV = useSharedValue(MOOD_BASELINE);
+  // How far the world has moved from the one that really happened. The crowd walks on
+  // this, not on the mood tally: a trade that cancels out leaves the mood flat, and the
+  // march was stuck at 'uneasy' for entire runs because of it.
+  const worldSV = useSharedValue(0);
   /** 0-1: how divided the last set of voices was. Drives the chop on the mood tide. */
   const unrestSV = useSharedValue(0);
   const divergenceSV = useSharedValue(0);
@@ -1364,6 +1368,7 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
     for (const k of METERS) {
       meterSV[k].value = withTiming(meters[k], EASE);
     }
+    worldSV.value = withTiming(wellbeing(meters), EASE);
     divergenceSV.value = withTiming(
       (METERS.reduce((sum, k) => sum + Math.abs(meters[k] - BASELINE), 0) / (METERS.length * BASELINE)) * 100,
       EASE,
@@ -1389,6 +1394,7 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
     setWipe(0);
     setMoodTally({});
     for (const k of METERS) meterSV[k].value = BASELINE;
+    worldSV.value = 0;
     moodSV.value = MOOD_BASELINE;
     unrestSV.value = 0;
     divergenceSV.value = 0;
@@ -1600,7 +1606,8 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
               <WorldBand meters={meters} label={t.worldNow} t={t} theme={theme} isDark={isDark} />
 
               <MoodBar
-                value={moodSV}
+                world={worldSV}
+                bandColor={bandFor(wellbeing(meters)).color}
                 unrest={unrestSV}
                 delta={moodDelta}
                 label={t.mood}
