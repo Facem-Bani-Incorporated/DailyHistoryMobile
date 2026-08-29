@@ -217,8 +217,8 @@ function moodUnrest(reactions: Reaction[] | undefined): number {
  * way on purpose: a ruler who fixed the country and is hated for it should not score the
  * same as one who did both, and neither should score like one who did neither.
  */
-function runScore(meters: Record<MeterKey, number>, mood: number, rarity: string): number {
-  const world = (wellbeing(meters) + 200) / 400;   // 0…1, reality at 0.5
+function runScore(worldPct: number, mood: number, rarity: string): number {
+  const world = (worldPct + 100) / 200;            // 0…1, reality at 0.5
   const people = mood / 100;                       // 0…1, reality at 0.5
   // The weights sum to 1 so a run that changes nothing lands at exactly 0.5 and grades
   // in the middle. They summed to 0.88 before, which quietly made "the same as history"
@@ -933,6 +933,70 @@ const cc = StyleSheet.create({
 // HOW WELL IS IT GOING — the one reading that answers the whole question
 // ═════════════════════════════════════════════════════════════════════════════
 /** The four meters against reality, summed. -200 (ruin) … +200 (golden age). */
+/**
+ * How far this particular tree lets a player go, best and worst, from each node onward.
+ *
+ * The four effects are authored by a model, and how boldly it uses the -30..+30 it is
+ * given varies from event to event. On one tree the most ruinous run available sums to
+ * -25; on the next it is -90. Drawing both on a fixed scale means the first one barely
+ * moves a needle — a player who took every reckless option in the tree and broke the
+ * century got a number that looked like a rounding error.
+ *
+ * So the tree measures itself. Walk it once, and the worst reachable total becomes the
+ * bottom of every graph and the best becomes the top. Taking every bad option always
+ * bottoms out the dial, whatever numbers the day happened to be written with.
+ */
+type Span = { lo: number; hi: number };
+type Reach = { world: Span; meter: Record<MeterKey, Span> };
+
+const ZERO_REACH = (): Reach => ({
+  world: { lo: 0, hi: 0 },
+  meter: { stability: { lo: 0, hi: 0 }, lives: { lo: 0, hi: 0 }, progress: { lo: 0, hi: 0 }, freedom: { lo: 0, hi: 0 } },
+});
+
+function reachOf(nodes: Node[], root: string): Reach {
+  const byId: Record<string, Node> = Object.fromEntries(nodes.map(n => [n.id, n]));
+  const memo: Record<string, Reach> = {};
+  const seen = new Set<string>();
+
+  const walk = (id: string): Reach => {
+    if (memo[id]) return memo[id];
+    const node = byId[id];
+    // A missing child or a cycle contributes nothing rather than looping forever.
+    if (!node?.choices?.length || seen.has(id)) return ZERO_REACH();
+    seen.add(id);
+
+    const out = ZERO_REACH();
+    let first = true;
+    for (const c of node.choices) {
+      const rest = walk(c.next);
+      const net = METERS.reduce((sum, k) => sum + (c.effects?.[k] ?? 0), 0);
+      const world = { lo: net + rest.world.lo, hi: net + rest.world.hi };
+      if (first) out.world = world;
+      else out.world = { lo: Math.min(out.world.lo, world.lo), hi: Math.max(out.world.hi, world.hi) };
+
+      for (const k of METERS) {
+        const e = c.effects?.[k] ?? 0;
+        const span = { lo: e + rest.meter[k].lo, hi: e + rest.meter[k].hi };
+        if (first) out.meter[k] = span;
+        else out.meter[k] = { lo: Math.min(out.meter[k].lo, span.lo), hi: Math.max(out.meter[k].hi, span.hi) };
+      }
+      first = false;
+    }
+    seen.delete(id);
+    memo[id] = out;
+    return out;
+  };
+
+  return walk(root);
+}
+
+/** A raw total as a percentage of the furthest this tree goes in that direction. */
+function norm(raw: number, span: Span): number {
+  if (raw >= 0) return span.hi > 0 ? Math.min(100, (raw / span.hi) * 100) : 0;
+  return span.lo < 0 ? Math.max(-100, (raw / -span.lo) * 100) : 0;
+}
+
 function wellbeing(meters: Record<MeterKey, number>): number {
   return METERS.reduce((sum, k) => sum + (meters[k] - BASELINE), 0);
 }
@@ -955,11 +1019,12 @@ const bandFor = (w: number) => BANDS.find(b => w < b.max) ?? BANDS[BANDS.length 
  * four separate meters never quite give — they can all move and still leave you unsure
  * whether you are winning.
  */
-function WorldBand({ meters, label, t, theme, isDark }: {
-  meters: Record<MeterKey, number>; label: string;
+function WorldBand({ world, label, t, theme, isDark }: {
+  /** Already normalised: -100 is the worst this tree allows, +100 the best. */
+  world: number; label: string;
   t: Record<string, string>; theme: any; isDark: boolean;
 }) {
-  const w = wellbeing(meters);
+  const w = Math.round(world);
   const band = bandFor(w);
 
   return (
@@ -1310,6 +1375,10 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
     () => (universe?.nodes ?? []).filter(n => !n.choices?.length),
     [universe],
   );
+  const reach = useMemo(
+    () => reachOf(universe?.nodes ?? [], universe?.root ?? ''),
+    [universe],
+  );
   const enIndex = useMemo(() => englishIndex(event?.parallelUniverse), [event?.parallelUniverse]);
   // Assigned for the whole grid at once so no two worlds wear the same symbol.
   const endingIcons = useMemo(
@@ -1392,9 +1461,9 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
 
   useEffect(() => {
     for (const k of METERS) {
-      meterSV[k].value = withTiming(meters[k], EASE);
+      meterSV[k].value = withTiming(shownMeters[k], EASE);
     }
-    worldSV.value = withTiming(wellbeing(meters), EASE);
+    worldSV.value = withTiming(worldPct, EASE);
     divergenceSV.value = withTiming(
       (METERS.reduce((sum, k) => sum + Math.abs(meters[k] - BASELINE), 0) / (METERS.length * BASELINE)) * 100,
       EASE,
@@ -1427,6 +1496,15 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
 
   const node: Node | undefined = byId[nodeId];
   const step = route.length;
+
+  /** Where the world sits, as a share of how far this tree can be pushed. */
+  const worldPct = useMemo(() => norm(wellbeing(meters), reach.world), [meters, reach]);
+
+  /** The meters as every graph draws them: 50 is history, and a full bar is the most
+   *  this tree lets that meter move. The raw values keep running the game underneath. */
+  const shownMeters = useMemo(() => Object.fromEntries(
+    METERS.map(k => [k, 50 + norm(meters[k] - BASELINE, reach.meter[k]) / 2]),
+  ) as Record<MeterKey, number>, [meters, reach]);
 
   const begin = useCallback(() => {
     if (!universe) return;
@@ -1483,7 +1561,7 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
         return next;
       });
       setFlash(f => ({ net, nonce: f.nonce + 1 }));
-      setHistory(h => [...h, { world: wellbeing(next), mood: nextMood }]);
+      setHistory(h => [...h, { world: norm(wellbeing(next), reach.world), mood: nextMood }]);
       // A second, quieter haptic under the flash: the screen and the hand agree on
       // whether that went well before a single number has been read.
       if (net !== 0) haptic(net > 0 ? 'success' : 'warning');
@@ -1545,7 +1623,7 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
   const divergence = Math.round(
     (METERS.reduce((s, k) => s + Math.abs(meters[k] - BASELINE), 0) / (METERS.length * BASELINE)) * 100,
   );
-  const score = runScore(meters, publicMood, node?.rarity ?? '');
+  const score = runScore(worldPct, publicMood, node?.rarity ?? '');
   const grade = gradeFor(score);
 
   const rarityLabel = (r: string) => t[r] ?? t.common;
@@ -1627,11 +1705,11 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
               {/* Four bars can all move and still leave you unsure whether you are
                   winning. These two say so outright, and they stay on screen the whole
                   run so the player watches them move rather than meeting them at the end. */}
-              <WorldBand meters={meters} label={t.worldNow} t={t} theme={theme} isDark={isDark} />
+              <WorldBand world={worldPct} label={t.worldNow} t={t} theme={theme} isDark={isDark} />
 
               <MoodBar
                 world={worldSV}
-                bandColor={bandFor(wellbeing(meters)).color}
+                bandColor={bandFor(worldPct).color}
                 unrest={unrestSV}
                 delta={moodDelta}
                 label={t.mood}
@@ -1718,19 +1796,19 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
               <Text style={[g.actLabel, { color: theme.subtext }]}>{t.society}</Text>
               <SocietyImpact
                 width={W - 44}
-                values={METERS.map(k => meters[k])}
+                values={METERS.map(k => shownMeters[k])}
                 baseline={BASELINE}
                 isDark={isDark}
               />
               <View style={g.towerLegend}>
                 <Text style={[g.towerName, { color: theme.subtext }]}>{t.realWorld2}</Text>
-                <Text style={[g.towerDelta, { color: bandFor(wellbeing(meters)).color }]}>
-                  {wellbeing(meters) > 0 ? `+${wellbeing(meters)}` : wellbeing(meters)}
+                <Text style={[g.towerDelta, { color: bandFor(worldPct).color }]}>
+                  {worldPct > 0 ? `+${Math.round(worldPct)}` : Math.round(worldPct)}
                 </Text>
                 <Text style={[g.towerName, { color: gold, textAlign: 'right' }]}>{t.yourWorld2}</Text>
               </View>
-              <Text style={[g.bandWord, { color: bandFor(wellbeing(meters)).color }]}>
-                {t[bandFor(wellbeing(meters)).key]}
+              <Text style={[g.bandWord, { color: bandFor(worldPct).color }]}>
+                {t[bandFor(worldPct).key]}
               </Text>
 
               {/* ── ACT THREE: what people made of you ─────────────────── */}
@@ -1784,14 +1862,14 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
                 </View>
                 <ChangeBars
                   width={W - 44 - 108}
-                  values={METERS.map(k => meters[k])}
+                  values={METERS.map(k => shownMeters[k])}
                   baseline={BASELINE}
                   hues={METERS.map(k => METER_COLOR[k])}
                   isDark={isDark}
                 />
                 <View style={g.changeLabels}>
                   {METERS.map(k => {
-                    const d = meters[k] - BASELINE;
+                    const d = Math.round(shownMeters[k] - BASELINE);
                     return (
                       <View key={k} style={g.changeRowRight}>
                         <Text style={[g.changeDelta, { color: d === 0 ? theme.subtext : d > 0 ? METER_COLOR[k] : '#D9603F' }]}>
