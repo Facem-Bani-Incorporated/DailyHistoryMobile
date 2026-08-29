@@ -40,7 +40,7 @@ import {
 
 import {
   BranchMap, ConsequenceBloom, CrowdOpinion, DivergenceField, ForkMark, PeasantMarch,
-  NeonFrame, Nail, PinnedNote, SceneWipe, ChangeBars, WoodWall, WorldDial,
+  Nail, PinnedNote, SceneWipe, ChangeBars, WoodWall, WorldDial,
   RarityAura, SkiaMeter, SocietyImpact, VerdictSeal,
   METER_WIDTH,
 } from './ParallelCanvas';
@@ -724,16 +724,16 @@ const st_ = StyleSheet.create({
  * Risk as a colour, on a ramp rather than in three buckets.
  *
  * Three fixed tones meant 32 and 65 lit the same green and 65 and 66 looked like
- * different worlds. The tube is now the only reading of danger on the card, so it has to
- * move with the number: green at 0, amber through the middle, red at 100.
+ * different worlds. The button's whole outline is the warning, so it has to move with
+ * the number: green at 0, amber through the middle, red at 100.
  */
 const RISK_STOPS: { at: number; rgb: [number, number, number] }[] = [
-  { at: 0,   rgb: [63, 224, 138] },
-  { at: 50,  rgb: [255, 193, 77] },
-  { at: 100, rgb: [255, 92, 61] },
+  { at: 0,   rgb: [61, 220, 132] },
+  { at: 50,  rgb: [246, 190, 74] },
+  { at: 100, rgb: [255, 84, 60] },
 ];
 
-function riskTone(risk: number): string {
+function riskMix(risk: number): [number, number, number] {
   const r = Math.max(0, Math.min(100, Number.isFinite(risk) ? risk : 50));
   let lo = RISK_STOPS[0];
   let hi = RISK_STOPS[RISK_STOPS.length - 1];
@@ -741,24 +741,27 @@ function riskTone(risk: number): string {
     if (s.at <= r) lo = s;
     if (s.at >= r) { hi = s; break; }
   }
-  if (hi.at === lo.at) return `rgb(${lo.rgb.join(',')})`;
+  if (hi.at === lo.at) return lo.rgb;
   const k = (r - lo.at) / (hi.at - lo.at);
-  const mix = lo.rgb.map((c, i) => Math.round(c + (hi.rgb[i] - c) * k));
-  return `rgb(${mix.join(',')})`;
+  return lo.rgb.map((c, i) => Math.round(c + (hi.rgb[i] - c) * k)) as [number, number, number];
 }
+
+const rgba = (c: [number, number, number], a: number) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
 
 /**
  * One option: a button that says what you do, and how badly it can go.
  *
- * It had accumulated a circular gauge, a committed value, a line of prose about the
- * trade-off and a row of chips — five things to read before making one decision, times
- * three cards on screen. What is left is the action and its risk, and the frame carries
- * the warning: the neon tube runs the whole outline in the risk's own colour, so which
- * option is the reckless one is answered before a word of it is read.
+ * The glow used to be a Skia canvas positioned absolutely against a measured box. It was
+ * never in register — the tube drew itself off the card, over the text above it and off
+ * the side of the screen, and the risk ended up outside the very frame that was supposed
+ * to be rating it. Nothing about that arrangement can be trusted: the canvas is laid out
+ * from numbers taken a frame earlier, while the words are laid out by the layout engine
+ * now, and the two only agree by luck.
  *
- * The effect chips stay for PRO, because they are the preview that is paid for, and they
- * are numbers rather than prose — they sit at the end of the risk line instead of on a
- * row of their own.
+ * So there is no canvas here. The outline is a real border on the same view as the
+ * words, which the layout engine cannot put anywhere else, and the light around it is
+ * that view's own shadow in the same colour. The glow follows the button because it IS
+ * the button.
  */
 function ChoiceCard({ choice, onPick, disabled, exiting, chosen, showEffects, gold, theme, isDark, delay, t }: {
   choice: Choice; onPick: () => void; disabled: boolean; exiting: boolean; chosen: boolean;
@@ -767,7 +770,6 @@ function ChoiceCard({ choice, onPick, disabled, exiting, chosen, showEffects, go
 }) {
   const enter = useRef(new Animated.Value(0)).current;
   const exit = useRef(new Animated.Value(0)).current;
-  const [box, setBox] = useState({ w: 0, h: 0 });
 
   useEffect(() => {
     Animated.spring(enter, {
@@ -786,7 +788,7 @@ function ChoiceCard({ choice, onPick, disabled, exiting, chosen, showEffects, go
   // you should feel which door you walked through.
   const scale = Animated.multiply(
     enter.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1] }),
-    exit.interpolate({ inputRange: [0, 1], outputRange: [1, chosen ? 1.05 : 0.9] }),
+    exit.interpolate({ inputRange: [0, 1], outputRange: [1, chosen ? 1.04 : 0.9] }),
   );
   const translateX = exit.interpolate({ inputRange: [0, 1], outputRange: [0, chosen ? 0 : -W] });
   const opacity = Animated.multiply(
@@ -795,64 +797,68 @@ function ChoiceCard({ choice, onPick, disabled, exiting, chosen, showEffects, go
   );
 
   const risk = typeof choice.risk === 'number' ? choice.risk : 50;
-  const tone = riskTone(risk);
+  const mix = riskMix(risk);
+  const tone = chosen ? gold : rgba(mix, 1);
   const word = risk >= 66 ? t.riskHigh : risk >= 33 ? t.riskMid : t.riskLow;
 
+  // Dimmed once a choice is made, so the three cards stop competing on the way out.
+  const lit = disabled && !chosen ? 0.35 : 1;
+
   return (
-    <Animated.View style={{ opacity, transform: [{ scale }, { translateX }], marginBottom: 20 }}>
-      {/* The tube is positioned against THIS view, which carries no padding and no style
-          of its own. An absolutely-positioned child is laid out against its parent's
-          padding edge, so measuring the padded card itself put the frame a padding's
-          width out of register with the words inside it. */}
-      <View
-        onLayout={(e) => {
-          const { width, height } = e.nativeEvent.layout;
-          setBox(b => (b.w === width && b.h === height ? b : { w: width, h: height }));
-        }}
+    <Animated.View style={{ opacity, transform: [{ scale }, { translateX }], marginBottom: 18 }}>
+      <Pressable
+        onPress={onPick}
+        disabled={disabled}
+        accessibilityRole="button"
+        accessibilityLabel={`${choice.label}. ${word}, ${risk}.`}
+        style={({ pressed }) => [
+          cc.card,
+          {
+            borderColor: tone,
+            // Opaque on purpose. iOS derives a shadow from the layer's alpha, so a
+            // see-through card gives a faint smear instead of a glow; the risk's colour
+            // goes on as a tint above this instead of into it.
+            backgroundColor: isDark ? '#100D19' : '#FFFFFF',
+            // The neon. iOS paints it from this view's own rounded box, so it can never
+            // sit anywhere but around the button.
+            shadowColor: tone,
+            shadowOpacity: (pressed ? 0.85 : 0.55) * lit,
+            shadowRadius: pressed ? 16 : 12,
+            shadowOffset: { width: 0, height: 0 },
+            opacity: lit,
+            transform: [{ scale: pressed ? 0.995 : 1 }],
+          },
+        ]}
       >
-        {box.w > 0 && (
-          <NeonFrame
-            width={box.w} height={box.h} radius={CARD_R}
-            tone={chosen ? gold : tone}
-            intensity={chosen ? 1 : disabled ? 0.3 : 1}
-          />
-        )}
+        {/* The tone, laid over the opaque card, and a hairline just inside the border.
+            Real neon has a hot core inside the coloured tube; the hairline is the
+            cheapest honest version of it. Both are plain views sized by the layout
+            engine off this button's own box, so neither can drift out of register. */}
+        <View style={[cc.tint, { backgroundColor: rgba(mix, isDark ? 0.09 : 0.06) }]} pointerEvents="none" />
+        <View style={[cc.inner, { borderColor: rgba(mix, isDark ? 0.3 : 0.22) }]} pointerEvents="none" />
 
-        <Pressable
-          onPress={onPick}
-          disabled={disabled}
-          accessibilityRole="button"
-          accessibilityLabel={`${choice.label}. ${word}, ${risk}.`}
-          style={({ pressed }) => [
-            cc.card,
-            {
-              backgroundColor: isDark ? 'rgba(10,8,16,0.72)' : 'rgba(255,255,255,0.7)',
-              opacity: pressed ? 0.92 : 1,
-            },
-          ]}
-        >
-          <Text style={[cc.label, { color: theme.text }]}>{choice.label}</Text>
+        <Text style={[cc.label, { color: theme.text }]}>{choice.label}</Text>
 
-          <View style={cc.riskRow}>
-            <View style={[cc.dot, { backgroundColor: tone }]} />
-            <Text style={[cc.riskWord, { color: tone }]}>{word}</Text>
-            <Text style={[cc.riskNum, { color: tone }]}>{risk}</Text>
-
-            {showEffects && (
-              <View style={cc.chips}>
-                {METERS.filter(k => choice.effects[k] !== 0).map(k => (
-                  <View key={k} style={[cc.chip, { borderColor: METER_COLOR[k] + '55', backgroundColor: METER_COLOR[k] + '14' }]}>
-                    <MaterialCommunityIcons name={METER_ICON[k]} size={10} color={METER_COLOR[k]} />
-                    <Text style={[cc.chipText, { color: METER_COLOR[k] }]}>
-                      {choice.effects[k] > 0 ? `+${choice.effects[k]}` : choice.effects[k]}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            )}
+        <View style={cc.foot}>
+          <View style={[cc.pill, { borderColor: rgba(mix, 0.55), backgroundColor: rgba(mix, 0.14) }]}>
+            <Text style={[cc.pillWord, { color: tone }]}>{word}</Text>
+            <Text style={[cc.pillNum, { color: tone }]}>{risk}</Text>
           </View>
-        </Pressable>
-      </View>
+
+          {showEffects && (
+            <View style={cc.chips}>
+              {METERS.filter(k => choice.effects[k] !== 0).map(k => (
+                <View key={k} style={[cc.chip, { borderColor: METER_COLOR[k] + '55', backgroundColor: METER_COLOR[k] + '14' }]}>
+                  <MaterialCommunityIcons name={METER_ICON[k]} size={10} color={METER_COLOR[k]} />
+                  <Text style={[cc.chipText, { color: METER_COLOR[k] }]}>
+                    {choice.effects[k] > 0 ? `+${choice.effects[k]}` : choice.effects[k]}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+      </Pressable>
     </Animated.View>
   );
 }
@@ -860,16 +866,37 @@ function ChoiceCard({ choice, onPick, disabled, exiting, chosen, showEffects, go
 const CARD_R = 18;
 
 const cc = StyleSheet.create({
-  card: { borderRadius: CARD_R, paddingHorizontal: 20, paddingVertical: 18 },
+  card: {
+    borderRadius: CARD_R,
+    borderWidth: 1.5,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    // Android has no coloured shadow; the border carries it there.
+    elevation: 3,
+  },
+  tint: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    borderRadius: CARD_R - 1.5,
+  },
+  inner: {
+    position: 'absolute',
+    top: 2.5, left: 2.5, right: 2.5, bottom: 2.5,
+    borderRadius: CARD_R - 2.5,
+    borderWidth: 1,
+  },
 
-  label: { fontSize: 20, fontWeight: '800', letterSpacing: -0.4, lineHeight: 26 },
+  label: { fontSize: 19, fontWeight: '800', letterSpacing: -0.4, lineHeight: 25 },
 
-  riskRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 13 },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  riskWord: { fontSize: 11, fontWeight: '900', letterSpacing: 1.1, textTransform: 'uppercase' },
-  riskNum: { fontSize: 13, fontWeight: '900', fontVariant: ['tabular-nums'] },
+  foot: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 13 },
+  pill: {
+    flexDirection: 'row', alignItems: 'center', gap: 7,
+    borderWidth: 1, borderRadius: 999,
+    paddingHorizontal: 11, paddingVertical: 4.5,
+  },
+  pillWord: { fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  pillNum: { fontSize: 12.5, fontWeight: '900', fontVariant: ['tabular-nums'] },
 
-  // Pushed to the far end of the risk line, so a PRO card is the same shape as a free one.
   chips: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 5 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 3, borderWidth: 1, borderRadius: 7, paddingHorizontal: 6, paddingVertical: 2.5 },
   chipText: { fontSize: 11, fontWeight: '800', fontVariant: ['tabular-nums'] },
