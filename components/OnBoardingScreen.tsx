@@ -16,15 +16,8 @@ import {
   Trophy,
 } from 'lucide-react-native';
 
-import {
-  INTEREST_CATEGORIES,
-  INTEREST_LABELS,
-  INTEREST_UI,
-  normalizeInterestLang,
-} from '../config/interests';
 import { useLanguage } from '../context/LanguageContext';
 import { useRevenueCat } from '../context/RevenueCatContext';
-import { usePreferencesStore } from '../store/usePreferencesStore';
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -50,7 +43,7 @@ const GOLD = '#D4A017';
 const GOLD_LIGHT = '#F3CB55';
 const INK = '#0A0B0E';
 
-type Step = 'language' | 'interests' | 'features' | 'notifications' | 'subscription';
+type Step = 'language' | 'features' | 'notifications' | 'subscription';
 
 // Language picker options (mirrors the profile modal).
 const LANGUAGES: { code: 'en' | 'ro' | 'fr' | 'de' | 'es'; native: string; label: string; flag: string }[] = [
@@ -120,11 +113,6 @@ export default function OnboardingScreen({ onComplete, startStep = 'features' }:
   const [step, setStep] = useState<Step>(startStep);
   const { isPro, presentPaywall } = useRevenueCat();
   const { language, setLanguage } = useLanguage();
-  const completeInterestQuiz = usePreferencesStore(s => s.completeInterestQuiz);
-  const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
-  const iLang = normalizeInterestLang(language);
-  const toggleInterest = (key: string) =>
-    setSelectedInterests(prev => (prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]));
 
   // Standalone PRO upsell (returning account). If they're already PRO there's
   // nothing to show — exit straight away (handles late RevenueCat hydration).
@@ -268,58 +256,7 @@ export default function OnboardingScreen({ onComplete, startStep = 'features' }:
             </ScrollView>
           </Animated.View>
           <Animated.View style={[ui.ctaWrap, enterStyle]}>
-            <PrimaryButton label={L.cta} onPress={() => setStep('interests')} trailingChevron />
-          </Animated.View>
-        </View>
-      </View>
-    );
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // INTERESTS (new account) — pick topics; the home feed ranks matches first
-  // ─────────────────────────────────────────────────────────────────────────────
-  if (step === 'interests') {
-    const U = INTEREST_UI[iLang];
-    const labels = INTEREST_LABELS[iLang];
-    return (
-      <View style={ui.screen}>
-        <View style={ui.glow} pointerEvents="none" />
-        <View style={[ui.pad, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 }]}>
-          <View style={ui.topBar}>
-            <View style={ui.brand}>
-              <LinearGradient colors={[GOLD_LIGHT, GOLD]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={ui.brandMark}>
-                <Text style={ui.brandLetter}>D</Text>
-              </LinearGradient>
-              <Text style={ui.brandName}>DailyHistory</Text>
-            </View>
-          </View>
-          <Animated.View style={[enterStyle, { flex: 1 }]}>
-            <Text style={ui.stepTitle}>{U.title}</Text>
-            <Text style={ui.stepSub}>{U.subtitle}</Text>
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={ui.interestGrid}>
-              {INTEREST_CATEGORIES.map(({ key, color, Icon }) => {
-                const on = selectedInterests.includes(key);
-                return (
-                  <TouchableOpacity
-                    key={key}
-                    activeOpacity={0.8}
-                    onPress={() => toggleInterest(key)}
-                    style={[ui.interestChip, { borderColor: on ? color : 'rgba(255,255,255,0.10)', backgroundColor: on ? color + '1E' : 'rgba(255,255,255,0.03)' }]}
-                  >
-                    <Icon color={on ? color : '#9AA0AC'} size={20} strokeWidth={2.2} />
-                    <Text style={[ui.interestLabel, { color: on ? '#F4F4F5' : '#C7CBD2' }]} numberOfLines={1}>
-                      {labels[key] ?? key}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </Animated.View>
-          <Animated.View style={[ui.ctaWrap, enterStyle]}>
-            <PrimaryButton label={U.cta} onPress={() => { completeInterestQuiz(selectedInterests); setStep('features'); }} trailingChevron />
-            <TouchableOpacity onPress={() => { completeInterestQuiz([]); setStep('features'); }} style={ui.skipBtn} hitSlop={8}>
-              <Text style={ui.interestSkipText}>{U.skip}</Text>
-            </TouchableOpacity>
+            <PrimaryButton label={L.cta} onPress={() => setStep('features')} trailingChevron />
           </Animated.View>
         </View>
       </View>
@@ -763,7 +700,7 @@ const ui = StyleSheet.create({
     marginLeft: 62,
   },
 
-  // Language & interests steps (new account)
+  // Language step (new account)
   stepIconWrap: {
     width: 56, height: 56, borderRadius: 18, alignItems: 'center', justifyContent: 'center',
     backgroundColor: 'rgba(212,160,23,0.10)', borderWidth: StyleSheet.hairlineWidth,
@@ -776,11 +713,6 @@ const ui = StyleSheet.create({
   langFlagText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
   langNative: { fontSize: 15.5, fontWeight: '700' },
   langLabel: { color: '#7C8290', fontSize: 12.5, marginTop: 1 },
-  interestGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, paddingBottom: 12, justifyContent: 'center' },
-  interestChip: { flexDirection: 'row', alignItems: 'center', gap: 9, paddingHorizontal: 15, paddingVertical: 13, borderRadius: 14, borderWidth: 1.5 },
-  interestLabel: { fontSize: 14.5, fontWeight: '700' },
-  skipBtn: { alignItems: 'center', marginTop: 12 },
-  interestSkipText: { color: '#7C8290', fontSize: 14, fontWeight: '600' },
 
   // CTA shared
   ctaWrap: {

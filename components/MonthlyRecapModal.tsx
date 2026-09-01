@@ -180,20 +180,20 @@ export default function MonthlyRecapModal({ visible, onClose }: { visible: boole
               <>
                 {/* Row 1 */}
                 <View style={ms.row}>
-                  <StatCard icon={<BookOpen size={18} color="#FFB300" strokeWidth={2} />} value={recap.storiesRead} label={tx(language, 'stories')} delay={150} isDark={isDark} theme={theme} accent="#FFB300" />
-                  <StatCard icon={<TrendingUp size={18} color="#10B981" strokeWidth={2} />} value={`+${recap.xpEarned.toLocaleString()}`} label={tx(language, 'xp')} delay={250} isDark={isDark} theme={theme} accent="#10B981" />
+                  <StatCard icon={<BookOpen size={18} color="#FFB300" strokeWidth={2} />} value={recap.storiesRead ?? 0} label={tx(language, 'stories')} delay={150} isDark={isDark} theme={theme} accent="#FFB300" />
+                  <StatCard icon={<TrendingUp size={18} color="#10B981" strokeWidth={2} />} value={`+${(recap.xpEarned ?? 0).toLocaleString()}`} label={tx(language, 'xp')} delay={250} isDark={isDark} theme={theme} accent="#10B981" />
                 </View>
 
                 {/* Row 2 */}
                 <View style={ms.row}>
-                  <StatCard icon={<Flame size={18} color="#FF6D00" strokeWidth={2} />} value={recap.activeDays} label={tx(language, 'activeDays')} delay={350} isDark={isDark} theme={theme} accent="#FF6D00" />
-                  <StatCard icon={<Target size={18} color="#A855F7" strokeWidth={2} />} value={recap.missionsCompleted} label={tx(language, 'missions')} delay={450} isDark={isDark} theme={theme} accent="#A855F7" />
+                  <StatCard icon={<Flame size={18} color="#FF6D00" strokeWidth={2} />} value={recap.activeDays ?? 0} label={tx(language, 'activeDays')} delay={350} isDark={isDark} theme={theme} accent="#FF6D00" />
+                  <StatCard icon={<Target size={18} color="#A855F7" strokeWidth={2} />} value={recap.missionsCompleted ?? 0} label={tx(language, 'missions')} delay={450} isDark={isDark} theme={theme} accent="#A855F7" />
                 </View>
 
                 {/* Row 3 */}
                 <View style={ms.row}>
-                  <StatCard icon={<Zap size={18} color="#3B82F6" strokeWidth={2} />} value={recap.quizzesCompleted} label={tx(language, 'quizzes')} delay={550} isDark={isDark} theme={theme} accent="#3B82F6" />
-                  <StatCard icon={<Star size={18} color={gold} strokeWidth={2} />} value={recap.categoriesExplored} label={tx(language, 'categories')} delay={650} isDark={isDark} theme={theme} accent={gold} />
+                  <StatCard icon={<Zap size={18} color="#3B82F6" strokeWidth={2} />} value={recap.quizzesCompleted ?? 0} label={tx(language, 'quizzes')} delay={550} isDark={isDark} theme={theme} accent="#3B82F6" />
+                  <StatCard icon={<Star size={18} color={gold} strokeWidth={2} />} value={recap.categoriesExplored ?? 0} label={tx(language, 'categories')} delay={650} isDark={isDark} theme={theme} accent={gold} />
                 </View>
 
                 {/* Top category */}
@@ -214,11 +214,11 @@ export default function MonthlyRecapModal({ visible, onClose }: { visible: boole
                     <Text style={[ms.levelName, { color: theme.text }]}>{levelName}</Text>
                     <Text style={[ms.levelLabel, { color: gold }]}>{tx(language, 'level')} {level.level}</Text>
                   </View>
-                  <Text style={[ms.levelXP, { color: gold }]}>{totalXP.toLocaleString()} XP</Text>
+                  <Text style={[ms.levelXP, { color: gold }]}>{(totalXP ?? 0).toLocaleString()} XP</Text>
                 </View>
 
                 <Text style={[ms.motivation, { color: theme.subtext }]}>
-                  {getMotivation(recap.storiesRead, recap.missionsCompleted, language)}
+                  {getMotivation(recap.storiesRead ?? 0, recap.missionsCompleted ?? 0, language)}
                 </Text>
               </>
             )}

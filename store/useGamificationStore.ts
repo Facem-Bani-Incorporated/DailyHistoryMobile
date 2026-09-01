@@ -749,7 +749,12 @@ export const useGamificationStore = create<GamificationState>()(
       getUnseenMonthlyRecap: () => {
         const { monthlyRecaps } = get();
         for (const key of Object.keys(monthlyRecaps).sort().reverse()) {
-          if (!monthlyRecaps[key].seen) return monthlyRecaps[key];
+          // A hole in the map is survivable, a crash here is not: this runs on the
+          // launch path, so reading .seen off a missing entry closes the app before
+          // the home screen ever appears. Holes get here from the server blob and
+          // from the DEV re-trigger button.
+          const recap = monthlyRecaps[key];
+          if (recap && !recap.seen) return recap;
         }
         return null;
       },
@@ -784,8 +789,8 @@ export const useGamificationStore = create<GamificationState>()(
         return recap;
       },
 
-      getLatestRecap: () => { const { weeklyRecaps } = get(); const keys = Object.keys(weeklyRecaps).sort().reverse(); return keys.length > 0 ? weeklyRecaps[keys[0]] : null; },
-      getUnseenRecap: () => { const { weeklyRecaps } = get(); for (const key of Object.keys(weeklyRecaps).sort().reverse()) { if (!weeklyRecaps[key].seen) return weeklyRecaps[key]; } return null; },
+      getLatestRecap: () => { const { weeklyRecaps } = get(); const keys = Object.keys(weeklyRecaps).sort().reverse(); return keys.length > 0 ? (weeklyRecaps[keys[0]] ?? null) : null; },
+      getUnseenRecap: () => { const { weeklyRecaps } = get(); for (const key of Object.keys(weeklyRecaps).sort().reverse()) { const recap = weeklyRecaps[key]; if (recap && !recap.seen) return recap; } return null; },
       markRecapSeen: (weekKey: string) => { const { weeklyRecaps } = get(); if (weeklyRecaps[weekKey]) set({ weeklyRecaps: { ...weeklyRecaps, [weekKey]: { ...weeklyRecaps[weekKey], seen: true } } }); },
 
       switchUser: async (userId: string) => {

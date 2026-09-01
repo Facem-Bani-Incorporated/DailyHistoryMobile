@@ -1028,11 +1028,20 @@ export default function HomeScreen() {
   // Deferred so it lands after the day's content has painted rather than on a blank
   // screen, and only once per launch — reopening it after the user closed it would be
   // a nag, not a reward.
+  // Android gives every RN Modal its own Dialog window, and RevenueCat's paywall is
+  // a native view on top of that. Two of them opening inside the same second is what
+  // takes the process down, so the launch surfaces take turns: whoever gets here
+  // first wins and the others stand down for this launch.
+  const launchModalBusyRef = useRef(false);
   const wheelAutoShownRef = useRef(false);
   useEffect(() => {
     if (wheelAutoShownRef.current || loading || !wheelReady) return;
     wheelAutoShownRef.current = true;
-    const id = setTimeout(() => setWheelOpen(true), 1400);
+    const id = setTimeout(() => {
+      if (launchModalBusyRef.current) return;
+      launchModalBusyRef.current = true;
+      setWheelOpen(true);
+    }, 1400);
     return () => clearTimeout(id);
   }, [loading, wheelReady]);
   const [tab, setTab] = useState<Tab>('today');
@@ -1233,7 +1242,14 @@ export default function HomeScreen() {
     // recordVisit() is what secures the streak, so today's 9 PM reminder is now moot.
     cancelStreakReminderForToday().catch(() => {});
     try { genMonthlyRecap(); } catch { }
-    setTimeout(() => { if (getUnseenMonthlyRecap()) setRecapVis(true); }, 2000);
+    // Unguarded, this throws straight into the timer queue, where no error boundary
+    // can see it — which on a release build is a silent close.
+    setTimeout(() => {
+      try {
+        if (launchModalBusyRef.current) return;
+        if (getUnseenMonthlyRecap()) { launchModalBusyRef.current = true; setRecapVis(true); }
+      } catch { }
+    }, 2000);
     Promise.all([fetchOne(0), fetchOne(-1), fetchOne(1), fetchOne(2)]).then(() => {
       const todayPg = mem.current[mk('free', isoFor(0))];
       const gotData = !!todayPg && todayPg.data.length > 0;
@@ -1524,7 +1540,7 @@ export default function HomeScreen() {
         <AchievementToast />
         <CelebrationOverlay />
 
-        <DailyWheel visible={wheelOpen} onClose={() => setWheelOpen(false)} />
+        <DailyWheel visible={wheelOpen} onClose={() => { launchModalBusyRef.current = false; setWheelOpen(false); }} />
         <XPFloatToast />
 
         {/* ═════════════════ CHROME (header) ═════════════════ */}
@@ -1597,7 +1613,12 @@ export default function HomeScreen() {
                         missionQuizzesDone: false,
                         quizzesToday: 0,
                         quizDate: null,
-                        monthlyRecaps: { ...s.monthlyRecaps, [prevMonth]: undefined as any },
+                        // Delete the key rather than setting it to undefined: an
+                        // undefined value survives as a key, and every reader of this
+                        // map walks the key list.
+                        monthlyRecaps: Object.fromEntries(
+                          Object.entries(s.monthlyRecaps).filter(([k]) => k !== prevMonth),
+                        ) as typeof s.monthlyRecaps,
                       }));
                       setTimeout(() => {
                         try { genMonthlyRecap(); } catch {}
@@ -1845,7 +1866,7 @@ export default function HomeScreen() {
             setTimeout(() => setLeadVis(true), 350); // let the closing modal settle first (iOS)
           }}
         />
-        <MonthlyRecapModal visible={recapVis} onClose={() => setRecapVis(false)} />
+        <MonthlyRecapModal visible={recapVis} onClose={() => { launchModalBusyRef.current = false; setRecapVis(false); }} />
         <WeeklyRecapModal visible={weeklyRecapVis} onClose={() => setWeeklyRecapVis(false)} />
         <InterestQuiz
           visible={quizVis}

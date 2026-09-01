@@ -107,6 +107,21 @@ export const useAuthStore = create<AuthState>()(
     {
       name: 'auth-storage',
       storage: createJSONStorage(() => AsyncStorage),
+      // isNewAccount describes the sign-in that just happened, not the account, so
+      // it must not survive a restart. Persisted, it stayed true forever — nothing
+      // clears it (logout() and setAuth() both leave it alone, only an explicit
+      // login sets it false) — and _layout.tsx re-ran the onboarding transition on
+      // every launch, because prevTokenRef starts undefined each time.
+      partialize: (state) => ({
+        token: state.token,
+        user: state.user,
+        isAuthenticated: state.isAuthenticated,
+      }),
+      // Storage written before partialize existed still carries isNewAccount: true.
+      // Clear it on read so already-affected accounts recover without reinstalling.
+      onRehydrateStorage: () => (state) => {
+        if (state) state.isNewAccount = false;
+      },
     }
   )
 );

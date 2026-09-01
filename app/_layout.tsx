@@ -6,6 +6,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, View } from 'react-native';
 
+import AppErrorBoundary from '../components/AppErrorBoundary';
 import CoinRewardModal from '../components/CoinRewardModal';
 import OnboardingScreen from '../components/OnBoardingScreen';
 import StreakRestoreModal from '../components/StreakRestoreModal';
@@ -75,10 +76,22 @@ function AppContent() {
   useEffect(() => {
     usePaywallStore.getState().registerSession();
   }, []);
+  // Re-point the paywall policy at whoever is signed in. Counters are per-account,
+  // so switching or creating one starts its session count from zero.
+  const paywallUserId = useAuthStore((s) => s.user?.id);
+  useEffect(() => {
+    usePaywallStore.getState().syncUser(paywallUserId != null ? String(paywallUserId) : null);
+  }, [paywallUserId]);
+  // A launch that showed onboarding is the user's first minute in the app. Pitching
+  // PRO into it is what the v2 policy set out to stop, and on Android it lands the
+  // native paywall on top of the daily wheel's Modal, which takes the app down.
+  const onboardingRanRef = useRef(false);
+  if (showOnboarding) onboardingRanRef.current = true;
   useEffect(() => {
     // rcReady gates on RevenueCat having resolved entitlements — otherwise a
     // paying subscriber could be shown the paywall during the startup window.
     if (!isReady || !token || showOnboarding || !rcReady) return;
+    if (onboardingRanRef.current) return;
     const id = setTimeout(() => { maybePaywall('third_session'); }, 2500);
     return () => clearTimeout(id);
   }, [isReady, token, showOnboarding, rcReady, maybePaywall]);
@@ -281,12 +294,16 @@ function AppContent() {
 
 export default function RootLayout() {
   return (
-    <LanguageProvider>
-      <ThemeProvider>
-        <RevenueCatProvider>
-          <AppContent />
-        </RevenueCatProvider>
-      </ThemeProvider>
-    </LanguageProvider>
+    // Outside the providers on purpose: a crash inside one of them is exactly the
+    // case where the app used to close itself with nothing to show for it.
+    <AppErrorBoundary>
+      <LanguageProvider>
+        <ThemeProvider>
+          <RevenueCatProvider>
+            <AppContent />
+          </RevenueCatProvider>
+        </ThemeProvider>
+      </LanguageProvider>
+    </AppErrorBoundary>
   );
 }

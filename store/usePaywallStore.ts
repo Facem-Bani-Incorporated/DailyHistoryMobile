@@ -67,6 +67,13 @@ interface PaywallState {
   fireCounts: Record<string, number>;
   /** Epoch ms of every paywall shown in the last 30 days. */
   recentViews: number[];
+  /** Account these counters describe. The policy is per-user — "third session"
+   *  means the user's third session, not the device's. Without this a brand-new
+   *  account inherits the previous account's count and gets pitched on its very
+   *  first launch, seconds after onboarding. */
+  _userId: string | null;
+  /** Point the counters at an account, resetting them when it changes. */
+  syncUser: (userId: string | null) => void;
 
   registerSession: () => void;
   registerDeepDiveGate: () => void;
@@ -91,12 +98,18 @@ const initial = {
   lastShownAt: 0,
   fireCounts: {} as Record<string, number>,
   recentViews: [] as number[],
+  _userId: null as string | null,
 };
 
 export const usePaywallStore = create<PaywallState>()(
   persist(
     (set, get) => ({
       ...initial,
+
+      syncUser: (userId) => {
+        if (get()._userId === userId) return;
+        set({ ...initial, _userId: userId });
+      },
 
       registerSession: () => set(s => ({ sessions: s.sessions + 1 })),
       registerDeepDiveGate: () => set(s => ({ deepDiveGates: s.deepDiveGates + 1 })),
