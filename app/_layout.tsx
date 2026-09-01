@@ -1,6 +1,7 @@
 // app/_layout.tsx
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import * as Notifications from 'expo-notifications';
+import { purgeOversizedNotifications } from '../utils/Notifications';
 import * as Linking from 'expo-linking';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
@@ -69,6 +70,10 @@ function AppContent() {
   const { language } = useLanguage();
   const { isPro } = useRevenueCat();
   useEffect(() => { analytics.init(); }, []);
+  // Runs before anything else touches notifications: devices carrying the old
+  // oversized payloads are in a kill loop, and this is what lets them out of it
+  // without the user clearing app data.
+  useEffect(() => { purgeOversizedNotifications(); }, []);
 
   // ── Paywall policy: count the launch, then pitch PRO on the 3rd session ──
   // Deferred so the paywall never lands on top of onboarding or the first frame.

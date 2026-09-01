@@ -1,4 +1,5 @@
 // utils/Notifications.ts
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { SchedulableTriggerInputTypes } from 'expo-notifications';
 import { Platform } from 'react-native';
@@ -23,6 +24,26 @@ export async function requestNotificationPermissions(): Promise<boolean> {
     return status === 'granted';
   } catch {
     return false;
+  }
+}
+
+/** One-time cleanup for devices poisoned by the old payload.
+ *
+ *  The notifications scheduled by earlier builds still carry the full event, and
+ *  they live in the OS, not in the app — new code cannot shrink them. Each one is
+ *  a queued broadcast Android cannot deliver, and it kills the process to say so.
+ *  Dropping every scheduled and delivered notification once breaks that loop; the
+ *  normal scheduler puts back small ones on the same launch. */
+const NOTIF_PURGE_KEY = 'notif_payload_purge_v1';
+
+export async function purgeOversizedNotifications(): Promise<void> {
+  try {
+    if (await AsyncStorage.getItem(NOTIF_PURGE_KEY)) return;
+    await Notifications.cancelAllScheduledNotificationsAsync();
+    await Notifications.dismissAllNotificationsAsync();
+    await AsyncStorage.setItem(NOTIF_PURGE_KEY, '1');
+  } catch {
+    // Nothing to do — a failed purge just means the next launch tries again.
   }
 }
 
