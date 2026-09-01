@@ -26,6 +26,38 @@ export async function requestNotificationPermissions(): Promise<boolean> {
   }
 }
 
+// ── Notification payloads must stay small ────────────────────────────────────
+// Everything in `content.data` is parcelled and handed to NotificationsService
+// over Binder. A full event carries narratives in five languages plus a gallery;
+// a day of them measured ~272 KB, and seven scheduled days pushed one broadcast
+// to 600 KB. Android cannot deliver a parcel that size, and its response is not
+// an exception the app can catch — ActivityManager kills the process with
+// "Can't deliver broadcast", then restarts it to retry, forever.
+//
+// So the notification carries a bounded excerpt plus the id. Anything that needs
+// the whole story looks it up by id from the day's content, which the home screen
+// fetches anyway.
+const NOTIF_NARRATIVE_BUDGET = 1200;
+
+function slimEventForNotification(event: any): any {
+  if (!event || typeof event !== 'object') return event;
+  const narratives: Record<string, string> = {};
+  for (const [lang, text] of Object.entries(event.narrativeTranslations ?? {})) {
+    if (typeof text === 'string') narratives[lang] = text.slice(0, NOTIF_NARRATIVE_BUDGET);
+  }
+  return {
+    id: event.id,
+    eventDate: event.eventDate,
+    category: event.category,
+    isPro: event.isPro,
+    titleTranslations: event.titleTranslations ?? {},
+    narrativeTranslations: narratives,
+    // One image is all the story header shows; the rest is dead weight in a parcel.
+    gallery: Array.isArray(event.gallery) ? event.gallery.slice(0, 1) : [],
+    imageUrl: event.imageUrl,
+  };
+}
+
 // ── Schedule a single notification at a specific Date ──
 async function scheduleAt(date: Date, title: string, body: string, eventData?: any) {
   await Notifications.scheduleNotificationAsync({
@@ -33,7 +65,7 @@ async function scheduleAt(date: Date, title: string, body: string, eventData?: a
       title,
       body,
       sound: 'default',
-      data: eventData ? { event: eventData } : {},
+      data: eventData ? { event: slimEventForNotification(eventData) } : {},
     },
     trigger: {
       type: SchedulableTriggerInputTypes.DATE,
@@ -601,7 +633,7 @@ export async function fireTestNotification(
       title,
       body,
       sound: 'default',
-      data: event ? { event } : {},
+      data: event ? { event: slimEventForNotification(event) } : {},
       ...(Platform.OS === 'android' && { channelId: 'daily-history' }),
     },
     trigger: null,
