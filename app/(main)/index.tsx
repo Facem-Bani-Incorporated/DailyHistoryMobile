@@ -1250,12 +1250,32 @@ export default function HomeScreen() {
         if (getUnseenMonthlyRecap()) { launchModalBusyRef.current = true; setRecapVis(true); }
       } catch { }
     }, 2000);
-    Promise.all([fetchOne(0), fetchOne(-1), fetchOne(1), fetchOne(2)]).then(() => {
+    // Paint before the network, then catch up.
+    //
+    // This used to await four days before clearing `loading` — ~1.6 MB of JSON for a
+    // screen that shows one of them. And the cache was refused once it passed its 30
+    // minute TTL, so the first open of the day always waited on the network with an
+    // empty screen. A day that has already happened does not change; serving it stale
+    // and refreshing underneath costs nothing and is the difference between "loading"
+    // and "already there".
+    (async () => {
+      const stale = await rC(isoFor(0), 'free', true, isProRef.current);
+      if (stale && stale.data.length > 0) {
+        mem.current[mk('free', isoFor(0))] = { data: stale.data, empty: stale.empty };
+        setLoading(false);
+        setTick(t => t + 1);
+      }
+    })().catch(() => {});
+
+    // Today first and alone: the neighbouring days are for swiping, and waiting on
+    // them keeps a story the user could already be reading off the screen.
+    fetchOne(0).then(() => {
       const todayPg = mem.current[mk('free', isoFor(0))];
       const gotData = !!todayPg && todayPg.data.length > 0;
       if (!gotData && netErrRef.current) setOffline(true);
       setLoading(false);
       setTick(t => t + 1);
+      Promise.all([fetchOne(-1), fetchOne(1), fetchOne(2)]).then(() => setTick(t => t + 1)).catch(() => {});
       fetchAll();
       fetchOne(0, 'pro').catch(() => {}); fetchOne(-1, 'pro').catch(() => {}); fetchOne(1, 'pro').catch(() => {}); fetchOne(2, 'pro').catch(() => {});
       for (let i = 2; i <= 7; i++) { fetchOne(-i).catch(() => { }); fetchOne(-i, 'pro').catch(() => {}); }
