@@ -221,6 +221,13 @@ export const CardLift = memo(function CardLift({
         position: 'absolute',
         left: -SPILL, top: -SPILL,
         width: width + SPILL * 2, height: height + SPILL * 2,
+        // In style, not as a prop. React Native 0.81 deprecated the `pointerEvents`
+        // prop in favour of this, and Skia's <Canvas> is a codegen native component:
+        // it forwards `style` (it has to — that is how it gets its geometry) but the
+        // bare prop does not reliably reach the native view. This canvas reaches 83px
+        // past the card on every side, so when it takes touches it eats the bottom of
+        // whatever card sits above it.
+        pointerEvents: 'none',
       }}
       pointerEvents="none"
     >
@@ -269,7 +276,11 @@ export const CardRim = memo(function CardRim({
 
   return (
     <Canvas
-      style={{ position: 'absolute', left: 0, top: 0, width, height }}
+      // Same story as CardLift, and worse: the rim is drawn after the card's children,
+      // so it sits over the entire tappable surface rather than merely overlapping a
+      // neighbour. This is what made the Discover hero, editorial and mosaic cards dead
+      // to touch while the Extras cards — which are not wrapped in <Lifted> — worked.
+      style={{ position: 'absolute', left: 0, top: 0, width, height, pointerEvents: 'none' }}
       pointerEvents="none"
     >
       <Path path={path} style="stroke" strokeWidth={1.25}>
@@ -322,7 +333,16 @@ export const Lifted = memo(function Lifted({
       )}
       {children}
       {box.w > 0 && (
-        <CardRim width={box.w} height={box.h} radius={radius} isDark={isDark} tone={tone} />
+        // The rim is the only decoration painted over the card, so it is the one that
+        // can swallow the tap that opens a story. A plain React Native View honours
+        // pointerEvents unconditionally, which a third-party native component cannot be
+        // trusted to do — and it is sized exactly to the card, so it clips nothing.
+        <View
+          pointerEvents="none"
+          style={{ position: 'absolute', left: 0, top: 0, width: box.w, height: box.h }}
+        >
+          <CardRim width={box.w} height={box.h} radius={radius} isDark={isDark} tone={tone} />
+        </View>
       )}
     </View>
   );
