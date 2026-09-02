@@ -13,15 +13,22 @@
 // The body text of a locked long read never reaches the device — the server sends
 // `deepDive: null` to anyone it does not see as PRO, and only `deepDiveTeaser` travels.
 import { LinearGradient } from 'expo-linear-gradient';
-import { BookOpen, Clock, Lock, Quote, ScrollText } from 'lucide-react-native';
+import { BookOpen, Clock, Lock, Quote, ScrollText, Sparkles } from 'lucide-react-native';
 import { memo, useEffect, useMemo, useRef } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 // ─── Shape of the JSON the backend passes through ────────────────────────────
 interface DeepDiveChapter { title: string; body: string }
 
+/** A point of interest shown above the article. The label is written per event by the
+ *  generator — "What he was actually known for" on a person, "What changed the next
+ *  morning" on a schism — so it is free text here rather than a fixed union. */
+interface DeepDiveHighlight { label: string; text: string }
+
 interface DeepDive {
   chapters: DeepDiveChapter[];
+  /** Optional: rows written before this section existed simply have none. */
+  highlights?: DeepDiveHighlight[];
   timeline: string[];
   misconception: string;
   aftermath: string[];
@@ -49,6 +56,7 @@ const L: Record<Lang, Record<string, string>> = {
     timeline: 'How it unfolded',
     misconception: 'What everyone gets wrong',
     aftermath: 'What happened next',
+    highlights: 'Worth knowing',
     sourcesTitle: 'Sources',
     ctaTitle: 'Continue with PRO',
     ctaBody: 'The full article, on every story, every day.',
@@ -64,6 +72,7 @@ const L: Record<Lang, Record<string, string>> = {
     timeline: 'Cum s-a desfășurat',
     misconception: 'Ce înțelege toată lumea greșit',
     aftermath: 'Ce a urmat',
+    highlights: 'Merită știut',
     sourcesTitle: 'Surse',
     ctaTitle: 'Continuă cu PRO',
     ctaBody: 'Articolul complet, la fiecare poveste, în fiecare zi.',
@@ -79,6 +88,7 @@ const L: Record<Lang, Record<string, string>> = {
     timeline: 'Le déroulé',
     misconception: 'Ce que tout le monde se trompe',
     aftermath: 'Ce qui a suivi',
+    highlights: 'Bon à savoir',
     sourcesTitle: 'Sources',
     ctaTitle: 'Continuer avec PRO',
     ctaBody: "L'article complet, sur chaque récit, chaque jour.",
@@ -94,6 +104,7 @@ const L: Record<Lang, Record<string, string>> = {
     timeline: 'Der Ablauf',
     misconception: 'Was alle falsch verstehen',
     aftermath: 'Was danach geschah',
+    highlights: 'Wissenswertes',
     sourcesTitle: 'Quellen',
     ctaTitle: 'Mit PRO weiterlesen',
     ctaBody: 'Der vollständige Artikel, zu jeder Geschichte, jeden Tag.',
@@ -109,6 +120,7 @@ const L: Record<Lang, Record<string, string>> = {
     timeline: 'Cómo se desarrolló',
     misconception: 'Lo que todo el mundo entiende mal',
     aftermath: 'Lo que pasó después',
+    highlights: 'Vale la pena saber',
     sourcesTitle: 'Fuentes',
     ctaTitle: 'Continúa con PRO',
     ctaBody: 'El artículo completo, en cada historia, cada día.',
@@ -216,6 +228,28 @@ function LongReadSectionInner({
     return (
       <View style={s.wrap}>
         {Header}
+
+        {!!full.highlights?.length && (
+          <View style={s.highlights}>
+            <View style={s.blockHead}>
+              <Sparkles size={13} color={gold} strokeWidth={2.2} />
+              <Text style={[s.blockTitle, { color: theme.text }]}>{t.highlights}</Text>
+            </View>
+            {full.highlights.map((h, i) => (
+              <View
+                key={i}
+                style={[s.highlightCard, { backgroundColor: softBg, borderLeftColor: gold }]}
+              >
+                {!!h.label && (
+                  <Text style={[s.highlightLabel, { color: gold }]}>
+                    {h.label.toUpperCase()}
+                  </Text>
+                )}
+                <Text style={[s.highlightText, { color: theme.text }]}>{h.text}</Text>
+              </View>
+            ))}
+          </View>
+        )}
 
         {full.chapters.map((ch, i) => (
           <View key={i} style={s.chapter}>
@@ -334,6 +368,18 @@ const s = StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 6 },
   label: { fontSize: 11, fontWeight: '700', letterSpacing: 1.6 },
   meta: { fontSize: 11.5, letterSpacing: 0.3, fontVariant: ['tabular-nums'] },
+
+  highlights: { marginBottom: 28 },
+  highlightCard: {
+    borderLeftWidth: 3,
+    borderTopRightRadius: 10,
+    borderBottomRightRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 9,
+  },
+  highlightLabel: { fontSize: 10.5, fontWeight: '700', letterSpacing: 1.1, marginBottom: 5 },
+  highlightText: { fontSize: 14.5, lineHeight: 22 },
 
   chapter: { marginBottom: 26 },
   chapterNum: { fontSize: 11, fontWeight: '700', letterSpacing: 1.4, marginBottom: 4 },
