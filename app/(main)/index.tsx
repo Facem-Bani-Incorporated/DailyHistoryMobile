@@ -143,7 +143,13 @@ const d2o = (date: Date) => {
 };
 
 type Tier = 'free' | 'pro';
-interface PD { data: any[]; empty: boolean }
+interface PD {
+  data: any[];
+  empty: boolean;
+  /** True when the long read was asked for and the request fell back without it. The
+   *  page still renders; it just must not be reused to answer a later PRO read. */
+  partial?: boolean;
+}
 const EMPTY: PD = { data: [], empty: true };
 // `tier` splits the day's events into free/PRO cards. `full` is a different axis:
 // whether this payload came from the PRO-only endpoint and therefore carries the long
@@ -1126,7 +1132,11 @@ export default function HomeScreen() {
     // and cascade a refetch of every mounted page; the effect below handles that once.
     const full = isProRef.current;
     const key = mk(tierArg, iso);
-    if (!force && mem.current[key]) return mem.current[key];
+    // A page fetched as a fallback carries no long read, so a PRO reader must not be
+    // served it from memory: that is how one transient 403 turned into a subscriber
+    // seeing the paywall on a story they had paid for, for the rest of the session.
+    const cached = mem.current[key];
+    if (!force && cached && !(full && cached.partial)) return cached;
     if (!force) {
       const c = await rC(iso, tierArg, false, full);
       if (c) { mem.current[key] = { data: c.data, empty: c.empty }; return mem.current[key]; }
@@ -1136,6 +1146,8 @@ export default function HomeScreen() {
       // disagrees about entitlement (a lapsed subscription the client hasn't noticed),
       // so fall back rather than showing an empty day.
       let r;
+      // Tracks what actually came back, which is not always what was asked for.
+      let gotFull = full;
       try {
         r = await api.get(
           full ? ENDPOINTS.FULL_DAILY_CONTENT : ENDPOINTS.DAILY_CONTENT,
@@ -1150,6 +1162,7 @@ export default function HomeScreen() {
         const status = err?.response?.status;
         if (full && typeof status === 'number' && status >= 400 && status < 500) {
           r = await api.get(ENDPOINTS.DAILY_CONTENT, { params: { date: iso, _t: Date.now() } });
+          gotFull = false;
         } else {
           throw err;
         }
@@ -1160,12 +1173,17 @@ export default function HomeScreen() {
       const allData: any[] = (r.data?.events ?? []).map((e: any) => ({ ...e, __day: day }));
       const freeData = allData.filter((e: any) => !e.isPro);
       const proData  = allData.filter((e: any) => !!e.isPro);
-      const freePg: PD = { data: freeData, empty: freeData.length === 0 };
-      const proPg:  PD = { data: proData,  empty: proData.length  === 0 };
+      const partial = full && !gotFull;
+      const freePg: PD = { data: freeData, empty: freeData.length === 0, partial };
+      const proPg:  PD = { data: proData,  empty: proData.length  === 0, partial };
       mem.current[mk('free', iso)] = freePg;
       mem.current[mk('pro',  iso)] = proPg;
-      wC(iso, 'free', freeData, freePg.empty, full);
-      wC(iso, 'pro',  proData,  proPg.empty, full);
+      // Cached as the variant that ARRIVED, never the one that was requested. Filing a
+      // payload with no long read under the full-variant key is what made a single
+      // refused request outlive itself: every later read hit that entry and a paying
+      // subscriber was shown the paywall until the cache expired.
+      wC(iso, 'free', freeData, freePg.empty, gotFull);
+      wC(iso, 'pro',  proData,  proPg.empty, gotFull);
       if (__DEV__) console.log(`[fetchOne] ${iso}: total=${allData.length} free=${freeData.length} pro=${proData.length}`);
       return tierArg === 'pro' ? proPg : freePg;
     } catch (e: any) {
