@@ -9,9 +9,8 @@
 // sharper hook than any description of the mechanic, and it is also the honest pitch —
 // the reason to come back is the eighteen worlds per event you have not seen yet.
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, FlatList, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -23,13 +22,13 @@ import { useDiscovered } from '../store/useParallelStore';
 import { haptic } from '../utils/haptics';
 import ParallelUniverse from './ParallelUniverse';
 
-const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
-
 type Lang = 'en' | 'ro' | 'fr' | 'de' | 'es';
 
 const L: Record<Lang, Record<string, string>> = {
   en: {
-    kicker: 'PARALLEL UNIVERSES',
+    kicker: 'Parallel Universes',
+    oneGame: 'playable',
+    manyGames: 'playable',
     title: 'Change one decision. See what happens.',
     sub: 'Every day, the turning points of history — handed back to you.',
     found: 'timelines found',
@@ -41,7 +40,9 @@ const L: Record<Lang, Record<string, string>> = {
     complete: 'Complete',
   },
   ro: {
-    kicker: 'UNIVERSURI PARALELE',
+    kicker: 'Universuri paralele',
+    oneGame: 'joc disponibil',
+    manyGames: 'jocuri disponibile',
     title: 'Schimbă o decizie. Vezi ce iese.',
     sub: 'În fiecare zi, punctele de cotitură ale istoriei — date înapoi ție.',
     found: 'cronologii găsite',
@@ -53,7 +54,9 @@ const L: Record<Lang, Record<string, string>> = {
     complete: 'Complet',
   },
   fr: {
-    kicker: 'UNIVERS PARALLÈLES',
+    kicker: 'Univers parallèles',
+    oneGame: 'partie disponible',
+    manyGames: 'parties disponibles',
     title: 'Changez une décision. Voyez la suite.',
     sub: 'Chaque jour, les tournants de l\'histoire — remis entre vos mains.',
     found: 'chronologies trouvées',
@@ -65,7 +68,9 @@ const L: Record<Lang, Record<string, string>> = {
     complete: 'Complet',
   },
   de: {
-    kicker: 'PARALLELE WELTEN',
+    kicker: 'Parallelwelten',
+    oneGame: 'spielbar',
+    manyGames: 'spielbar',
     title: 'Ändere eine Entscheidung. Sieh, was folgt.',
     sub: 'Jeden Tag die Wendepunkte der Geschichte — zurück in deiner Hand.',
     found: 'Zeitlinien gefunden',
@@ -77,7 +82,9 @@ const L: Record<Lang, Record<string, string>> = {
     complete: 'Vollständig',
   },
   es: {
-    kicker: 'UNIVERSOS PARALELOS',
+    kicker: 'Universos paralelos',
+    oneGame: 'partida disponible',
+    manyGames: 'partidas disponibles',
     title: 'Cambia una decisión. Mira qué pasa.',
     sub: 'Cada día, los puntos de giro de la historia — devueltos a tus manos.',
     found: 'cronologías encontradas',
@@ -135,35 +142,38 @@ const GameCard = memo(function GameCard({ event, meta, title, day, t, theme, isD
     <Pressable
       onPress={onOpen}
       accessibilityRole="button"
-      accessibilityLabel={meta.pivotTitle || title}
-      style={({ pressed }) => [{ opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.995 : 1 }] }]}
+      accessibilityLabel={`${meta.pivotTitle || title} — ${discovered}/${meta.endings}`}
+      style={({ pressed }) => [
+        s.card,
+        {
+          backgroundColor: theme.card,
+          borderColor: done ? gold + '55' : theme.border,
+          opacity: pressed ? 0.85 : 1,
+        },
+      ]}
     >
-      <LinearGradient
-        colors={isDark ? ['#171326', '#0E0C15'] : ['#F6F2FF', '#FFFDF7']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[s.card, { borderColor: done ? gold + '66' : gold + '30' }]}
-      >
-        <View style={s.cardHead}>
-          <Text style={[s.year, { color: gold }]}>{meta.pivotYear}</Text>
-          {!!day && <Text style={[s.day, { color: theme.subtext }]}>{day}</Text>}
-          <View style={{ flex: 1 }} />
-          {done && (
-            <View style={[s.completeTag, { borderColor: gold + '66' }]}>
-              <MaterialCommunityIcons name="check-decagram" size={11} color={gold} />
-              <Text style={[s.completeText, { color: gold }]}>{t.complete}</Text>
-            </View>
-          )}
-        </View>
-
-        <Text style={[s.cardTitle, { color: theme.text }]} numberOfLines={2}>
-          {meta.pivotTitle || title}
+      <View style={s.cardHead}>
+        <Text style={[s.year, { color: theme.subtext }]}>{meta.pivotYear}</Text>
+        {!!day && <Text style={[s.day, { color: theme.subtext }]}>{day}</Text>}
+        <View style={{ flex: 1 }} />
+        <Text style={[s.count, { color: discovered ? gold : theme.subtext }]}>
+          {discovered}/{meta.endings}
         </Text>
-        {!!meta.premise && (
-          <Text style={[s.premise, { color: theme.subtext }]} numberOfLines={2}>{meta.premise}</Text>
-        )}
+        <MaterialCommunityIcons name="chevron-right" size={18} color={theme.subtext} />
+      </View>
 
-        <View style={[s.track, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]}>
+      <Text style={[s.cardTitle, { color: theme.text }]} numberOfLines={2}>
+        {meta.pivotTitle || title}
+      </Text>
+
+      {!!meta.premise && (
+        <Text style={[s.premise, { color: theme.subtext }]} numberOfLines={2}>
+          {meta.premise}
+        </Text>
+      )}
+
+      {discovered > 0 && (
+        <Animated.View style={[s.track, { backgroundColor: theme.border }]}>
           <Animated.View
             style={[
               s.fill,
@@ -173,19 +183,8 @@ const GameCard = memo(function GameCard({ event, meta, title, day, t, theme, isD
               },
             ]}
           />
-        </View>
-
-        <View style={s.cardFoot}>
-          <Text style={[s.count, { color: theme.subtext }]}>
-            <Text style={{ color: gold, fontWeight: '900' }}>{discovered}</Text>
-            {` / ${meta.endings} ${t.found}`}
-          </Text>
-          <View style={[s.cta, { borderColor: gold + '55' }]}>
-            <Text style={[s.ctaText, { color: gold }]}>{discovered ? t.replay : t.play}</Text>
-            <MaterialCommunityIcons name="arrow-right" size={13} color={gold} />
-          </View>
-        </View>
-      </LinearGradient>
+        </Animated.View>
+      )}
     </Pressable>
   );
 });
@@ -234,12 +233,18 @@ export default function UniversesHub({ events, topInset }: { events: any[]; topI
     analytics.capture('universes_hub_viewed', { games: games.length, is_pro: isPro });
   }, [games.length, isPro]);
 
+  // A kicker, a serif display line and a subtitle stacked three deep is preamble
+  // before any content. One heading and the count of what is on the shelf says the
+  // same thing and gets out of the way.
   const header = (
-    <>
-      <Text style={[s.kicker, { color: gold }]}>{t.kicker}</Text>
-      <Text style={[s.title, { color: theme.text }]}>{t.title}</Text>
-      <Text style={[s.sub, { color: theme.subtext }]}>{t.sub}</Text>
-    </>
+    <View style={s.header}>
+      <Text style={[s.title, { color: theme.text }]}>{t.kicker}</Text>
+      {games.length > 0 && (
+        <Text style={[s.sub, { color: theme.subtext }]}>
+          {games.length} {games.length === 1 ? t.oneGame : t.manyGames}
+        </Text>
+      )}
+    </View>
   );
 
   return (
@@ -299,31 +304,25 @@ const DATE_LOCALE: Record<Lang, string> = {
 const s = StyleSheet.create({
   scroll: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 130 },
 
-  kicker: { fontSize: 10, fontWeight: '800', letterSpacing: 2.2, marginBottom: 10 },
-  title: { fontSize: 27, fontFamily: SERIF, fontWeight: '700', lineHeight: 33, letterSpacing: -0.5, marginBottom: 8 },
-  sub: { fontSize: 14, lineHeight: 21, marginBottom: 24 },
+  header: { marginBottom: 20, gap: 4 },
+  title: { fontSize: 22, fontWeight: '700', letterSpacing: -0.4 },
+  sub: { fontSize: 13, letterSpacing: 0.1 },
 
-  card: { borderWidth: 1, borderRadius: 17, padding: 17, marginBottom: 14, overflow: 'hidden' },
-  cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 },
-  year: { fontSize: 11.5, fontWeight: '800', letterSpacing: 1.4 },
-  day: { fontSize: 10.5, marginLeft: 9 },
-  completeTag: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderRadius: 9, paddingHorizontal: 7, paddingVertical: 2.5 },
-  completeText: { fontSize: 9, fontWeight: '900', letterSpacing: 0.8, textTransform: 'uppercase' },
+  card: { borderWidth: 1, borderRadius: 14, padding: 15, marginBottom: 10, overflow: 'hidden' },
+  cardHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  year: { fontSize: 11.5, fontWeight: '700', letterSpacing: 0.6, fontVariant: ['tabular-nums'] },
+  day: { fontSize: 11.5 },
+  count: { fontSize: 12.5, fontWeight: '700', fontVariant: ['tabular-nums'] },
 
-  cardTitle: { fontSize: 20, fontFamily: SERIF, fontWeight: '700', lineHeight: 26, letterSpacing: -0.35, marginBottom: 7 },
-  premise: { fontSize: 13, lineHeight: 19.5, marginBottom: 14 },
+  cardTitle: { fontSize: 16, fontWeight: '600', lineHeight: 21.5, letterSpacing: -0.2, marginBottom: 5 },
+  premise: { fontSize: 13, lineHeight: 19, marginBottom: 12 },
 
-  track: { height: 5, borderRadius: 3, overflow: 'hidden', marginBottom: 12 },
-  fill: { height: 5, borderRadius: 3 },
+  track: { position: 'absolute', left: 15, right: 15, bottom: 0, height: 2, borderRadius: 1, overflow: 'hidden' },
+  fill: { height: 2, borderRadius: 1 },
 
-  cardFoot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  count: { fontSize: 12 },
-  cta: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 11, paddingHorizontal: 12, paddingVertical: 7 },
-  ctaText: { fontSize: 12.5, fontWeight: '800' },
+  runs: { fontSize: 12, textAlign: 'center', marginTop: 14 },
 
-  runs: { fontSize: 12, fontStyle: 'italic', textAlign: 'center', marginTop: 10 },
-
-  empty: { borderWidth: 1, borderRadius: 16, padding: 26, alignItems: 'center', gap: 10, marginTop: 20 },
-  emptyTitle: { fontSize: 18, fontFamily: SERIF, fontWeight: '700' },
+  empty: { borderWidth: 1, borderRadius: 14, padding: 26, alignItems: 'center', gap: 10, marginTop: 8 },
+  emptyTitle: { fontSize: 17, fontWeight: '700' },
   emptyBody: { fontSize: 13.5, lineHeight: 20.5, textAlign: 'center' },
 });

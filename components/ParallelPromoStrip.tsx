@@ -13,50 +13,46 @@
 // Three native-driven loops and nothing else — this sits on the home screen, which is
 // the one place in the app where a dropped frame is unforgivable.
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { memo, useMemo, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { BranchingPulse } from './ParallelCanvas';
 import { useDiscovered } from '../store/useParallelStore';
 import { haptic } from '../utils/haptics';
 import ParallelUniverse from './ParallelUniverse';
-
-const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
 
 type Lang = 'en' | 'ro' | 'fr' | 'de' | 'es';
 
 const L: Record<Lang, Record<string, string>> = {
   en: {
-    badge: 'NEW',
+    badge: 'PARALLEL WORLDS',
     title: 'Change one decision. See what happens.',
     meta: '{n} endings to find',
     found: 'found',
     play: 'Play',
   },
   ro: {
-    badge: 'NOU',
+    badge: 'LUMI PARALELE',
     title: 'Schimbă o decizie. Vezi ce iese.',
     meta: '{n} finaluri de găsit',
     found: 'găsite',
     play: 'Joacă',
   },
   fr: {
-    badge: 'NOUVEAU',
+    badge: 'MONDES PARALLÈLES',
     title: 'Changez une décision. Voyez la suite.',
     meta: '{n} fins à trouver',
     found: 'trouvées',
     play: 'Jouer',
   },
   de: {
-    badge: 'NEU',
+    badge: 'PARALLELWELTEN',
     title: 'Ändere eine Entscheidung. Sieh, was folgt.',
     meta: '{n} Enden zu finden',
     found: 'gefunden',
     play: 'Spielen',
   },
   es: {
-    badge: 'NUEVO',
+    badge: 'MUNDOS PARALELOS',
     title: 'Cambia una decisión. Mira qué pasa.',
     meta: '{n} finales por descubrir',
     found: 'encontrados',
@@ -101,69 +97,46 @@ function ParallelPromoStripInner({ events, language, theme, isDark }: Props) {
   // Nothing to promote on a day with no game — a dead strip is worse than no strip.
   if (!found) return null;
 
+  const total = found.endings;
+  const pct = total ? Math.min(1, discovered / total) : 0;
+
   return (
     <>
+      {/* One row, read left to right: what this is, what it asks, how far you are.
+          It replaces a gradient card carrying an animated branching diagram, a gold
+          "NEW" pill, a serif headline and a separate Play button — five things
+          competing for the same glance, none of which said what the feature does.
+          The row is the target; the chevron says so. */}
       <Pressable
         onPress={open_}
         accessibilityRole="button"
-        accessibilityLabel={t.title}
-        style={({ pressed }) => [s.wrap, { transform: [{ scale: pressed ? 0.99 : 1 }] }]}
+        accessibilityLabel={`${t.title} — ${discovered}/${total}`}
+        style={({ pressed }) => [
+          s.row,
+          { backgroundColor: theme.card, borderColor: theme.border, opacity: pressed ? 0.85 : 1 },
+        ]}
       >
-        <LinearGradient
-          colors={isDark ? ['#1A142E', '#100D1C', '#0B0912'] : ['#F4EEFF', '#FCF8FF', '#FFFDF7']}
-          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-          style={[s.card, { borderColor: gold + '3A' }]}
-        >
-          {/* The drawing is the pitch. It sits behind the words at the left, where a
-              play button used to be — a triangle in a circle said "video", which is the
-              one thing this is not. */}
-          <View style={s.art} pointerEvents="none">
-            <BranchingPulse width={ART_W} height={ART_H} isDark={isDark} />
+        <View style={s.body}>
+          <Text style={[s.label, { color: theme.subtext }]}>{t.badge}</Text>
+          <Text style={[s.title, { color: theme.text }]} numberOfLines={2}>
+            {t.title}
+          </Text>
+        </View>
+
+        <View style={s.right}>
+          <Text style={[s.count, { color: discovered ? gold : theme.subtext }]}>
+            {discovered}/{total}
+          </Text>
+          <MaterialCommunityIcons name="chevron-right" size={20} color={theme.subtext} />
+        </View>
+
+        {/* Progress only once there is progress. An empty bar on first sight reads as
+            something already failing rather than something not yet started. */}
+        {discovered > 0 && (
+          <View style={[s.track, { backgroundColor: theme.border }]}>
+            <View style={[s.fill, { backgroundColor: gold, width: `${pct * 100}%` }]} />
           </View>
-
-          <View style={s.body}>
-            <View style={s.topRow}>
-              <View style={[s.badge, { backgroundColor: gold }]}>
-                <Text style={s.badgeText}>{t.badge}</Text>
-              </View>
-              {discovered > 0 && (
-                <Text style={[s.found, { color: theme.subtext }]}>
-                  {discovered} {t.found}
-                </Text>
-              )}
-            </View>
-
-            <Text style={[s.title, { color: theme.text }]} numberOfLines={2}>
-              {t.title}
-            </Text>
-
-            {/* An actual button, with its own handler.
-                The whole card has always been pressable, but a card that only looks like
-                a headline gives a thumb nothing to aim at, and a tap that lands on the
-                artwork or in the padding reads as the feature being broken. This is the
-                target people are looking for, and it opens the game on its own rather
-                than relying on the press bubbling out of the card. */}
-            <View style={s.ctaRow}>
-              <Pressable
-                onPress={open_}
-                hitSlop={10}
-                accessibilityRole="button"
-                accessibilityLabel={t.play}
-                style={({ pressed }) => [
-                  s.cta,
-                  { backgroundColor: gold, opacity: pressed ? 0.85 : 1 },
-                ]}
-              >
-                <Text style={s.ctaText}>{t.play}</Text>
-                <MaterialCommunityIcons name="arrow-right" size={13} color="#1A1408" />
-              </Pressable>
-
-              <Text style={[s.meta, { color: theme.subtext }]} numberOfLines={1}>
-                {t.meta.replace('{n}', String(found.endings))}
-              </Text>
-            </View>
-          </View>
-        </LinearGradient>
+        )}
       </Pressable>
 
       <ParallelUniverse
@@ -175,36 +148,30 @@ function ParallelPromoStripInner({ events, language, theme, isDark }: Props) {
   );
 }
 
-const ART_W = 104;
-const ART_H = 74;
-
 const s = StyleSheet.create({
-  wrap: { marginHorizontal: 16, marginBottom: 14 },
-  card: {
+  row: {
+    marginHorizontal: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: 20,
-    paddingVertical: 16,
-    paddingRight: 18,
-    overflow: 'hidden',
+    gap: 12,
   },
-  art: { width: ART_W, height: ART_H, marginLeft: 4, justifyContent: 'center' },
-  body: { flex: 1, justifyContent: 'center' },
+  body: { flex: 1, gap: 5 },
+  label: { fontSize: 10, fontWeight: '700', letterSpacing: 1.4 },
+  title: { fontSize: 15.5, fontWeight: '600', lineHeight: 21, letterSpacing: -0.2 },
 
-  topRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 7 },
-  ctaRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 11 },
-  cta: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    borderRadius: 999, paddingHorizontal: 13, paddingVertical: 6.5,
+  right: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  count: { fontSize: 13, fontWeight: '700', fontVariant: ['tabular-nums'] },
+
+  track: {
+    position: 'absolute', left: 16, right: 16, bottom: 0,
+    height: 2, borderRadius: 1, overflow: 'hidden',
   },
-  ctaText: { fontSize: 12.5, fontWeight: '900', letterSpacing: 0.3, color: '#1A1408' },
-  meta: { flex: 1, fontSize: 11, letterSpacing: 0.1 },
-  badge: { borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2.5 },
-  badgeText: { fontSize: 9, fontWeight: '900', letterSpacing: 1.1, color: '#1A1408' },
-  found: { fontSize: 11 },
-
-  title: { fontSize: 18, fontFamily: SERIF, fontWeight: '700', lineHeight: 24, letterSpacing: -0.35 },
+  fill: { height: 2, borderRadius: 1 },
 });
 
 /** Memoised: it sits above the day feed and re-renders on every scroll otherwise. */
