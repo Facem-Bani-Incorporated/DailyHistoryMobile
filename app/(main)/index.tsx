@@ -1710,7 +1710,21 @@ export default function HomeScreen() {
             almost nobody scrolled to it. Renders nothing on a day with no game. */}
         {tab === 'today' && (
           <ParallelPromoStrip
-            events={mem.current[mk('free', isoFor(off))]?.data ?? []}
+            // The strip shows the first event that carries a game, and it was being fed
+            // the free bucket alone. Each tier generates its own tree, so on a day where
+            // the free tier's generation fails and the PRO one succeeds there IS a game
+            // and a paying subscriber is shown nothing — which is what happened on
+            // 2026-09-05. PRO paid for both tiers, so PRO is offered both. Free users
+            // keep seeing only free games: advertising a game they cannot open would be
+            // worse than the empty space.
+            events={
+              isPro
+                ? [
+                    ...(mem.current[mk('free', isoFor(off))]?.data ?? []),
+                    ...(mem.current[mk('pro', isoFor(off))]?.data ?? []),
+                  ]
+                : mem.current[mk('free', isoFor(off))]?.data ?? []
+            }
             language={language}
             theme={theme}
             isDark={isDark}
