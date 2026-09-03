@@ -49,6 +49,20 @@ interface ParallelData {
 
 const EMPTY: ParallelData = { attempts: {}, adRuns: {}, discovered: {} };
 
+/** Fill in whatever a stored record is missing.
+ *
+ *  `?? EMPTY` is not enough and that mistake shipped: it only fires on null/undefined,
+ *  and an account that used this feature before the per-world rewrite HAS a record — the
+ *  old `{ runDate, runsToday, discovered }` one. That record is not nullish, so the
+ *  default was skipped, `d.adRuns` was undefined, and reading `d.adRuns[eventId]` threw
+ *  on every existing install. Everything that touches a stored record goes through here
+ *  so a shape older than the current one can never do that again. */
+const hydrate = (d: Partial<ParallelData> | undefined): ParallelData => ({
+  attempts: d?.attempts ?? EMPTY.attempts,
+  adRuns: d?.adRuns ?? EMPTY.adRuns,
+  discovered: d?.discovered ?? EMPTY.discovered,
+});
+
 /** Shared empty array: a fresh `[]` from a selector re-renders forever (Object.is). */
 export const NO_ENDINGS: string[] = [];
 
@@ -67,11 +81,11 @@ interface ParallelState {
 export const useParallelStore = create<ParallelState>()(
   persist(
     (set, get) => {
-      const read = (): ParallelData => get()._perUser[getUserId()] ?? EMPTY;
+      const read = (): ParallelData => hydrate(get()._perUser[getUserId()]);
       const write = (patch: Partial<ParallelData>) => {
         const uid = getUserId();
         set(s => ({
-          _perUser: { ...s._perUser, [uid]: { ...(s._perUser[uid] ?? EMPTY), ...patch } },
+          _perUser: { ...s._perUser, [uid]: { ...hydrate(s._perUser[uid]), ...patch } },
         }));
       };
 
@@ -135,21 +149,21 @@ export const useParallelStore = create<ParallelState>()(
 /** Endings this user has found for an event. Stable reference when there are none. */
 export function useDiscovered(eventId: string): string[] {
   const perUser = useParallelStore(s => s._perUser);
-  return (perUser[getUserId()] ?? EMPTY).discovered[eventId] ?? NO_ENDINGS;
+  return hydrate(perUser[getUserId()]).discovered[eventId] ?? NO_ENDINGS;
 }
 
 /** Runs left on one world for the current user. Infinity for PRO. */
 export function useRunsLeftFor(eventId: string, isPro: boolean): number {
   const perUser = useParallelStore(s => s._perUser);
   if (isPro) return Infinity;
-  return runsLeft(perUser[getUserId()] ?? EMPTY, eventId);
+  return runsLeft(hydrate(perUser[getUserId()]), eventId);
 }
 
 /** Whether a rewarded video would buy this user another run on this world. */
 export function useCanWatchAdFor(eventId: string, isPro: boolean): boolean {
   const perUser = useParallelStore(s => s._perUser);
   if (isPro) return false;
-  const d = perUser[getUserId()] ?? EMPTY;
+  const d = hydrate(perUser[getUserId()]);
   return runsLeft(d, eventId) <= 0
     && (d.adRuns[eventId] ?? 0) < REWARDED_RUNS_PER_WORLD;
 }
