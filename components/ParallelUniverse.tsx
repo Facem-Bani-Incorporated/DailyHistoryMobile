@@ -52,6 +52,8 @@ import { usePaywallStore } from '../store/usePaywallStore';
 import { iconsForEndings } from './parallelIcons';
 import { useCanWatchAdFor, useDiscovered, useParallelStore, useRunsLeftFor } from '../store/useParallelStore';
 import { useRewardedUnlock } from '../hooks/useRewardedUnlock';
+import { noteStoryFinishedAndCheck } from '../utils/review';
+import ReviewPromptModal from './ReviewPromptModal';
 import { haptic } from '../utils/haptics';
 
 const { width: W, height: H } = Dimensions.get('window');
@@ -1413,6 +1415,7 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
   const runsLeft = useRunsLeftFor(eventId, isPro);
   const canWatchAd = useCanWatchAdFor(eventId, isPro);
   const { showForUnlock } = useRewardedUnlock();
+  const [reviewVis, setReviewVis] = useState(false);
 
   const [phase, setPhase] = useState<'intro' | 'play' | 'end'>('intro');
   const [nodeId, setNodeId] = useState<string>('');
@@ -1623,6 +1626,12 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
         });
         haptic(target.rarity === 'rare' ? 'success' : 'light');
         setPhase('end');
+        // Reaching an ending is the high point of this screen, so it is the moment
+        // worth asking. Gated by the cooldown and the cap in utils/review.ts, and
+        // delayed so it does not land on top of the verdict animation.
+        noteStoryFinishedAndCheck().then((ok) => {
+          if (ok) setTimeout(() => setReviewVis(true), 1600);
+        }).catch(() => {});
       }
       Animated.timing(bodyFade, { toValue: 1, duration: 260, useNativeDriver: true }).start();
     });
@@ -1957,6 +1966,7 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
           )}
         </ScrollView>
       </View>
+      <ReviewPromptModal visible={reviewVis} onClose={() => setReviewVis(false)} />
     </Modal>
   );
 }

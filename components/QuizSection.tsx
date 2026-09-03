@@ -1,4 +1,6 @@
 // components/QuizSection.tsx
+import { noteStoryFinishedAndCheck } from '../utils/review';
+import ReviewPromptModal from './ReviewPromptModal';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Check, ChevronDown, Sparkles, Trophy, X as XIcon } from 'lucide-react-native';
@@ -56,6 +58,7 @@ export function QuizSection({ eventId, language = 'en' }: Props) {
   const optBorder = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
 
   const [expanded, setExpanded] = useState(false);
+  const [reviewVis, setReviewVis] = useState(false);
   const [contentH, setContentH] = useState(0);
   const [shownXP, setShownXP] = useState(0);
 
@@ -71,6 +74,9 @@ export function QuizSection({ eventId, language = 'en' }: Props) {
 
   useEffect(() => {
     if (phase === 'done' && result) {
+      noteStoryFinishedAndCheck().then((ok) => {
+        if (ok) setTimeout(() => setReviewVis(true), 1600);
+      }).catch(() => {});
       scorePop.setValue(0.7);
       xpCount.setValue(0);
       Animated.spring(scorePop, { toValue: 1, tension: 160, friction: 8, useNativeDriver: true }).start();
@@ -353,6 +359,8 @@ export function QuizSection({ eventId, language = 'en' }: Props) {
           </View>
         </Animated.View>
       </View>
+
+      <ReviewPromptModal visible={reviewVis} onClose={() => setReviewVis(false)} />
     </View>
   );
 }

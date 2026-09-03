@@ -9,7 +9,7 @@
 // rejectable rating gate, and it's the pattern that gets apps pulled.
 import { LinearGradient } from 'expo-linear-gradient';
 import { Star } from 'lucide-react-native';
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
@@ -79,6 +79,7 @@ export default function ReviewPromptModal({ visible, onClose }: Props) {
   const { theme: colors } = useTheme();
   const { language } = useLanguage();
 
+  const [picked, setPicked] = useState(0);
   const fade = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(0.9)).current;
 
@@ -86,6 +87,7 @@ export default function ReviewPromptModal({ visible, onClose }: Props) {
     if (!visible) {
       fade.setValue(0);
       scale.setValue(0.9);
+      setPicked(0);
       return;
     }
     // Start the cooldown the moment it's actually on screen, not when the
@@ -126,14 +128,36 @@ export default function ReviewPromptModal({ visible, onClose }: Props) {
             },
           ]}
         >
-          <LinearGradient
-            colors={[GOLD_LIGHT, GOLD, GOLD_DEEP]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.badge}
-          >
-            <Star size={30} color={INK} fill={INK} strokeWidth={1.5} />
-          </LinearGradient>
+          {/* Five taps, one destination.
+              Every star opens the same store page, and that is deliberate: routing a
+              high rating to the store and a low one to a private feedback form is a
+              rating gate, which App Store review guideline 1.1.7 prohibits and which
+              apps get pulled for. The stars are here because they are the gesture
+              people expect, not because the number changes what happens next.
+
+              A rating cannot be submitted from inside the app by anyone — Apple and
+              Google expose no such API. The tap opens the store's own review
+              composer, which on iOS lands directly on the write-a-review screen. */}
+          <View style={styles.stars}>
+            {[1, 2, 3, 4, 5].map(n => (
+              <TouchableOpacity
+                key={n}
+                activeOpacity={0.7}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel={`${n}`}
+                onPressIn={() => { haptic('light'); setPicked(n); }}
+                onPress={handleRate}
+              >
+                <Star
+                  size={32}
+                  color={GOLD}
+                  fill={n <= picked ? GOLD : 'transparent'}
+                  strokeWidth={1.6}
+                />
+              </TouchableOpacity>
+            ))}
+          </View>
 
           <Text style={[styles.title, { color: colors.text }]}>
             {tx(language, 'title')}
@@ -182,6 +206,7 @@ const styles = StyleSheet.create({
     paddingBottom: 18,
     alignItems: 'center',
   },
+  stars: { flexDirection: 'row', gap: 8, marginBottom: 18 },
   badge: {
     width: 62,
     height: 62,
