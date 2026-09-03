@@ -19,7 +19,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useRevenueCat } from '../context/RevenueCatContext';
 import { useTheme } from '../context/ThemeContext';
 import * as analytics from '../src/analytics/posthog';
-import { useDiscovered, useRunsLeft } from '../store/useParallelStore';
+import { useDiscovered } from '../store/useParallelStore';
 import { haptic } from '../utils/haptics';
 import ParallelUniverse from './ParallelUniverse';
 
@@ -34,7 +34,7 @@ const L: Record<Lang, Record<string, string>> = {
     sub: 'Every day, the turning points of history — handed back to you.',
     found: 'timelines found',
     play: 'Play', replay: 'Play again',
-    runsLeft: 'run left today', runsNone: 'No runs left today',
+    perWorld: 'One free run on each fork',
     proUnlimited: 'PRO plays as often as it likes',
     emptyTitle: 'No fork today',
     emptyBody: 'Today\'s stories had no decision worth replaying. Come back tomorrow — there is a new one most days.',
@@ -46,7 +46,7 @@ const L: Record<Lang, Record<string, string>> = {
     sub: 'În fiecare zi, punctele de cotitură ale istoriei — date înapoi ție.',
     found: 'cronologii găsite',
     play: 'Joacă', replay: 'Joacă din nou',
-    runsLeft: 'rulare rămasă azi', runsNone: 'Nu mai ai rulări azi',
+    perWorld: 'O rulare gratuită pe fiecare bifurcație',
     proUnlimited: 'PRO joacă oricât vrea',
     emptyTitle: 'Nicio bifurcație azi',
     emptyBody: 'Poveștile de azi n-au avut o decizie care merită rejucată. Revino mâine — în cele mai multe zile e una nouă.',
@@ -58,7 +58,7 @@ const L: Record<Lang, Record<string, string>> = {
     sub: 'Chaque jour, les tournants de l\'histoire — remis entre vos mains.',
     found: 'chronologies trouvées',
     play: 'Jouer', replay: 'Rejouer',
-    runsLeft: 'partie restante aujourd\'hui', runsNone: 'Plus de parties aujourd\'hui',
+    perWorld: 'Un tour gratuit sur chaque bifurcation',
     proUnlimited: 'PRO joue autant qu\'il veut',
     emptyTitle: 'Pas de bifurcation aujourd\'hui',
     emptyBody: 'Les récits du jour n\'avaient pas de décision à rejouer. Revenez demain — il y en a une presque tous les jours.',
@@ -70,7 +70,7 @@ const L: Record<Lang, Record<string, string>> = {
     sub: 'Jeden Tag die Wendepunkte der Geschichte — zurück in deiner Hand.',
     found: 'Zeitlinien gefunden',
     play: 'Spielen', replay: 'Nochmal spielen',
-    runsLeft: 'Durchgang heute übrig', runsNone: 'Heute keine Durchgänge mehr',
+    perWorld: 'Ein Gratis-Durchgang pro Weggabelung',
     proUnlimited: 'PRO spielt so oft es will',
     emptyTitle: 'Heute keine Abzweigung',
     emptyBody: 'Die Geschichten von heute hatten keine Entscheidung zum Nachspielen. Komm morgen wieder — meistens gibt es eine neue.',
@@ -82,7 +82,7 @@ const L: Record<Lang, Record<string, string>> = {
     sub: 'Cada día, los puntos de giro de la historia — devueltos a tus manos.',
     found: 'cronologías encontradas',
     play: 'Jugar', replay: 'Jugar otra vez',
-    runsLeft: 'partida restante hoy', runsNone: 'No quedan partidas hoy',
+    perWorld: 'Una partida gratis en cada bifurcación',
     proUnlimited: 'PRO juega cuantas veces quiera',
     emptyTitle: 'Hoy no hay bifurcación',
     emptyBody: 'Las historias de hoy no tenían una decisión que valga la pena rejugar. Vuelve mañana — casi todos los días hay una.',
@@ -202,7 +202,6 @@ export default function UniversesHub({ events, topInset }: { events: any[]; topI
   const t = L[lang];
   const gold = theme.gold ?? '#D4A843';
 
-  const runsLeft = useRunsLeft(isPro);
   const [open, setOpen] = useState<any | null>(null);
   // This tab draws its own header rather than sitting under the app chrome, so it owns
   // the notch. Without this the kicker and the headline ran under the status bar.
@@ -272,7 +271,9 @@ export default function UniversesHub({ events, topInset }: { events: any[]; topI
             <Text style={[s.runs, { color: theme.subtext }]}>
               {isPro
                 ? t.proUnlimited
-                : runsLeft > 0 ? `${runsLeft} ${t.runsLeft}` : t.runsNone}
+                // Runs are per fork now, so there is no single number to show here —
+                // each card carries its own state once opened.
+                : t.perWorld}
             </Text>
           ) : null
         }

@@ -50,7 +50,8 @@ import { useTheme } from '../context/ThemeContext';
 import * as analytics from '../src/analytics/posthog';
 import { usePaywallStore } from '../store/usePaywallStore';
 import { iconsForEndings } from './parallelIcons';
-import { useDiscovered, useParallelStore, useRunsLeft } from '../store/useParallelStore';
+import { useCanWatchAdFor, useDiscovered, useParallelStore, useRunsLeftFor } from '../store/useParallelStore';
+import { useRewardedUnlock } from '../hooks/useRewardedUnlock';
 import { haptic } from '../utils/haptics';
 
 const { width: W, height: H } = Dimensions.get('window');
@@ -254,7 +255,8 @@ const L: Record<Lang, Record<string, string>> = {
     divergence: 'Divergence from reality', timeline: 'Your timeline',
     discovered: 'timelines discovered', again: 'Run it again', done: 'Close',
     rare: 'RARE', uncommon: 'UNCOMMON', common: 'COMMON',
-    noRuns: 'You have used today\'s run', proUnlimited: 'PRO plays as often as it likes',
+    noRuns: 'Free run used on this one', watchAd: 'Watch a video for one more run',
+    adSpent: 'Both runs used on this one', proUnlimited: 'PRO plays as often as it likes',
     getPro: 'Unlock unlimited runs', locked: 'Come back tomorrow',
     preview: 'PRO sees the cost before choosing', already: 'Found before',
     firstTime: 'New timeline', risk: 'Risk', riskLow: 'Low risk', riskMid: 'Fair risk', riskHigh: 'High risk',
@@ -279,7 +281,8 @@ const L: Record<Lang, Record<string, string>> = {
     divergence: 'Abatere de la realitate', timeline: 'Cronologia ta',
     discovered: 'cronologii descoperite', again: 'Încearcă din nou', done: 'Închide',
     rare: 'RAR', uncommon: 'NEOBIȘNUIT', common: 'OBIȘNUIT',
-    noRuns: 'Ți-ai folosit rularea de azi', proUnlimited: 'PRO joacă oricât vrea',
+    noRuns: 'Ai folosit rularea gratuită pe asta', watchAd: 'Vezi un clip pentru încă o rulare',
+    adSpent: 'Ai folosit ambele rulări pe asta', proUnlimited: 'PRO joacă oricât vrea',
     getPro: 'Deblochează rulări nelimitate', locked: 'Revino mâine',
     preview: 'PRO vede costul înainte să aleagă', already: 'Găsită deja',
     firstTime: 'Cronologie nouă', risk: 'Risc', riskLow: 'Risc mic', riskMid: 'Risc mediu', riskHigh: 'Risc mare',
@@ -304,7 +307,8 @@ const L: Record<Lang, Record<string, string>> = {
     divergence: 'Écart avec la réalité', timeline: 'Votre chronologie',
     discovered: 'chronologies découvertes', again: 'Recommencer', done: 'Fermer',
     rare: 'RARE', uncommon: 'PEU COMMUN', common: 'COMMUN',
-    noRuns: 'Vous avez utilisé votre tour du jour', proUnlimited: 'PRO joue autant qu\'il veut',
+    noRuns: 'Tour gratuit déjà utilisé ici', watchAd: 'Regardez une vidéo pour un tour de plus',
+    adSpent: 'Les deux tours sont utilisés ici', proUnlimited: 'PRO joue autant qu\'il veut',
     getPro: 'Débloquer les parties illimitées', locked: 'Revenez demain',
     preview: 'PRO voit le coût avant de choisir', already: 'Déjà trouvée',
     firstTime: 'Nouvelle chronologie', risk: 'Risque', riskLow: 'Risque faible', riskMid: 'Risque moyen', riskHigh: 'Risque élevé',
@@ -329,7 +333,8 @@ const L: Record<Lang, Record<string, string>> = {
     divergence: 'Abweichung von der Realität', timeline: 'Deine Zeitlinie',
     discovered: 'Zeitlinien entdeckt', again: 'Nochmal spielen', done: 'Schließen',
     rare: 'SELTEN', uncommon: 'UNGEWÖHNLICH', common: 'GEWÖHNLICH',
-    noRuns: 'Dein heutiger Durchgang ist verbraucht', proUnlimited: 'PRO spielt so oft es will',
+    noRuns: 'Gratis-Durchgang hier verbraucht', watchAd: 'Video ansehen für einen weiteren Durchgang',
+    adSpent: 'Beide Durchgänge hier verbraucht', proUnlimited: 'PRO spielt so oft es will',
     getPro: 'Unbegrenzte Durchgänge freischalten', locked: 'Komm morgen wieder',
     preview: 'PRO sieht die Kosten vor der Wahl', already: 'Schon gefunden',
     firstTime: 'Neue Zeitlinie', risk: 'Risiko', riskLow: 'Geringes Risiko', riskMid: 'Mittleres Risiko', riskHigh: 'Hohes Risiko',
@@ -354,7 +359,8 @@ const L: Record<Lang, Record<string, string>> = {
     divergence: 'Desviación de la realidad', timeline: 'Tu cronología',
     discovered: 'cronologías descubiertas', again: 'Jugar otra vez', done: 'Cerrar',
     rare: 'RARO', uncommon: 'POCO COMÚN', common: 'COMÚN',
-    noRuns: 'Ya usaste tu partida de hoy', proUnlimited: 'PRO juega cuantas veces quiera',
+    noRuns: 'Partida gratis usada en esta', watchAd: 'Mira un vídeo para otra partida',
+    adSpent: 'Ambas partidas usadas en esta', proUnlimited: 'PRO juega cuantas veces quiera',
     getPro: 'Desbloquear partidas ilimitadas', locked: 'Vuelve mañana',
     preview: 'PRO ve el coste antes de elegir', already: 'Ya encontrada',
     firstTime: 'Cronología nueva', risk: 'Riesgo', riskLow: 'Riesgo bajo', riskMid: 'Riesgo medio', riskHigh: 'Riesgo alto',
@@ -1402,7 +1408,11 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
   }, [byId, universe]);
 
   const discovered = useDiscovered(eventId);
-  const runsLeft = useRunsLeft(isPro);
+  // Runs are counted per world, not per calendar day: a free player gets one on each
+  // fork, and may buy a second on that same fork with a rewarded video, once, ever.
+  const runsLeft = useRunsLeftFor(eventId, isPro);
+  const canWatchAd = useCanWatchAdFor(eventId, isPro);
+  const { showForUnlock } = useRewardedUnlock();
 
   const [phase, setPhase] = useState<'intro' | 'play' | 'end'>('intro');
   const [nodeId, setNodeId] = useState<string>('');
@@ -1514,11 +1524,24 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
       return;
     }
     haptic('medium');
-    useParallelStore.getState().startRun();
+    useParallelStore.getState().startRun(eventId);
     analytics.capture('parallel_started', { event_id: eventId, is_pro: isPro });
     setNodeId(universe.root);
     setPhase('play');
   }, [universe, isPro, runsLeft, presentPaywall, eventId]);
+
+  /** Trade a completed rewarded video for this world's second run.
+
+   *  The grant is recorded before anything else so a player who closes the screen the
+   *  instant the ad ends still owns what they watched it for. `showForUnlock` grants
+   *  anyway when no ad was loaded — a fill problem is ours, not theirs. */
+  const earnRun = useCallback(() => {
+    haptic('medium');
+    showForUnlock(() => {
+      useParallelStore.getState().grantRewardedRun(eventId);
+      analytics.capture('parallel_run_earned', { event_id: eventId });
+    }, 'parallel_extra_run');
+  }, [showForUnlock, eventId]);
 
   const pick = useCallback((choice: Choice) => {
     if (pickedId || reacting) return;
@@ -1679,7 +1702,16 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
                 </Pressable>
               ) : (
                 <View style={g.lockedWrap}>
-                  <Text style={[g.lockedText, { color: theme.subtext }]}>{t.noRuns}</Text>
+                  <Text style={[g.lockedText, { color: theme.subtext }]}>
+                    {canWatchAd ? t.noRuns : t.adSpent}
+                  </Text>
+                  {canWatchAd && (
+                    <Pressable onPress={earnRun} accessibilityRole="button"
+                      style={({ pressed }) => [g.proBtn, { borderColor: gold + '55', opacity: pressed ? 0.8 : 1 }]}>
+                      <MaterialCommunityIcons name="play-circle-outline" size={16} color={gold} />
+                      <Text style={[g.proBtnText, { color: gold }]}>{t.watchAd}</Text>
+                    </Pressable>
+                  )}
                   <Pressable onPress={() => { haptic('medium'); presentPaywall('parallel_runs_out'); }}
                     accessibilityRole="button"
                     style={({ pressed }) => [g.proBtn, { borderColor: gold + '55', opacity: pressed ? 0.8 : 1 }]}>
@@ -1906,6 +1938,12 @@ export default function ParallelUniverse({ visible, onClose, event }: Props) {
                   style={({ pressed }) => [g.againBtn, { borderColor: gold + '55', opacity: pressed ? 0.8 : 1 }]}>
                   <MaterialCommunityIcons name="restart" size={16} color={gold} />
                   <Text style={[g.againText, { color: gold }]}>{t.again}</Text>
+                </Pressable>
+              ) : canWatchAd ? (
+                <Pressable onPress={earnRun} accessibilityRole="button"
+                  style={({ pressed }) => [g.againBtn, { borderColor: gold + '55', opacity: pressed ? 0.8 : 1 }]}>
+                  <MaterialCommunityIcons name="play-circle-outline" size={16} color={gold} />
+                  <Text style={[g.againText, { color: gold }]}>{t.watchAd}</Text>
                 </Pressable>
               ) : (
                 <Pressable onPress={() => { haptic('medium'); presentPaywall('parallel_runs_out'); }}

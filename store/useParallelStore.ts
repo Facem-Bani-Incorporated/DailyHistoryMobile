@@ -9,14 +9,21 @@
 // means finishing one shows you an eighth of what is there, and the grid of empty slots
 // is what pulls a player back into an event they have already read.
 //
-// Free gets one run a day across all events; PRO unlimited. The wall is always the
-// number of attempts, never the content.
+// Free gets one run per WORLD, plus a second on that world in exchange for a rewarded
+// video; PRO unlimited. It used to be a single run per calendar day across every event,
+// which made the archive unreachable — a player who spent today's run on one fork could
+// not look at the other fifty-nine, so the back catalogue that the hub exists to show
+// was decoration. Per-world is more generous and points the player at more content
+// rather than less. The wall is always the number of attempts, never the content.
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { useAuthStore } from './useAuthStore';
 
-const todayISO = () => new Date().toISOString().split('T')[0];
+/** Runs still available on one world, ignoring PRO. Shared by the store action and the
+ *  hook so the button and the guard can never disagree about whether a play is left. */
+const runsLeft = (d: ParallelData, eventId: string): number =>
+  Math.max(0, FREE_RUNS_PER_WORLD + (d.adRuns[eventId] ?? 0) - (d.attempts[eventId] ?? 0));
 
 const getUserId = (): string => {
   try {
@@ -26,17 +33,21 @@ const getUserId = (): string => {
   }
 };
 
-/** Runs a free account gets per calendar day, across every event. */
-export const FREE_RUNS_PER_DAY = 1;
+/** Free runs on each world, before any ad is watched. */
+export const FREE_RUNS_PER_WORLD = 1;
+/** Extra runs a rewarded video buys on a world. Once per world, ever. */
+export const REWARDED_RUNS_PER_WORLD = 1;
 
 interface ParallelData {
-  runDate: string | null;
-  runsToday: number;
+  /** eventId -> runs started on that world, ever. */
+  attempts: Record<string, number>;
+  /** eventId -> extra runs earned by watching an ad. Capped at REWARDED_RUNS_PER_WORLD. */
+  adRuns: Record<string, number>;
   /** eventId -> ending ids discovered, ever. */
   discovered: Record<string, string[]>;
 }
 
-const EMPTY: ParallelData = { runDate: null, runsToday: 0, discovered: {} };
+const EMPTY: ParallelData = { attempts: {}, adRuns: {}, discovered: {} };
 
 /** Shared empty array: a fresh `[]` from a selector re-renders forever (Object.is). */
 export const NO_ENDINGS: string[] = [];
@@ -45,8 +56,10 @@ interface ParallelState {
   _perUser: Record<string, ParallelData>;
 
   getData: () => ParallelData;
-  runsLeft: (isPro: boolean) => number;
-  startRun: () => void;
+  runsLeftFor: (eventId: string, isPro: boolean) => number;
+  canWatchAdFor: (eventId: string, isPro: boolean) => boolean;
+  startRun: (eventId: string) => void;
+  grantRewardedRun: (eventId: string) => void;
   recordEnding: (eventId: string, endingId: string) => void;
   reset: () => void;
 }
@@ -67,22 +80,34 @@ export const useParallelStore = create<ParallelState>()(
 
         getData: read,
 
-        runsLeft: (isPro) => {
+        runsLeftFor: (eventId, isPro) => {
           if (isPro) return Infinity;
+          return runsLeft(read(), eventId);
+        },
+
+        // True only in the gap between spending the free run and spending the earned
+        // one. Offering the ad before the free run is used would sell what is already
+        // free; offering it after would sell what cannot be delivered.
+        canWatchAdFor: (eventId, isPro) => {
+          if (isPro) return false;
           const d = read();
-          if (d.runDate !== todayISO()) return FREE_RUNS_PER_DAY;
-          return Math.max(0, FREE_RUNS_PER_DAY - d.runsToday);
+          return runsLeft(d, eventId) <= 0
+            && (d.adRuns[eventId] ?? 0) < REWARDED_RUNS_PER_WORLD;
         },
 
         // Counted when a run STARTS. Counting at the end would make abandoning at the
         // last decision a free retry, and the choice that matters most would be the one
         // with no cost to redo.
-        startRun: () => {
+        startRun: (eventId) => {
           const d = read();
-          const today = todayISO();
-          write(d.runDate === today
-            ? { runsToday: d.runsToday + 1 }
-            : { runDate: today, runsToday: 1 });
+          write({ attempts: { ...d.attempts, [eventId]: (d.attempts[eventId] ?? 0) + 1 } });
+        },
+
+        grantRewardedRun: (eventId) => {
+          const d = read();
+          const had = d.adRuns[eventId] ?? 0;
+          if (had >= REWARDED_RUNS_PER_WORLD) return;
+          write({ adRuns: { ...d.adRuns, [eventId]: had + 1 } });
         },
 
         recordEnding: (eventId, endingId) => {
@@ -92,11 +117,14 @@ export const useParallelStore = create<ParallelState>()(
           write({ discovered: { ...d.discovered, [eventId]: [...had, endingId] } });
         },
 
-        reset: () => write({ ...EMPTY, discovered: {} }),
+        reset: () => write({ attempts: {}, adRuns: {}, discovered: {} }),
       };
     },
     {
-      // v2: state moved under `_perUser`.
+      // v2: state moved under `_perUser`. The key is deliberately unchanged for the
+      // per-world migration: `attempts` and `adRuns` simply arrive empty on an existing
+      // install, which grants everyone a fresh free run, while `discovered` — the
+      // collection, and the whole reason anyone comes back — is preserved.
       name: 'parallel_universes_v2',
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (s) => ({ _perUser: s._perUser }),
@@ -110,11 +138,18 @@ export function useDiscovered(eventId: string): string[] {
   return (perUser[getUserId()] ?? EMPTY).discovered[eventId] ?? NO_ENDINGS;
 }
 
-/** Runs left today for the current user. Infinity for PRO. */
-export function useRunsLeft(isPro: boolean): number {
+/** Runs left on one world for the current user. Infinity for PRO. */
+export function useRunsLeftFor(eventId: string, isPro: boolean): number {
   const perUser = useParallelStore(s => s._perUser);
   if (isPro) return Infinity;
+  return runsLeft(perUser[getUserId()] ?? EMPTY, eventId);
+}
+
+/** Whether a rewarded video would buy this user another run on this world. */
+export function useCanWatchAdFor(eventId: string, isPro: boolean): boolean {
+  const perUser = useParallelStore(s => s._perUser);
+  if (isPro) return false;
   const d = perUser[getUserId()] ?? EMPTY;
-  if (d.runDate !== todayISO()) return FREE_RUNS_PER_DAY;
-  return Math.max(0, FREE_RUNS_PER_DAY - d.runsToday);
+  return runsLeft(d, eventId) <= 0
+    && (d.adRuns[eventId] ?? 0) < REWARDED_RUNS_PER_WORLD;
 }
