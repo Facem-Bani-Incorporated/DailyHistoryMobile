@@ -14,11 +14,13 @@
 // the one place in the app where a dropped frame is unforgivable.
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { memo, useMemo, useState } from 'react';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useDiscovered } from '../store/useParallelStore';
 import { haptic } from '../utils/haptics';
 import ParallelUniverse from './ParallelUniverse';
+import { BranchField } from './ParallelCanvas';
 
 type Lang = 'en' | 'ro' | 'fr' | 'de' | 'es';
 
@@ -73,6 +75,7 @@ function ParallelPromoStripInner({ events, language, theme, isDark }: Props) {
   const t = L[lang];
   const gold = theme.gold ?? '#D4A843';
   const [open, setOpen] = useState(false);
+  const [w, setW] = useState(0);
 
   // Only the day's hero events carry a game, so most days this finds exactly one.
   const found = useMemo(() => {
@@ -102,38 +105,60 @@ function ParallelPromoStripInner({ events, language, theme, isDark }: Props) {
 
   return (
     <>
-      {/* One row, read left to right: what this is, what it asks, how far you are.
-          It replaces a gradient card carrying an animated branching diagram, a gold
-          "NEW" pill, a serif headline and a separate Play button — five things
-          competing for the same glance, none of which said what the feature does.
-          The row is the target; the chevron says so. */}
       <Pressable
         onPress={open_}
+        onLayout={e => setW(e.nativeEvent.layout.width)}
         accessibilityRole="button"
-        accessibilityLabel={`${t.title} — ${discovered}/${total}`}
+        accessibilityLabel={`${t.title}, ${discovered}/${total}`}
         style={({ pressed }) => [
-          s.row,
-          { backgroundColor: theme.card, borderColor: theme.border, opacity: pressed ? 0.85 : 1 },
+          s.card,
+          { borderColor: gold + '2E', opacity: pressed ? 0.9 : 1 },
         ]}
       >
-        <View style={s.body}>
-          <Text style={[s.label, { color: theme.subtext }]}>{t.badge}</Text>
-          <Text style={[s.title, { color: theme.text }]} numberOfLines={2}>
-            {t.title}
-          </Text>
+        {/* Ground first, then the moving field, then a scrim, then the words. The
+            scrim is what lets the animation run bright enough to be worth having
+            without the title ever fighting a line crossing behind it. */}
+        <LinearGradient
+          colors={isDark ? ['#17131F', '#0E0C13'] : ['#FFFBF2', '#FFF7E8']}
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+
+        {w > 0 && (
+          <View style={StyleSheet.absoluteFill} pointerEvents="none">
+            <BranchField width={w} height={CARD_H} isDark={isDark} />
+          </View>
+        )}
+
+        <LinearGradient
+          colors={
+            isDark
+              ? ['rgba(14,12,19,0.94)', 'rgba(14,12,19,0.72)', 'rgba(14,12,19,0.12)']
+              : ['rgba(255,251,242,0.94)', 'rgba(255,251,242,0.7)', 'rgba(255,251,242,0.1)']
+          }
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+
+        <View style={s.content}>
+          <View style={s.body}>
+            <Text style={[s.label, { color: gold }]}>{t.badge}</Text>
+            <Text style={[s.title, { color: theme.text }]} numberOfLines={2}>
+              {t.title}
+            </Text>
+          </View>
+
+          <View style={s.right}>
+            <Text style={[s.count, { color: discovered ? gold : theme.subtext }]}>
+              {discovered}/{total}
+            </Text>
+            <MaterialCommunityIcons name="chevron-right" size={20} color={theme.subtext} />
+          </View>
         </View>
 
-        <View style={s.right}>
-          <Text style={[s.count, { color: discovered ? gold : theme.subtext }]}>
-            {discovered}/{total}
-          </Text>
-          <MaterialCommunityIcons name="chevron-right" size={20} color={theme.subtext} />
-        </View>
-
-        {/* Progress only once there is progress. An empty bar on first sight reads as
-            something already failing rather than something not yet started. */}
         {discovered > 0 && (
-          <View style={[s.track, { backgroundColor: theme.border }]}>
+          <View style={[s.track, { backgroundColor: isDark ? '#ffffff14' : '#00000012' }]}>
             <View style={[s.fill, { backgroundColor: gold, width: `${pct * 100}%` }]} />
           </View>
         )}
@@ -148,30 +173,28 @@ function ParallelPromoStripInner({ events, language, theme, isDark }: Props) {
   );
 }
 
+const CARD_H = 92;
+
 const s = StyleSheet.create({
-  row: {
+  card: {
     marginHorizontal: 16,
     marginBottom: 14,
+    height: CARD_H,
     borderWidth: 1,
-    borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+    borderRadius: 16,
+    overflow: 'hidden',
+    justifyContent: 'center',
   },
+  content: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16 },
   body: { flex: 1, gap: 5 },
-  label: { fontSize: 10, fontWeight: '700', letterSpacing: 1.4 },
-  title: { fontSize: 15.5, fontWeight: '600', lineHeight: 21, letterSpacing: -0.2 },
+  label: { fontSize: 10, fontWeight: '800', letterSpacing: 1.5 },
+  title: { fontSize: 16, fontWeight: '600', lineHeight: 21, letterSpacing: -0.2 },
 
   right: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   count: { fontSize: 13, fontWeight: '700', fontVariant: ['tabular-nums'] },
 
-  track: {
-    position: 'absolute', left: 16, right: 16, bottom: 0,
-    height: 2, borderRadius: 1, overflow: 'hidden',
-  },
-  fill: { height: 2, borderRadius: 1 },
+  track: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 2 },
+  fill: { height: 2 },
 });
 
 /** Memoised: it sits above the day feed and re-renders on every scroll otherwise. */

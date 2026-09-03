@@ -776,6 +776,89 @@ export const BranchingPulse = memo(function BranchingPulse({
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
+// BRANCH FIELD — the home strip's living background
+// ═════════════════════════════════════════════════════════════════════════════
+/**
+ * One timeline entering from the left, splitting, and leaving as three.
+ *
+ * The earlier version of this drew the same idea into a 104pt box beside the text,
+ * which made it an illustration sitting next to a headline: two things asking for the
+ * same glance and neither winning. Here it spans the whole card and the words sit on
+ * top of it, so the motion is the surface rather than an object on it.
+ *
+ * The paths are drawn once, dim, as a map. What moves is light travelling along them:
+ * three pulses sharing the trunk and leaving through different arms, staggered so the
+ * fork is never empty. That is the feature stated without a word — one decision, more
+ * than one future — and it loops without a seam, so there is no moment where the card
+ * visibly restarts.
+ */
+export const BranchField = memo(function BranchField({
+  width, height, isDark,
+}: { width: number; height: number; isDark: boolean }) {
+  const t = useSharedValue(0);
+
+  useEffect(() => {
+    // Linear, because a pulse that eases is a pulse that hesitates. Slow enough to
+    // read as drifting rather than racing: this sits under text people are reading.
+    t.value = withRepeat(withTiming(1, { duration: 5200, easing: Easing.linear }), -1, false);
+  }, [t]);
+
+  const midY = height / 2;
+  const forkX = width * 0.3;
+
+  // Three complete routes, each the shared trunk plus one arm, so a pulse sweeping a
+  // single path travels the whole journey without being handed between two of them.
+  const routes = useMemo(() => [-1, 0, 1].map((dir, i) => {
+    const p = Skia.Path.Make();
+    const endY = midY + dir * height * 0.33;
+    p.moveTo(-2, midY);
+    p.lineTo(forkX, midY);
+    p.cubicTo(forkX + width * 0.14, midY, width * 0.62, endY, width + 2, endY);
+    return p;
+  }), [width, height, midY, forkX]);
+
+  // The map: always visible, never the point. Low enough that body text over it stays
+  // comfortably readable in both themes.
+  const mapColor = isDark ? 'rgba(212,168,67,0.16)' : 'rgba(140,105,30,0.14)';
+
+  const comet = (i: number) => {
+    const phase = useDerivedValue(() => (t.value + i / 3) % 1);
+    const end = useDerivedValue(() => phase.value);
+    const start = useDerivedValue(() => Math.max(0, phase.value - 0.26));
+    // Fades in as it leaves the left edge and out as it reaches the right, so nothing
+    // pops into or out of existence at the boundary.
+    const opacity = useDerivedValue(() =>
+      interpolate(phase.value, [0, 0.12, 0.82, 1], [0, 1, 1, 0], 'clamp'));
+    return { start, end, opacity };
+  };
+  const comets = [comet(0), comet(1), comet(2)];
+
+  const glow = useDerivedValue(() =>
+    interpolate((t.value * 3) % 1, [0, 0.2, 1], [0.5, 1, 0.5], 'clamp'));
+
+  return (
+    <Canvas style={{ width, height, pointerEvents: 'none' }} pointerEvents="none">
+      {routes.map((r, i) => (
+        <Path key={`m${i}`} path={r} style="stroke" strokeWidth={1.25}
+          strokeCap="round" color={mapColor} />
+      ))}
+
+      {routes.map((r, i) => (
+        <Path key={`c${i}`} path={r} style="stroke" strokeWidth={2}
+          strokeCap="round" color={GOLD}
+          start={comets[i].start} end={comets[i].end} opacity={comets[i].opacity} />
+      ))}
+
+      {/* The split itself, lit. Everything the card is about happens at this point. */}
+      <Circle cx={forkX} cy={midY} r={2.6} color={GOLD} opacity={glow} />
+      <Circle cx={forkX} cy={midY} r={9} color={GOLD} opacity={useDerivedValue(() => glow.value * 0.22)}>
+        <BlurMask blur={9} style="normal" />
+      </Circle>
+    </Canvas>
+  );
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
 // SCENE WIPE — time moving between one decision and the next
 // ═════════════════════════════════════════════════════════════════════════════
 /**

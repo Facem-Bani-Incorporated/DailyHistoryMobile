@@ -1,10 +1,8 @@
 // components/LockedTomorrowCard.tsx
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useRef } from 'react';
 import {
   Animated,
-  Easing,
   Platform,
   StyleSheet,
   Text,
@@ -14,8 +12,6 @@ import {
 import { COIN_GOLD, COIN_GOLD_DEEP } from '../config/coins';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
-
-const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
 
 const T: Record<string, Record<string, string>> = {
   en: {
@@ -139,26 +135,14 @@ export default function LockedTomorrowCard({
   const { theme, isDark } = useTheme();
   const { language } = useLanguage();
 
-  const pulse = useRef(new Animated.Value(0)).current;
-  const lockBounce = useRef(new Animated.Value(0.8)).current;
+  // One fade on mount and nothing else. What was here — a pulsing gold button, a
+  // bouncing padlock and two shimmering divider rules — was three separate loops
+  // running under a card whose whole job is to be read once and acted on.
   const fadeIn = useRef(new Animated.Value(0)).current;
-  const shimmer = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.timing(fadeIn, { toValue: 1, duration: 600, useNativeDriver: true }).start();
-    Animated.spring(lockBounce, { toValue: 1, tension: 80, friction: 6, useNativeDriver: true }).start();
-    Animated.loop(
-      Animated.timing(shimmer, { toValue: 1, duration: 2800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-    ).start();
-    if (isReady) {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulse, { toValue: 1, duration: 1100, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-          Animated.timing(pulse, { toValue: 0, duration: 1300, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        ]),
-      ).start();
-    }
-  }, [isReady]);
+    Animated.timing(fadeIn, { toValue: 1, duration: 420, useNativeDriver: true }).start();
+  }, [fadeIn]);
 
   const gold = isDark ? COIN_GOLD : COIN_GOLD_DEEP;
   const isMain = variant === 'main';
@@ -182,331 +166,109 @@ export default function LockedTomorrowCard({
     ? peekTitle(eventTitle)
     : { visible: '', hidden: '' };
 
-  const pulseScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.04] });
-  const pulseGlow = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.65, 1] });
-  const shimmerOp = shimmer.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.12, 0.4, 0.12] });
-
   return (
-    <Animated.View style={[styles.card, { shadowColor: isDark ? '#000' : '#444', opacity: fadeIn }]}>
-      <View style={[styles.inner, { paddingBottom: 20 + bottomPad }]}>
-        {/* Background gradient */}
-        <LinearGradient
-          colors={isDark
-            ? ['#0D0A07', '#1A1408', '#0D0A07']
-            : ['#FFF9EF', '#FFFBF5', '#FFF9EF']}
-          style={StyleSheet.absoluteFill}
-        />
+    <Animated.View style={[styles.card, { opacity: fadeIn }]}>
+      <View style={[styles.inner, { backgroundColor: theme.card, paddingBottom: 20 + bottomPad }]}>
+        <Text style={[styles.day, { color: theme.subtext }]}>{dayLabel.toUpperCase()}</Text>
 
-        {/* Top badge */}
-        <View style={styles.top}>
-          <View style={[styles.dayBadge, { borderColor: gold + '40', backgroundColor: gold + '15' }]}>
-            <Ionicons name="time-outline" size={9} color={gold} />
-            <Text style={[styles.dayText, { color: gold }]}>{dayLabel}</Text>
-          </View>
-        </View>
-
-        {/* Event hint teaser */}
         {hasHint ? (
-          <View style={[styles.hintCard, {
-            borderColor: gold + '22',
-            backgroundColor: isDark ? 'rgba(255,215,0,0.035)' : 'rgba(199,126,8,0.04)',
-          }]}>
-            {/* Shimmer top accent */}
-            <Animated.View style={[styles.hintAccent, { backgroundColor: gold, opacity: shimmerOp }]} />
-
-            {/* Category + year */}
-            <View style={styles.hintMeta}>
+          <View style={styles.teaser}>
+            <View style={styles.meta}>
               {!!eventCategory && (
-                <View style={[styles.catPill, { borderColor: gold + '35', backgroundColor: gold + '10' }]}>
-                  <Text style={[styles.catText, { color: gold }]}>{eventCategory.toUpperCase()}</Text>
-                </View>
+                <Text style={[styles.metaText, { color: gold }]}>
+                  {eventCategory.toUpperCase()}
+                </Text>
+              )}
+              {!!eventCategory && !!eventYear && (
+                <Text style={[styles.metaText, { color: theme.subtext }]}>·</Text>
               )}
               {!!eventYear && (
-                <Text style={[styles.yearText, { color: theme.subtext }]}>{eventYear}</Text>
+                <Text style={[styles.metaText, { color: theme.subtext }]}>{eventYear}</Text>
               )}
             </View>
 
-            {/* Partially revealed title */}
-            <Text style={styles.hintTitle} numberOfLines={2}>
-              <Text style={{ color: theme.text, fontFamily: SERIF }}>{titleVisible}</Text>
-              {!!titleHidden && (
-                <Text style={{ color: gold + '2A', fontFamily: SERIF }}>{titleHidden}</Text>
-              )}
+            {/* The tease is the sentence stopping, so it does not need a frosted pane
+                and a padlock on top of it saying the same thing a third time. */}
+            <Text style={styles.title} numberOfLines={3}>
+              <Text style={{ color: theme.text }}>{titleVisible}</Text>
+              {!!titleHidden && <Text style={{ color: theme.subtext + '40' }}>{titleHidden}</Text>}
             </Text>
-
-            {/* Frosted overlay with lock */}
-            <View style={[styles.hintOverlay, {
-              backgroundColor: isDark ? 'rgba(13,10,7,0.48)' : 'rgba(255,249,239,0.55)',
-            }]}>
-              <Animated.View style={[styles.lockCircleSmall, {
-                backgroundColor: gold + '15',
-                borderColor: gold + '35',
-                transform: [{ scale: lockBounce }],
-              }]}>
-                <Ionicons name="lock-closed" size={20} color={gold} />
-              </Animated.View>
-            </View>
           </View>
         ) : (
-          /* Fallback: no hint yet */
-          <View style={styles.center}>
-            <Animated.View style={[styles.lockCircle, {
-              backgroundColor: gold + '12',
-              borderColor: gold + '30',
-              transform: [{ scale: lockBounce }],
-            }]}>
-              <Ionicons name="lock-closed" size={32} color={gold} />
-            </Animated.View>
+          <View style={styles.teaser}>
+            <Ionicons name="lock-closed-outline" size={22} color={theme.subtext} />
           </View>
         )}
 
-        {/* Subtitle */}
         <Text style={[styles.subtitle, { color: theme.subtext }]}>{subtitle}</Text>
 
-        {/* CTA section */}
-        <View style={styles.bottom}>
-          {/* Rewarded video button */}
-          <TouchableOpacity
-            onPress={onUnlock}
-            disabled={!isReady}
-            activeOpacity={0.75}
-            style={styles.ctaWrap}
-          >
-            <Animated.View style={[
-              styles.ctaBtn,
-              {
-                backgroundColor: isReady ? gold : (isDark ? '#1A1610' : '#EDE5D8'),
-                transform: [{ scale: isReady ? pulseScale : 1 }],
-                opacity: isReady ? pulseGlow : 0.5,
-              },
-            ]}>
-              <Ionicons
-                name={isReady ? 'play-circle' : 'hourglass-outline'}
-                size={18}
-                color={isReady ? '#000' : theme.subtext}
-              />
-              <Text style={[styles.ctaText, { color: isReady ? '#000' : theme.subtext }]}>
-                {ctaText}
-              </Text>
-              {isReady && (
-                <View style={styles.durationBadge}>
-                  <Text style={styles.durationText}>{tx(language, 'duration')}</Text>
-                </View>
-              )}
-            </Animated.View>
+        <TouchableOpacity
+          onPress={onUnlock}
+          disabled={!isReady}
+          activeOpacity={0.8}
+          style={[
+            styles.cta,
+            {
+              backgroundColor: isReady ? gold : 'transparent',
+              borderColor: isReady ? gold : theme.border,
+              opacity: isReady ? 1 : 0.55,
+            },
+          ]}
+        >
+          <Ionicons
+            name={isReady ? 'play' : 'hourglass-outline'}
+            size={15}
+            color={isReady ? '#1A1408' : theme.subtext}
+          />
+          <Text style={[styles.ctaText, { color: isReady ? '#1A1408' : theme.subtext }]}>
+            {ctaText}
+          </Text>
+        </TouchableOpacity>
+
+        {!!onPaywall && (
+          <TouchableOpacity onPress={onPaywall} activeOpacity={0.7} style={styles.proLink} hitSlop={10}>
+            <Text style={[styles.proText, { color: theme.subtext }]}>{tx(language, 'getPro')}</Text>
           </TouchableOpacity>
-
-          {/* OR + PRO upgrade */}
-          {!!onPaywall && (
-            <>
-              <View style={styles.orRow}>
-                <Animated.View style={[styles.orLine, { backgroundColor: gold, opacity: shimmerOp }]} />
-                <Text style={[styles.orText, { color: theme.subtext }]}>{tx(language, 'or')}</Text>
-                <Animated.View style={[styles.orLine, { backgroundColor: gold, opacity: shimmerOp }]} />
-              </View>
-
-              <TouchableOpacity
-                onPress={onPaywall}
-                activeOpacity={0.7}
-                style={[styles.proBtn, { borderColor: gold + '40' }]}
-              >
-                <Ionicons name="star" size={13} color={gold} />
-                <Text style={[styles.proBtnText, { color: gold }]}>{tx(language, 'getPro')}</Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
+        )}
       </View>
     </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 30,
-    elevation: 15,
-    shadowOpacity: 0.5,
-    shadowRadius: 15,
-    shadowOffset: { width: 0, height: 10 },
-  },
+  card: { width: '100%', height: '100%', borderRadius: 18, overflow: 'hidden' },
   inner: {
     flex: 1,
-    borderRadius: 30,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,215,0,0.12)',
-    justifyContent: 'space-between',
-    paddingTop: 22,
-    paddingHorizontal: 20,
-    gap: 10,
+    paddingHorizontal: 24,
+    paddingTop: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 14,
   },
-  top: {
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
-  },
-  dayBadge: {
+
+  day: { fontSize: 10, fontWeight: '800', letterSpacing: 1.8 },
+
+  teaser: { alignItems: 'center', gap: 8, paddingHorizontal: 8 },
+  meta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  metaText: { fontSize: 10.5, fontWeight: '700', letterSpacing: 1 },
+  title: { fontSize: 20, fontWeight: '700', lineHeight: 27, letterSpacing: -0.3, textAlign: 'center' },
+
+  subtitle: { fontSize: 13.5, lineHeight: 20, textAlign: 'center', maxWidth: 300 },
+
+  cta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
     borderRadius: 12,
-    borderWidth: 1,
+    paddingVertical: 13,
+    paddingHorizontal: 26,
+    minWidth: 210,
+    marginTop: 4,
   },
-  dayText: {
-    fontWeight: '800',
-    fontSize: 9,
-    letterSpacing: 2.5,
-  },
+  ctaText: { fontSize: 14.5, fontWeight: '700', letterSpacing: 0.1 },
 
-  // Event hint block
-  hintCard: {
-    borderRadius: 18,
-    borderWidth: 1,
-    padding: 16,
-    gap: 8,
-    overflow: 'hidden',
-    flex: 1,
-  },
-  hintAccent: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 2,
-  },
-  hintMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  catPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    borderWidth: 1,
-  },
-  catText: {
-    fontSize: 8,
-    fontWeight: '900',
-    letterSpacing: 1.5,
-  },
-  yearText: {
-    fontSize: 11,
-    fontWeight: '600',
-    opacity: 0.6,
-  },
-  hintTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    letterSpacing: -0.3,
-    lineHeight: 24,
-  },
-  hintOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  lockCircleSmall: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  // Fallback (no hint)
-  center: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-  },
-  lockCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  subtitle: {
-    fontSize: 12,
-    fontWeight: '500',
-    opacity: 0.55,
-    textAlign: 'center',
-    lineHeight: 18,
-  },
-
-  // Buttons
-  bottom: {
-    gap: 10,
-  },
-  ctaWrap: {
-    width: '100%',
-  },
-  ctaBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 15,
-    borderRadius: 16,
-  },
-  ctaText: {
-    fontSize: 15,
-    fontWeight: '800',
-    letterSpacing: 0.3,
-  },
-  durationBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: 'rgba(0,0,0,0.18)',
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  durationText: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: 'rgba(0,0,0,0.65)',
-    letterSpacing: 0.3,
-  },
-
-  orRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  orLine: {
-    flex: 1,
-    height: 1,
-    borderRadius: 0.5,
-  },
-  orText: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1.5,
-    opacity: 0.4,
-  },
-
-  proBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-    paddingVertical: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-  },
-  proBtnText: {
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 0.2,
-  },
+  proLink: { paddingVertical: 6, paddingHorizontal: 12 },
+  proText: { fontSize: 12.5, fontWeight: '600', textDecorationLine: 'underline' },
 });
