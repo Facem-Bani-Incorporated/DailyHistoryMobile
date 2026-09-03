@@ -59,10 +59,17 @@ export async function hasRequestedReview(): Promise<boolean> {
 // has no quota. Tuning knobs live here.
 // ══════════════════════════════════════════════════════════════
 
-/** Stories the user must finish before we ask the first time. */
-export const REVIEW_MIN_STORIES = 3;
+// These were tuned when the only trigger was finishing a long read, which happens at
+// most once or twice a session. There are now three triggers — a long read, an ending
+// in Parallel Universes, a finished quiz — and against a three-completion floor plus a
+// four-day cooldown the card had become something almost nobody would ever be shown.
+//
+// The one condition that stays absolute is DONE_KEY: once someone has actually gone to
+// the store, they are never asked again. That is the requirement; the rest is pacing.
+/** Completions the user must finish before we ask the first time. */
+export const REVIEW_MIN_STORIES = 1;
 /** Days between two asks. */
-export const REVIEW_COOLDOWN_DAYS = 4;
+export const REVIEW_COOLDOWN_DAYS = 1;
 /** Hard ceiling on how many times we ever ask. */
 export const REVIEW_MAX_ASKS = 5;
 
@@ -70,8 +77,25 @@ const ASK_COUNT_KEY = 'review_ask_count_v1';
 const LAST_ASK_KEY = 'review_last_ask_v1';
 const DONE_KEY = 'review_done_v1';
 const STORIES_KEY = 'review_stories_finished_v1';
+const PACING_MIGRATED_KEY = 'review_pacing_v2_migrated';
 
 const DAY_MS = 86400000;
+
+/** Wipe every counter and flag, so the next completion asks again.
+ *
+ *  Exists because there was no way to verify this flow on a real device: after a single
+ *  tap on "Rate" the DONE flag is set for the life of the install, which is correct
+ *  behaviour and makes the feature untestable without wiping app data. */
+export async function resetReviewState(): Promise<void> {
+  try {
+    await AsyncStorage.multiRemove([
+      SHOWN_KEY, ASK_COUNT_KEY, LAST_ASK_KEY, DONE_KEY, STORIES_KEY,
+    ]);
+  } catch {
+    // Nothing to recover: the flow simply stays as it was.
+  }
+}
+
 
 /** App Store id (eas.json → submit.production.ios.ascAppId) and Play package. */
 const IOS_APP_ID = '6768552706';
@@ -84,6 +108,16 @@ const ANDROID_PACKAGE = 'com.rexinus.dailyhistorymobile';
 export async function noteStoryFinishedAndCheck(): Promise<boolean> {
   try {
     if ((await AsyncStorage.getItem(DONE_KEY)) === 'true') return false;
+
+    // The pacing above changed, so the counters on an existing install were set under
+    // rules that no longer apply — someone sitting mid-cooldown from the old four-day
+    // regime would wait days for a card the new one would show them now. Clear the
+    // pacing once, and only the pacing: DONE_KEY is untouched, so anyone who has
+    // already been to the store stays un-asked, which is the whole point of it.
+    if ((await AsyncStorage.getItem(PACING_MIGRATED_KEY)) !== 'true') {
+      await AsyncStorage.multiRemove([ASK_COUNT_KEY, LAST_ASK_KEY, STORIES_KEY]);
+      await AsyncStorage.setItem(PACING_MIGRATED_KEY, 'true');
+    }
 
     const finished = Number((await AsyncStorage.getItem(STORIES_KEY)) ?? '0') + 1;
     await AsyncStorage.setItem(STORIES_KEY, String(finished));
