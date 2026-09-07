@@ -35,6 +35,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '../api';
+import * as analytics from '../src/analytics/posthog';
 import { ENDPOINTS } from '../config/api';
 
 const { width: W } = Dimensions.get('window');
@@ -44,6 +45,12 @@ const GOLD_LIGHT = '#F3CB55';
 const INK = '#0A0B0E';
 
 type Step = 'language' | 'features' | 'notifications' | 'subscription';
+
+/** Position in the funnel, so a drop-off chart orders itself. `subscription` is the
+ *  standalone PRO upsell for returning accounts, not part of the first-run walk. */
+const STEP_INDEX: Record<Step, number> = {
+  language: 0, features: 1, notifications: 2, subscription: 99,
+};
 
 // Language picker options (mirrors the profile modal).
 const LANGUAGES: { code: 'en' | 'ro' | 'fr' | 'de' | 'es'; native: string; label: string; flag: string }[] = [
@@ -141,15 +148,43 @@ export default function OnboardingScreen({ onComplete, startStep = 'features' }:
 
   const enterStyle = { opacity: fade, transform: [{ translateY: slide }] };
 
+  // ── Funnel ──
+  // Onboarding is the one part of the app every new account walks through, and until
+  // now it emitted nothing at all: a install that quit on the language step and one
+  // that finished looked identical in the data. Each step reports itself as it is
+  // shown, so the drop-off between them is a funnel rather than a guess.
+  const seenSteps = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (seenSteps.current.has(step)) return;
+    seenSteps.current.add(step);
+    analytics.capture('onboarding_step_viewed', {
+      step,
+      index: STEP_INDEX[step] ?? -1,
+      is_first_step: seenSteps.current.size === 1,
+    });
+  }, [step]);
+
   // ── Push permissions ──
   const requestPushPermissions = async () => {
-    if (!Device.isDevice) return;
+    if (!Device.isDevice) {
+      analytics.capture('push_permission_result', { granted: false, reason: 'simulator' });
+      return;
+    }
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
     if (existingStatus !== 'granted') {
       const { status } = await Notifications.requestPermissionsAsync();
       finalStatus = status;
     }
+    // The single most important number for retention in a daily app: the 9 AM
+    // notification is the whole return mechanism, so a denied prompt is a churned
+    // user two days early. It was never measured.
+    analytics.capture('push_permission_result', {
+      granted: finalStatus === 'granted',
+      status: finalStatus,
+      was_already_granted: existingStatus === 'granted',
+      source: 'onboarding',
+    });
     if (finalStatus === 'granted' && Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('default', {
         name: 'default',
@@ -165,11 +200,19 @@ export default function OnboardingScreen({ onComplete, startStep = 'features' }:
   const handleEnableNotifs = async () => {
     await AsyncStorage.setItem('notif_prompt_seen', 'true');
     await requestPushPermissions();
+    analytics.capture('onboarding_completed', { accepted_notifications: true });
     onComplete();
   };
 
   const handleSkipNotifs = async () => {
     await AsyncStorage.setItem('notif_prompt_seen', 'true');
+    analytics.capture('push_permission_result', {
+      granted: false,
+      status: 'skipped',
+      was_already_granted: false,
+      source: 'onboarding',
+    });
+    analytics.capture('onboarding_completed', { accepted_notifications: false });
     onComplete();
   };
 

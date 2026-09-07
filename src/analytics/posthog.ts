@@ -1,4 +1,10 @@
-// src/analytics/posthog.ts — PostHog over plain fetch, zero native dependencies.
+// src/analytics/posthog.ts — the app's analytics entry point.
+//
+// Named for PostHog because that is the transport implemented here, but `capture()`
+// is what all 17 call sites use, so it is also where events fan out to Firebase
+// Analytics (see ./firebase.ts). Mirroring inside capture() rather than at the call
+// sites means the two backends can never drift apart: there is no way to add an
+// event that reaches one and not the other.
 //
 // Deliberately NOT posthog-react-native: that package pulls native modules,
 // which would require a new store build. This file is pure JS so it ships
@@ -14,6 +20,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { AppState, Platform } from 'react-native';
 import { POSTHOG_API_KEY, POSTHOG_HOST } from '../../config/posthog';
+import { mirrorEvent, mirrorIdentify, mirrorUserProperty } from './firebase';
 
 const ID_KEY = 'ph_distinct_id';
 const FIRST_OPEN_KEY = 'ph_first_open_ts';
@@ -127,6 +134,12 @@ export function setSuperProps(props: Record<string, any>): void {
  */
 export function capture(event: string, properties?: Record<string, any>): void {
   try {
+    // Mirrored first and outside the PostHog gate on purpose. `enabled()` is about
+    // whether a PostHog key is configured, which has nothing to do with whether
+    // Firebase should record the event, and a misconfigured key must not silently
+    // take both backends down at once.
+    mirrorEvent(event, { ...superProps, ...properties });
+
     if (!enabled()) return;
     if (queue.length >= MAX_QUEUE) queue.shift();
     queue.push({
@@ -154,6 +167,13 @@ export function capture(event: string, properties?: Record<string, any>): void {
  */
 export function identify(userId: string | number): void {
   try {
+    // Firebase gets the id even when PostHog is unconfigured or already identified:
+    // setUserId is idempotent, and without it every Firebase retention curve is
+    // per-install rather than per-person.
+    mirrorIdentify(userId);
+    mirrorUserProperty('is_pro', superProps.is_pro ?? false);
+    mirrorUserProperty('app_locale', superProps.locale ?? '');
+
     if (!enabled() || !distinctId || !userId) return;
     const newId = String(userId);
     if (newId === distinctId) return; // already identified

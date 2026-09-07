@@ -4,6 +4,7 @@ import * as Notifications from 'expo-notifications';
 import { SchedulableTriggerInputTypes } from 'expo-notifications';
 import { Platform } from 'react-native';
 
+import * as analytics from '../src/analytics/posthog';
 import { formatEventYear } from './year';
 
 // ── Configure notification handler ──
@@ -23,6 +24,15 @@ export async function requestNotificationPermissions(): Promise<boolean> {
     const { status: existing } = await Notifications.getPermissionsAsync();
     if (existing === 'granted') return true;
     const { status } = await Notifications.requestPermissionsAsync();
+    // The other place the OS prompt can be raised, besides onboarding: the settings
+    // toggle. Reported with the same event name so the two paths add up to one
+    // "share of users who can receive the 9 AM story" number.
+    analytics.capture('push_permission_result', {
+      granted: status === 'granted',
+      status,
+      was_already_granted: false,
+      source: 'settings_toggle',
+    });
     return status === 'granted';
   } catch {
     return false;

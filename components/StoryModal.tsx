@@ -23,6 +23,7 @@ import { usePaywallStore } from '../store/usePaywallStore';
 import { getEventId, useSavedStore } from '../store/useSavedStore';
 import { noteStoryFinishedAndCheck } from '../utils/review';
 import { extractYear, formatYear } from '../utils/year';
+import { Figure, StatRow } from './Figures';
 import { LongReadSection } from './LongReadSection';
 import ParallelUniverse from './ParallelUniverse';
 import ParallelEntryCard from './ParallelEntryCard';
@@ -463,6 +464,18 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
 
   const yearNum = extractYear(currentEvent);
   const year = formatYear(yearNum, language);
+  // The band of numbers every reader gets. It travels inside `deepDiveTeaser`, which
+  // the backend serves to free and PRO alike, so this is the one drawn figure that is
+  // not behind the paywall. Events from before the feature simply have none.
+  const statFigure = ((): Figure | null => {
+    try {
+      const parsed = JSON.parse(currentEvent.deepDiveTeaser ?? '');
+      const forLang = parsed?.[language] ?? parsed?.en ?? null;
+      return forLang?.figure ?? null;
+    } catch {
+      return null;
+    }
+  })();
   const title = currentEvent.titleTranslations?.[language] ?? currentEvent.titleTranslations?.en ?? '';
   const narrative = currentEvent.narrativeTranslations?.[language] ?? currentEvent.narrativeTranslations?.en ?? '';
   const category = (currentEvent.category ?? 'HISTORY').replace(/_/g, ' ').toUpperCase();
@@ -655,6 +668,19 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
 
               {/* Thin gold accent separator */}
               <View style={[st.accentLine, { backgroundColor: theme.gold + '35' }]} />
+
+              {/* The event in numbers, before a word of the article */}
+              {statFigure && (
+                <StatRow
+                  figure={statFigure}
+                  palette={{
+                    text: theme.text,
+                    subtext: theme.subtext,
+                    gold: theme.gold,
+                    isDark,
+                  }}
+                />
+              )}
 
               {/* Narrative text */}
               <Paragraphs text={narrative || t('no_story_available')} theme={theme} isDark={isDark} />

@@ -17,6 +17,8 @@ import { BookOpen, Clock, Lock, Quote, ScrollText, Sparkles } from 'lucide-react
 import { memo, useEffect, useMemo, useRef } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
+import { Figure, Figures, TimelineRail } from './Figures';
+
 // ─── Shape of the JSON the backend passes through ────────────────────────────
 interface DeepDiveChapter { title: string; body: string }
 
@@ -29,6 +31,9 @@ interface DeepDive {
   chapters: DeepDiveChapter[];
   /** Optional: rows written before this section existed simply have none. */
   highlights?: DeepDiveHighlight[];
+  /** Optional: the generator omits these entirely when the event has no numbers it
+   *  is confident about, which is a normal outcome and not a failure. */
+  figures?: Figure[];
   timeline: string[];
   misconception: string;
   aftermath: string[];
@@ -42,6 +47,10 @@ interface DeepDiveTeaser {
   chapters: string[];   // titles only
   wordCount: number;
   sourceCount: number;
+  /** The one figure a free reader gets: the band of numbers, never a chart. Chosen in
+   *  the pipeline rather than here, so the long read's other figures never travel to a
+   *  device that cannot open them. */
+  figure?: Figure;
 }
 
 type Lang = 'en' | 'ro' | 'fr' | 'de' | 'es';
@@ -251,6 +260,12 @@ function LongReadSectionInner({
           </View>
         )}
 
+        <Figures
+          figures={full.figures}
+          palette={{ text: theme.text, subtext: theme.subtext, gold, isDark }}
+          lang={lang}
+        />
+
         {full.chapters.map((ch, i) => (
           <View key={i} style={s.chapter}>
             <Text style={[s.chapterNum, { color: gold }]}>{ROMAN[i] ?? String(i + 1)}</Text>
@@ -267,12 +282,10 @@ function LongReadSectionInner({
               <Clock size={13} color={gold} strokeWidth={2.2} />
               <Text style={[s.blockTitle, { color: theme.text }]}>{t.timeline}</Text>
             </View>
-            {full.timeline.map((entry, i) => (
-              <View key={i} style={s.timelineRow}>
-                <View style={[s.timelineDot, { backgroundColor: gold }]} />
-                <Text style={[s.timelineText, { color: theme.subtext }]}>{entry}</Text>
-              </View>
-            ))}
+            <TimelineRail
+              entries={full.timeline}
+              palette={{ text: theme.text, subtext: theme.subtext, gold, isDark }}
+            />
           </View>
         )}
 
@@ -389,10 +402,6 @@ const s = StyleSheet.create({
   block: { borderRadius: 12, borderWidth: 1, padding: 16, marginBottom: 26 },
   blockHead: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 12 },
   blockTitle: { fontSize: 14.5, fontWeight: '700', letterSpacing: -0.2 },
-
-  timelineRow: { flexDirection: 'row', gap: 10, marginBottom: 10 },
-  timelineDot: { width: 5, height: 5, borderRadius: 3, marginTop: 8 },
-  timelineText: { flex: 1, fontSize: 14, lineHeight: 21 },
 
   aftermath: { fontSize: 14.5, lineHeight: 23, paddingLeft: 12, borderLeftWidth: 2, marginBottom: 12 },
 

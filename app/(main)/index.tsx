@@ -1051,6 +1051,15 @@ export default function HomeScreen() {
     return () => clearTimeout(id);
   }, [loading, wheelReady]);
   const [tab, setTab] = useState<Tab>('today');
+  // Six tabs ship and none of them reported being opened, so "which half of this app
+  // is dead weight" was unanswerable. First view per tab per session: enough to rank
+  // them, not enough to drown the funnel in noise from a user flicking back and forth.
+  const seenTabs = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (seenTabs.current.has(tab)) return;
+    seenTabs.current.add(tab);
+    analytics.capture('tab_viewed', { tab, nth_tab_this_session: seenTabs.current.size });
+  }, [tab]);
   const user = useAuthStore(s => s.user);
   const isTestAccount = (user as any)?.email === 'stefanrazvan.dogaru@gmail.com';
   const gamificationSet = useGamificationStore.setState;
@@ -1185,9 +1194,21 @@ export default function HomeScreen() {
       wC(iso, 'free', freeData, freePg.empty, gotFull);
       wC(iso, 'pro',  proData,  proPg.empty, gotFull);
       if (__DEV__) console.log(`[fetchOne] ${iso}: total=${allData.length} free=${freeData.length} pro=${proData.length}`);
+      // A user who opens the app and is shown nothing churns without a trace, and
+      // the pipeline has left days empty before. This is the event that turns "our
+      // retention dipped that week" into "we shipped no content on those days".
+      if (allData.length === 0) {
+        analytics.capture('day_empty', { date: iso, tier: tierArg, requested_full: full });
+      }
       return tierArg === 'pro' ? proPg : freePg;
     } catch (e: any) {
       if (__DEV__) console.log(`[fetchOne] ${iso} ERROR:`, e?.response?.status, e?.message);
+      analytics.capture('content_fetch_failed', {
+        date: iso,
+        tier: tierArg,
+        status: e?.response?.status ?? 0,
+        offline: !e?.response,
+      });
       const stale = await rC(iso, tierArg, true, full);
       if (stale && stale.data.length > 0) {
         mem.current[key] = { data: stale.data, empty: stale.empty };
