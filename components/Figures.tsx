@@ -18,17 +18,23 @@
 // a percentage: react-native-svg would add a native round trip to draw the same shape
 // and cannot be laid out by flex. SVG earns its place on curves and axes, and there are
 // none here.
-import { memo, useEffect, useRef } from 'react';
-import { Animated, Easing, Platform, StyleSheet, Text, View } from 'react-native';
+import { memo, useEffect, useRef, useState } from 'react';
+import {
+  Animated, Easing, Platform, StyleSheet, Text, TouchableOpacity, View,
+} from 'react-native';
+
+import { haptic } from '../utils/haptics';
 
 const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
 
 // ─── Shapes written by the pipeline ──────────────────────────────────────────
 export interface FigureStat { value: string; unit?: string; label?: string }
 export interface FigureBarPoint { label: string; value: number }
-export interface FigureRow { label: string; value: string }
+export interface FigureRow { label: string; value: string; cells?: string[] }
 export interface Figure {
-  kind: 'stat_row' | 'bar' | 'fact_grid' | 'compare' | string;
+  kind:
+    | 'stat_row' | 'bar' | 'fact_grid' | 'compare' | 'table' | 'share' | 'guess'
+    | string;
   title?: string;
   unit?: string;
   /** Provenance, printed under the figure. "Ammianus' estimate; modern figures run lower." */
@@ -37,6 +43,12 @@ export interface Figure {
   stats?: FigureStat[];
   points?: FigureBarPoint[];
   rows?: FigureRow[];
+  columns?: string[];
+  /** kind === 'guess' */
+  question?: string;
+  options?: string[];
+  answerIndex?: number;
+  reveal?: string;
 }
 
 interface Palette {
@@ -285,6 +297,195 @@ export const CompareFigure = memo(function CompareFigure({
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
+// TABLE — two or three parties across several dimensions
+// ═════════════════════════════════════════════════════════════════════════════
+export const TableFigure = memo(function TableFigure({
+  figure, palette,
+}: { figure: Figure; palette: Palette }) {
+  const columns = figure?.columns ?? [];
+  const rows = (figure?.rows ?? []).filter(
+    r => r && r.label && Array.isArray(r.cells) && r.cells.length >= columns.length,
+  );
+  if (columns.length < 2 || rows.length < 2) return null;
+
+  const { text, subtext, gold, isDark } = palette;
+  const hairline = isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)';
+  const headBg = isDark ? 'rgba(255,255,255,0.035)' : 'rgba(0,0,0,0.025)';
+
+  return (
+    <View style={s.tblWrap}>
+      {!!figure.title && (
+        <Text style={[s.figTitle, { color: gold }]}>{figure.title.toUpperCase()}</Text>
+      )}
+      <View style={[s.tblBox, { borderColor: hairline }]}>
+        <View style={[s.tblRow, { backgroundColor: headBg }]}>
+          <View style={s.tblLabelCell} />
+          {columns.map((c, i) => (
+            <Text key={i} style={[s.tblHead, { color: gold }]} numberOfLines={1}>
+              {c.toUpperCase()}
+            </Text>
+          ))}
+        </View>
+        {rows.map((row, i) => (
+          <View
+            key={i}
+            style={[s.tblRow, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: hairline }]}
+          >
+            <Text style={[s.tblLabel, { color: subtext }]} numberOfLines={2}>{row.label}</Text>
+            {columns.map((_, j) => (
+              <Text key={j} style={[s.tblCell, { color: text }]} numberOfLines={2}>
+                {row.cells?.[j] ?? ''}
+              </Text>
+            ))}
+          </View>
+        ))}
+      </View>
+      {!!figure.note && <Text style={[s.note, { color: subtext }]}>{figure.note}</Text>}
+    </View>
+  );
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SHARE — one whole, divided
+// ═════════════════════════════════════════════════════════════════════════════
+/** Tints of the accent rather than separate hues: the slices belong to one quantity,
+ *  and five unrelated colours would read as five unrelated things. */
+const SHARE_OPACITY = ['ff', 'cc', '99', '66', '40'];
+
+export const ShareFigure = memo(function ShareFigure({
+  figure, palette, lang,
+}: { figure: Figure; palette: Palette; lang: string }) {
+  const points = (figure?.points ?? []).filter(
+    p => p && typeof p.value === 'number' && isFinite(p.value) && p.value > 0,
+  );
+  if (points.length < 2) return null;
+
+  const total = points.reduce((sum, p) => sum + p.value, 0);
+  if (total <= 0) return null;
+
+  const { text, subtext, gold, isDark } = palette;
+  const hairline = isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)';
+
+  return (
+    <View style={[s.shrWrap, { borderColor: hairline }]}>
+      {!!figure.title && (
+        <Text style={[s.figTitle, { color: gold }]}>{figure.title.toUpperCase()}</Text>
+      )}
+      <View style={s.shrBar}>
+        {points.map((p, i) => (
+          <View
+            key={i}
+            style={{
+              flex: p.value,
+              backgroundColor: gold + (SHARE_OPACITY[i] ?? '33'),
+              borderRightWidth: i === points.length - 1 ? 0 : 1,
+              borderRightColor: isDark ? '#000' : '#fff',
+            }}
+          />
+        ))}
+      </View>
+      <View style={s.shrLegend}>
+        {points.map((p, i) => (
+          <View key={i} style={s.shrLegendItem}>
+            <View style={[s.shrSwatch, { backgroundColor: gold + (SHARE_OPACITY[i] ?? '33') }]} />
+            <Text style={[s.shrLabel, { color: text }]} numberOfLines={1}>{p.label}</Text>
+            <Text style={[s.shrPct, { color: subtext }]}>
+              {Math.round((p.value / total) * 100)}%
+            </Text>
+          </View>
+        ))}
+      </View>
+      {(!!figure.unit || !!figure.note) && (
+        <Text style={[s.note, { color: subtext }]}>
+          {[
+            figure.unit ? `${formatValue(total, lang)} ${figure.unit}` : '',
+            figure.note,
+          ].filter(Boolean).join(' · ')}
+        </Text>
+      )}
+    </View>
+  );
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// GUESS — the one figure the reader touches
+// ═════════════════════════════════════════════════════════════════════════════
+export const GuessFigure = memo(function GuessFigure({
+  figure, palette,
+}: { figure: Figure; palette: Palette }) {
+  const options = figure?.options ?? [];
+  const answer = figure?.answerIndex ?? -1;
+  // Everything has to be present and in range. An out-of-range answer would mark the
+  // true option wrong in front of the reader, which is worse than showing nothing.
+  const usable =
+    !!figure?.question && !!figure?.reveal && options.length === 3 &&
+    answer >= 0 && answer < options.length;
+
+  const [picked, setPicked] = useState<number | null>(null);
+  const revealFade = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (picked === null) return;
+    Animated.timing(revealFade, {
+      toValue: 1, duration: 420, easing: Easing.out(Easing.cubic), useNativeDriver: true,
+    }).start();
+  }, [picked, revealFade]);
+
+  if (!usable) return null;
+
+  const { text, subtext, gold, isDark } = palette;
+  const hairline = isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)';
+  const right = '#3FA96A';
+
+  const choose = (i: number) => {
+    if (picked !== null) return;
+    haptic(i === answer ? 'success' : 'warning');
+    setPicked(i);
+  };
+
+  return (
+    <View style={[s.gsWrap, { borderColor: gold + '44', backgroundColor: gold + '0D' }]}>
+      <Text style={[s.gsQuestion, { color: text }]}>{figure.question}</Text>
+
+      <View style={s.gsOptions}>
+        {options.map((opt, i) => {
+          const isAnswer = i === answer;
+          const chosen = picked === i;
+          const settled = picked !== null;
+          const border = !settled ? hairline : isAnswer ? right : chosen ? '#C4553D' : hairline;
+          const fg = !settled ? text : isAnswer ? right : chosen ? '#C4553D' : subtext;
+          return (
+            <TouchableOpacity
+              key={i}
+              activeOpacity={0.8}
+              onPress={() => choose(i)}
+              disabled={settled}
+              style={[
+                s.gsOption,
+                { borderColor: border, opacity: settled && !isAnswer && !chosen ? 0.45 : 1 },
+              ]}
+            >
+              <Text style={[s.gsOptionText, { color: fg }]} numberOfLines={1} adjustsFontSizeToFit>
+                {opt}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {picked !== null && (
+        <Animated.View style={{ opacity: revealFade }}>
+          <Text style={[s.gsVerdict, { color: picked === answer ? right : subtext }]}>
+            {picked === answer ? '\u2713' : '\u2192'} {options[answer]}
+          </Text>
+          <Text style={[s.gsReveal, { color: text }]}>{figure.reveal}</Text>
+        </Animated.View>
+      )}
+    </View>
+  );
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
 // FIGURES — a whole list, in the order the pipeline wrote them
 // ═════════════════════════════════════════════════════════════════════════════
 export const Figures = memo(function Figures({
@@ -298,6 +499,9 @@ export const Figures = memo(function Figures({
           case 'bar':       return <BarFigure key={i} figure={f} palette={palette} lang={lang} />;
           case 'fact_grid': return <FactGrid key={i} figure={f} palette={palette} />;
           case 'compare':   return <CompareFigure key={i} figure={f} palette={palette} />;
+          case 'table':     return <TableFigure key={i} figure={f} palette={palette} />;
+          case 'share':     return <ShareFigure key={i} figure={f} palette={palette} lang={lang} />;
+          case 'guess':     return <GuessFigure key={i} figure={f} palette={palette} />;
           // Anything unrecognised is treated as a stat row, which renders null unless
           // it actually has two numbers. A future kind this build predates therefore
           // shows nothing rather than crashing the story.
@@ -397,6 +601,51 @@ const s = StyleSheet.create({
   gridRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 11, paddingHorizontal: 13 },
   gridLabel: { width: 96, fontSize: 9.5, fontWeight: '800', letterSpacing: 0.9, paddingTop: 2 },
   gridValue: { flex: 1, fontSize: 13.5, lineHeight: 19, fontWeight: '500' },
+
+  // ── table ──
+  tblWrap: { marginBottom: 26 },
+  tblBox: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 10, overflow: 'hidden' },
+  tblRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 11 },
+  tblLabelCell: { flex: 1.3 },
+  tblLabel: { flex: 1.3, fontSize: 11, fontWeight: '700', letterSpacing: 0.2, paddingRight: 6 },
+  tblHead: { flex: 1, fontSize: 9.5, fontWeight: '800', letterSpacing: 0.9, textAlign: 'right' },
+  tblCell: {
+    flex: 1,
+    fontSize: 12.5,
+    textAlign: 'right',
+    fontVariant: ['tabular-nums'],
+    paddingLeft: 6,
+  },
+
+  // ── share ──
+  shrWrap: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 16,
+    marginBottom: 26,
+  },
+  shrBar: { flexDirection: 'row', height: 16, borderRadius: 8, overflow: 'hidden' },
+  shrLegend: { marginTop: 12 },
+  shrLegendItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
+  shrSwatch: { width: 9, height: 9, borderRadius: 2, marginRight: 8 },
+  shrLabel: { flex: 1, fontSize: 12.5 },
+  shrPct: { fontSize: 12, fontWeight: '700', fontVariant: ['tabular-nums'] },
+
+  // ── guess ──
+  gsWrap: { borderWidth: 1, borderRadius: 14, padding: 16, marginBottom: 26 },
+  gsQuestion: { fontFamily: SERIF, fontSize: 16, lineHeight: 23, marginBottom: 14 },
+  gsOptions: { flexDirection: 'row', gap: 8 },
+  gsOption: {
+    flex: 1,
+    borderWidth: 1.2,
+    borderRadius: 10,
+    paddingVertical: 13,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+  },
+  gsOptionText: { fontFamily: SERIF, fontSize: 17, fontWeight: '700' },
+  gsVerdict: { fontFamily: SERIF, fontSize: 19, fontWeight: '700', marginTop: 16 },
+  gsReveal: { fontSize: 13.5, lineHeight: 20, marginTop: 6 },
 
   // ── compare ──
   cmpWrap: {

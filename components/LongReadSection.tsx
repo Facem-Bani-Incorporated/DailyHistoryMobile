@@ -13,13 +13,74 @@
 // The body text of a locked long read never reaches the device — the server sends
 // `deepDive: null` to anyone it does not see as PRO, and only `deepDiveTeaser` travels.
 import { LinearGradient } from 'expo-linear-gradient';
-import { BookOpen, Clock, Lock, Quote, ScrollText, Sparkles } from 'lucide-react-native';
+import { BookOpen, ChevronDown, Clock, Lock, Quote, ScrollText, Sparkles } from 'lucide-react-native';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  Animated, Easing, LayoutAnimation, Platform, StyleSheet, Text, TouchableOpacity,
+  UIManager, View,
+} from 'react-native';
 
 import api from '../api';
 import { ENDPOINTS } from '../config/api';
 import { Figure, Figures, TimelineRail } from './Figures';
+import { haptic } from '../utils/haptics';
+
+// Old-architecture Android needs this switched on or configureNext is a no-op. Guarded
+// because the setter is absent under Fabric, where the animation works without it.
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+/** One chapter, closed until asked for.
+ *
+ *  The long read is read by a quarter of the people who open a story, and the reason
+ *  is that it opened as a wall of paragraphs. Folded, the piece opens as its own table
+ *  of contents: highlights, figures, then five titles. A reader who only wants to scan
+ *  gets a complete experience in fifteen seconds, and the prose is there for the one
+ *  who wants it instead of being in the way of the one who does not. */
+const FoldedChapter = memo(function FoldedChapter({
+  numeral, title, body, theme, gold, hairline, open, onToggle,
+}: {
+  numeral: string; title: string; body: string; theme: any; gold: string;
+  hairline: string; open: boolean; onToggle: () => void;
+}) {
+  const spin = useRef(new Animated.Value(open ? 1 : 0)).current;
+  useEffect(() => {
+    Animated.timing(spin, {
+      toValue: open ? 1 : 0,
+      duration: 220,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [open, spin]);
+
+  const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '180deg'] });
+
+  return (
+    <View style={[s.foldWrap, { borderTopColor: hairline }]}>
+      <TouchableOpacity
+        activeOpacity={0.7}
+        onPress={onToggle}
+        style={s.foldHead}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+      >
+        <Text style={[s.foldNum, { color: gold }]}>{numeral}</Text>
+        <Text style={[s.foldTitle, { color: theme.text }]}>{title}</Text>
+        <Animated.View style={{ transform: [{ rotate }] }}>
+          <ChevronDown size={17} color={gold} strokeWidth={2.4} />
+        </Animated.View>
+      </TouchableOpacity>
+      {open && (
+        <View style={s.foldBody}>
+          {body.split(/\n{2,}/).filter(Boolean).map((para, j) => (
+            <Text key={j} style={[s.body, { color: theme.text }]}>{para.trim()}</Text>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+});
 
 // ─── Shape of the JSON the backend passes through ────────────────────────────
 interface DeepDiveChapter { title: string; body: string }
@@ -211,6 +272,19 @@ function LongReadSectionInner({
   // Fetching the whole archive as PRO is not the fix: 60 days of long reads in five
   // languages is tens of megabytes to hold in memory for content nobody asked for.
   // So the article is fetched for the one day the reader actually opened, once.
+  // Which chapters the reader has opened. Reset per event by the effect below, so
+  // opening a second story does not inherit the first one's expanded sections.
+  const [openChapters, setOpenChapters] = useState<Record<number, boolean>>({});
+  const toggleChapter = (i: number) => {
+    haptic('light');
+    try {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    } catch {
+      // An unsupported platform just means the section appears without animating.
+    }
+    setOpenChapters(prev => ({ ...prev, [i]: !prev[i] }));
+  };
+
   const [fetched, setFetched] = useState<DeepDive | null>(null);
   const full = onEvent ?? fetched;
 
@@ -223,6 +297,7 @@ function LongReadSectionInner({
 
   useEffect(() => {
     setFetched(null);
+    setOpenChapters({});
     if (!isPro || onEvent || !day || !eventId) return;
 
     let cancelled = false;
@@ -337,15 +412,21 @@ function LongReadSectionInner({
           lang={lang}
         />
 
-        {full.chapters.map((ch, i) => (
-          <View key={i} style={s.chapter}>
-            <Text style={[s.chapterNum, { color: gold }]}>{ROMAN[i] ?? String(i + 1)}</Text>
-            <Text style={[s.chapterTitle, { color: theme.text }]}>{ch.title}</Text>
-            {ch.body.split(/\n{2,}/).filter(Boolean).map((para, j) => (
-              <Text key={j} style={[s.body, { color: theme.text }]}>{para.trim()}</Text>
-            ))}
-          </View>
-        ))}
+        <View style={s.foldList}>
+          {full.chapters.map((ch, i) => (
+            <FoldedChapter
+              key={i}
+              numeral={ROMAN[i] ?? String(i + 1)}
+              title={ch.title}
+              body={ch.body}
+              theme={theme}
+              gold={gold}
+              hairline={hairline}
+              open={!!openChapters[i]}
+              onToggle={() => toggleChapter(i)}
+            />
+          ))}
+        </View>
 
         {full.timeline.length > 0 && (
           <View style={[s.block, { backgroundColor: softBg, borderColor: hairline }]}>
@@ -452,6 +533,14 @@ const s = StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 6 },
   label: { fontSize: 11, fontWeight: '700', letterSpacing: 1.6 },
   meta: { fontSize: 11.5, letterSpacing: 0.3, fontVariant: ['tabular-nums'] },
+
+  // ── folded chapters ──
+  foldList: { marginBottom: 28 },
+  foldWrap: { borderTopWidth: StyleSheet.hairlineWidth },
+  foldHead: { flexDirection: 'row', alignItems: 'center', paddingVertical: 15, gap: 10 },
+  foldNum: { fontSize: 11, fontWeight: '800', letterSpacing: 1, width: 26 },
+  foldTitle: { flex: 1, fontSize: 15.5, lineHeight: 21, fontWeight: '600' },
+  foldBody: { paddingBottom: 6 },
 
   highlights: { marginBottom: 28 },
   highlightCard: {
