@@ -26,14 +26,17 @@ const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
 // ─── Shapes written by the pipeline ──────────────────────────────────────────
 export interface FigureStat { value: string; unit?: string; label?: string }
 export interface FigureBarPoint { label: string; value: number }
+export interface FigureRow { label: string; value: string }
 export interface Figure {
-  kind: 'stat_row' | 'bar' | string;
+  kind: 'stat_row' | 'bar' | 'fact_grid' | 'compare' | string;
   title?: string;
   unit?: string;
   /** Provenance, printed under the figure. "Ammianus' estimate; modern figures run lower." */
   note?: string;
+  /** A band of 2-4 numbers, or exactly 2 for a before/after comparison. */
   stats?: FigureStat[];
   points?: FigureBarPoint[];
+  rows?: FigureRow[];
 }
 
 interface Palette {
@@ -195,6 +198,93 @@ export const BarFigure = memo(function BarFigure({
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
+// FACT GRID — the event's specification sheet
+// ═════════════════════════════════════════════════════════════════════════════
+export const FactGrid = memo(function FactGrid({
+  figure, palette,
+}: { figure: Figure; palette: Palette }) {
+  const rows = (figure?.rows ?? []).filter(r => r && r.label && r.value);
+  if (rows.length < 2) return null;
+
+  const { text, subtext, gold, isDark } = palette;
+  const hairline = isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)';
+
+  return (
+    <View style={s.gridWrap}>
+      {!!figure.title && (
+        <Text style={[s.figTitle, { color: gold }]}>{figure.title.toUpperCase()}</Text>
+      )}
+      <View style={[s.gridBox, { borderColor: hairline }]}>
+        {rows.map((row, i) => (
+          <View
+            key={i}
+            style={[
+              s.gridRow,
+              i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: hairline },
+            ]}
+          >
+            <Text style={[s.gridLabel, { color: subtext }]} numberOfLines={1}>
+              {row.label.toUpperCase()}
+            </Text>
+            <Text style={[s.gridValue, { color: text }]} numberOfLines={2}>{row.value}</Text>
+          </View>
+        ))}
+      </View>
+      {!!figure.note && <Text style={[s.note, { color: subtext }]}>{figure.note}</Text>}
+    </View>
+  );
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// COMPARE — before and after, the same thing measured twice
+// ═════════════════════════════════════════════════════════════════════════════
+export const CompareFigure = memo(function CompareFigure({
+  figure, palette,
+}: { figure: Figure; palette: Palette }) {
+  const pair = (figure?.stats ?? []).filter(st => st && String(st.value ?? '').trim());
+  // Exactly two. Anything else is a stat row or a bar chart wearing the wrong kind,
+  // and drawing an arrow between three things means nothing.
+  if (pair.length !== 2) return null;
+
+  const { text, subtext, gold, isDark } = palette;
+  const hairline = isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)';
+  const [before, after] = pair;
+
+  return (
+    <View style={[s.cmpWrap, { borderColor: hairline }]}>
+      {!!figure.title && (
+        <Text style={[s.figTitle, { color: gold }]}>{figure.title.toUpperCase()}</Text>
+      )}
+      <View style={s.cmpRow}>
+        {[before, after].map((st, i) => (
+          <View key={i} style={s.cmpSide}>
+            {!!st.unit && (
+              <Text style={[s.cmpUnit, { color: subtext }]} numberOfLines={1}>
+                {st.unit.toUpperCase()}
+              </Text>
+            )}
+            <Text
+              style={[s.cmpValue, { color: i === 0 ? subtext : gold }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+            >
+              {st.value}
+            </Text>
+            {!!st.label && (
+              <Text style={[s.cmpLabel, { color: text }]} numberOfLines={2}>{st.label}</Text>
+            )}
+          </View>
+        ))}
+        <View style={s.cmpArrowWrap} pointerEvents="none">
+          <Text style={[s.cmpArrow, { color: gold }]}>{'\u2192'}</Text>
+        </View>
+      </View>
+      {!!figure.note && <Text style={[s.note, { color: subtext }]}>{figure.note}</Text>}
+    </View>
+  );
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
 // FIGURES — a whole list, in the order the pipeline wrote them
 // ═════════════════════════════════════════════════════════════════════════════
 export const Figures = memo(function Figures({
@@ -203,11 +293,17 @@ export const Figures = memo(function Figures({
   if (!Array.isArray(figures) || figures.length === 0) return null;
   return (
     <>
-      {figures.map((f, i) =>
-        f?.kind === 'bar'
-          ? <BarFigure key={i} figure={f} palette={palette} lang={lang} />
-          : <StatRow key={i} figure={f} palette={palette} />,
-      )}
+      {figures.map((f, i) => {
+        switch (f?.kind) {
+          case 'bar':       return <BarFigure key={i} figure={f} palette={palette} lang={lang} />;
+          case 'fact_grid': return <FactGrid key={i} figure={f} palette={palette} />;
+          case 'compare':   return <CompareFigure key={i} figure={f} palette={palette} />;
+          // Anything unrecognised is treated as a stat row, which renders null unless
+          // it actually has two numbers. A future kind this build predates therefore
+          // shows nothing rather than crashing the story.
+          default:          return <StatRow key={i} figure={f} palette={palette} />;
+        }
+      })}
     </>
   );
 });
@@ -294,6 +390,30 @@ const s = StyleSheet.create({
   barValue: { width: 68, fontSize: 12, textAlign: 'right', fontVariant: ['tabular-nums'] },
 
   note: { fontSize: 11, lineHeight: 16, marginTop: 10, fontStyle: 'italic', opacity: 0.9 },
+
+  // ── fact grid ──
+  gridWrap: { marginBottom: 26 },
+  gridBox: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 10, overflow: 'hidden' },
+  gridRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 11, paddingHorizontal: 13 },
+  gridLabel: { width: 96, fontSize: 9.5, fontWeight: '800', letterSpacing: 0.9, paddingTop: 2 },
+  gridValue: { flex: 1, fontSize: 13.5, lineHeight: 19, fontWeight: '500' },
+
+  // ── compare ──
+  cmpWrap: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 16,
+    marginBottom: 26,
+  },
+  cmpRow: { flexDirection: 'row', alignItems: 'center' },
+  cmpSide: { flex: 1, alignItems: 'center', paddingHorizontal: 6 },
+  cmpUnit: { fontSize: 9.5, fontWeight: '800', letterSpacing: 1, marginBottom: 4 },
+  cmpValue: { fontFamily: SERIF, fontSize: 30, lineHeight: 36, fontWeight: '700' },
+  cmpLabel: { fontSize: 11, lineHeight: 15, textAlign: 'center', marginTop: 5, opacity: 0.85 },
+  // Centred over the gap between the two sides rather than laid out between them, so
+  // neither value has to give up width to it.
+  cmpArrowWrap: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+  cmpArrow: { fontSize: 20, fontWeight: '300' },
 
   // ── timeline rail ──
   railWrap: { marginTop: 4 },

@@ -14,9 +14,11 @@
 // `deepDive: null` to anyone it does not see as PRO, and only `deepDiveTeaser` travels.
 import { LinearGradient } from 'expo-linear-gradient';
 import { BookOpen, Clock, Lock, Quote, ScrollText, Sparkles } from 'lucide-react-native';
-import { memo, useEffect, useMemo, useRef } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
+import api from '../api';
+import { ENDPOINTS } from '../config/api';
 import { Figure, Figures, TimelineRail } from './Figures';
 
 // ─── Shape of the JSON the backend passes through ────────────────────────────
@@ -159,6 +161,24 @@ function pick<T>(raw: string | null | undefined, language: string): T | null {
   }
 }
 
+/** Long reads fetched on demand, keyed by the day they were published for.
+ *
+ *  Module-level rather than component state because the point is to survive the
+ *  modal closing: a reader who opens four stories from the same day should cost one
+ *  request, not four. Bounded because a session can walk the whole 60-day archive.
+ *  `null` is a remembered failure, so a day the server refuses is not re-asked on
+ *  every story from it. */
+const dayCache = new Map<string, Record<string, any> | null>();
+const DAY_CACHE_MAX = 12;
+
+function rememberDay(iso: string, byEventId: Record<string, any> | null) {
+  if (dayCache.size >= DAY_CACHE_MAX) {
+    const oldest = dayCache.keys().next().value;
+    if (oldest !== undefined) dayCache.delete(oldest);
+  }
+  dayCache.set(iso, byEventId);
+}
+
 interface Props {
   event: any;
   language: string;
@@ -177,10 +197,61 @@ function LongReadSectionInner({
   const lang = (['en', 'ro', 'fr', 'de', 'es'].includes(language) ? language : 'en') as Lang;
   const t = L[lang];
 
-  const full = useMemo(
+  const onEvent = useMemo(
     () => pick<DeepDive>(event?.deepDive, lang),
     [event?.deepDive, lang],
   );
+
+  // Only the day the home screen fetched carries a long read. `allEvents` is built
+  // from the FREE endpoint for 60 days regardless of entitlement (fetchAll in
+  // app/(main)/index.tsx), so every story opened from search, the timeline, the
+  // universes hub or the related list arrives with deepDive: null, and a paying
+  // subscriber was shown the unlock pitch for it.
+  //
+  // Fetching the whole archive as PRO is not the fix: 60 days of long reads in five
+  // languages is tens of megabytes to hold in memory for content nobody asked for.
+  // So the article is fetched for the one day the reader actually opened, once.
+  const [fetched, setFetched] = useState<DeepDive | null>(null);
+  const full = onEvent ?? fetched;
+
+  // `__day` is the date the pipeline published this event for, which is what the
+  // endpoint keys on. `eventDate` is the historical date (0251-09-07) and would ask
+  // the server for the third century. An event without `__day` (one arriving from a
+  // notification payload) simply keeps the old behaviour.
+  const day: string | null = event?.__day ?? null;
+  const eventId = event?.id != null ? String(event.id) : null;
+
+  useEffect(() => {
+    setFetched(null);
+    if (!isPro || onEvent || !day || !eventId) return;
+
+    let cancelled = false;
+    const apply = (byId: Record<string, any> | null) => {
+      if (cancelled || !byId) return;
+      const raw = byId[eventId];
+      if (raw) setFetched(pick<DeepDive>(raw, lang));
+    };
+
+    if (dayCache.has(day)) { apply(dayCache.get(day) ?? null); return; }
+
+    api.get(ENDPOINTS.FULL_DAILY_CONTENT, { params: { date: day } })
+      .then(r => {
+        const byId: Record<string, any> = {};
+        for (const e of (r.data?.events ?? [])) {
+          if (e?.id != null && e.deepDive) byId[String(e.id)] = e.deepDive;
+        }
+        rememberDay(day, byId);
+        apply(byId);
+      })
+      .catch(() => {
+        // A 403 means the server does not see this account as PRO, a 404 means the
+        // day was never written. Either way the teaser is the correct fallback, and
+        // remembering the failure stops every story from that day re-asking.
+        rememberDay(day, null);
+      });
+
+    return () => { cancelled = true; };
+  }, [isPro, onEvent, day, eventId, lang]);
   const teaser = useMemo(
     () => pick<DeepDiveTeaser>(event?.deepDiveTeaser, lang),
     [event?.deepDiveTeaser, lang],

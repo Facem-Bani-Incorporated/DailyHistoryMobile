@@ -23,7 +23,7 @@ import { usePaywallStore } from '../store/usePaywallStore';
 import { getEventId, useSavedStore } from '../store/useSavedStore';
 import { noteStoryFinishedAndCheck } from '../utils/review';
 import { extractYear, formatYear } from '../utils/year';
-import { Figure, StatRow } from './Figures';
+import { Figure, Figures } from './Figures';
 import { LongReadSection } from './LongReadSection';
 import ParallelUniverse from './ParallelUniverse';
 import ParallelEntryCard from './ParallelEntryCard';
@@ -671,14 +671,15 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
 
               {/* The event in numbers, before a word of the article */}
               {statFigure && (
-                <StatRow
-                  figure={statFigure}
+                <Figures
+                  figures={[statFigure]}
                   palette={{
                     text: theme.text,
                     subtext: theme.subtext,
                     gold: theme.gold,
                     isDark,
                   }}
+                  lang={language}
                 />
               )}
 
