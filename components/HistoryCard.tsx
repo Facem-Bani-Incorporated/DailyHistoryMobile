@@ -23,6 +23,7 @@ import { haptic } from '../utils/haptics';
 import { useEventImages } from '../hooks/useEventImages';
 import { useGamificationStore } from '../store/useGamificationStore';
 import { getEventId } from '../store/useSavedStore';
+import { extractYear, formatYear } from '../utils/year';
 import { StoryModal } from './StoryModal';
 
 const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
@@ -30,19 +31,6 @@ const SANS = Platform.OS === 'ios' ? 'System' : 'sans-serif';
 
 /** Shared by the card, its lift and its rim — three places that must agree. */
 const CARD_RADIUS = 28;
-
-const extractYear = (event: any): string => {
-  if (!event) return '';
-  if (event.year && Number(event.year) > 100) return String(event.year);
-  const rawDate = event.eventDate ?? event.event_date ?? event.date;
-  if (rawDate) {
-    if (rawDate instanceof Date) return String(rawDate.getFullYear());
-    const dateStr = String(rawDate).trim();
-    const match = dateStr.match(/^(\d{3,4})-/);
-    if (match) return match[1];
-  }
-  return '';
-};
 
 const eraLabel = (year: number): string => {
   if (!year) return '';
@@ -75,8 +63,8 @@ const HistoryCardComponent = ({ event, allEvents = [] }: { event: any; allEvents
 
   if (!event) return null;
 
-  const year = extractYear(event);
-  const yearNum = parseInt(year) || 0;
+  const yearNum = extractYear(event) ?? 0;
+  const year = formatYear(yearNum, language);
   const title = event.titleTranslations?.[language] ?? event.titleTranslations?.en ?? 'No Title';
   const narrative = event.narrativeTranslations?.[language] ?? event.narrativeTranslations?.en ?? '';
   const category = (event.category ?? 'HISTORY').replace(/_/g, ' ');

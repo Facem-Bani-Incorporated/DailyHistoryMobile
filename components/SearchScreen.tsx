@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { haptic } from '../utils/haptics';
+import { formatEventYear } from '../utils/year';
 import { StoryModal } from './StoryModal';
 
 const { width: W } = Dimensions.get('window');
@@ -32,14 +33,6 @@ const ALL_CATEGORIES = [
   'war_conflict', 'tech_innovation', 'science_discovery', 'politics_state',
   'culture_arts', 'natural_disaster', 'exploration', 'religion_phil',
 ];
-
-const extractYear = (event: any): string => {
-  const raw = event?.eventDate ?? event?.event_date ?? event?.year ?? '';
-  const s = String(raw).trim();
-  if (/^\d{4}$/.test(s)) return s;
-  if (s.includes('-') && s.split('-')[0].length === 4) return s.split('-')[0];
-  return '';
-};
 
 interface Props {
   allEvents: any[];
@@ -79,7 +72,7 @@ export default function SearchScreen({ allEvents }: Props) {
           e.narrativeTranslations?.[language] ??
           e.narrativeTranslations?.en ?? ''
         ).toLowerCase();
-        const year = extractYear(e);
+        const year = formatEventYear(e, language);
         const cat = (e.category ?? '').toLowerCase().replace(/_/g, ' ');
         return title.includes(q) || narrative.includes(q) || year.includes(q) || cat.includes(q);
       });
@@ -97,7 +90,7 @@ export default function SearchScreen({ allEvents }: Props) {
 
   const renderEvent = ({ item }: { item: any }) => {
     const title = item.titleTranslations?.[language] ?? item.titleTranslations?.en ?? '';
-    const year = extractYear(item);
+    const year = formatEventYear(item, language);
     const catKey = (item.category ?? '').toLowerCase();
     const catColor = CAT_COLORS[catKey] ?? '#8B7355';
     // Categoria fara underscore

@@ -19,6 +19,7 @@ import { haptic } from '../utils/haptics';
 import { useRevenueCat } from '../context/RevenueCatContext';
 import { useGamificationStore } from '../store/useGamificationStore';
 import { maybeRequestReview } from '../utils/review';
+import { extractYear as sharedExtractYear } from '../utils/year';
 
 const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
 const QUESTIONS_PER_QUIZ = 5;
@@ -130,12 +131,7 @@ export interface Question {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-const extractYear = (e: any): number => {
-  const r = String(e?.eventDate ?? e?.event_date ?? e?.year ?? '').trim();
-  if (/^-?\d{1,4}$/.test(r)) return parseInt(r);
-  if (r.includes('-') && r.split('-')[0].length === 4) return parseInt(r.split('-')[0]);
-  return 0;
-};
+const extractYear = (e: any): number => sharedExtractYear(e) ?? 0;
 
 const shuffle = <T,>(arr: T[]): T[] => {
   const a = [...arr];

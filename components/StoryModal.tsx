@@ -22,6 +22,7 @@ import { useGamificationStore } from '../store/useGamificationStore';
 import { usePaywallStore } from '../store/usePaywallStore';
 import { getEventId, useSavedStore } from '../store/useSavedStore';
 import { noteStoryFinishedAndCheck } from '../utils/review';
+import { extractYear, formatYear } from '../utils/year';
 import { LongReadSection } from './LongReadSection';
 import ParallelUniverse from './ParallelUniverse';
 import ParallelEntryCard from './ParallelEntryCard';
@@ -248,16 +249,14 @@ const GalleryDots = ({ total, active, gold }: { total: number; active: number; g
 
 // ─── Same year events ─────────────────────────────────────────────────────────
 const SameYearEvents = ({ currentEvent, allEvents, year, theme, isDark, language, onPress }: {
-  currentEvent: any; allEvents: any[]; year: string; theme: any; isDark: boolean; language: string; onPress: (e: any) => void;
+  currentEvent: any; allEvents: any[]; year: number | null; theme: any; isDark: boolean; language: string; onPress: (e: any) => void;
 }) => {
-  const yearNum = parseInt(year);
-  if (!yearNum || isNaN(yearNum)) return null;
+  const yearNum = year;
+  if (!yearNum) return null;
 
   const sameYear = allEvents.filter(e => {
     if (getEventId(e) === getEventId(currentEvent)) return false;
-    const eYear = String(e.eventDate ?? e.event_date ?? e.year ?? '').trim();
-    const parsed = parseInt(eYear.match(/^(\d{3,4})/)?.[1] ?? '');
-    return parsed === yearNum;
+    return extractYear(e) === yearNum;
   }).slice(0, 5);
 
   if (sameYear.length === 0) return null;
@@ -267,7 +266,7 @@ const SameYearEvents = ({ currentEvent, allEvents, year, theme, isDark, language
     <View style={sy.wrap}>
       <View style={sy.header}>
         <View style={[sy.line, { backgroundColor: theme.gold + '30' }]} />
-        <Text style={[sy.title, { color: theme.gold }]}>{label} {yearNum}</Text>
+        <Text style={[sy.title, { color: theme.gold }]}>{label} {formatYear(yearNum, language)}</Text>
         <View style={[sy.line, { backgroundColor: theme.gold + '30' }]} />
       </View>
       {sameYear.map(evt => {
@@ -462,7 +461,8 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
   const saved = isSaved(eventId!);
   const toggleSave = () => saved ? removeEvent(eventId!) : saveEvent(currentEvent);
 
-  const year = String(currentEvent.eventDate ?? currentEvent.event_date ?? currentEvent.year ?? '').trim();
+  const yearNum = extractYear(currentEvent);
+  const year = formatYear(yearNum, language);
   const title = currentEvent.titleTranslations?.[language] ?? currentEvent.titleTranslations?.en ?? '';
   const narrative = currentEvent.narrativeTranslations?.[language] ?? currentEvent.narrativeTranslations?.en ?? '';
   const category = (currentEvent.category ?? 'HISTORY').replace(/_/g, ' ').toUpperCase();
@@ -684,7 +684,7 @@ export const StoryModal = ({ visible, event, onClose, theme, allEvents: allEvent
 
               {/* Same year events */}
               <SameYearEvents
-                currentEvent={currentEvent} allEvents={allEvents} year={year}
+                currentEvent={currentEvent} allEvents={allEvents} year={yearNum}
                 theme={theme} isDark={isDark} language={language} onPress={pushRelated}
               />
 

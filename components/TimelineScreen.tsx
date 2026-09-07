@@ -28,6 +28,7 @@ import { useGamificationStore } from '../store/useGamificationStore';
 import { StoryModal } from './StoryModal';
 import TimelineQuizModal from './TimelineQuizModal';
 import HistoricalFiguresModal from './HistoricalFiguresModal';
+import { extractYear as sharedExtractYear, formatYear as sharedFormatYear } from '../utils/year';
 
 const { width: W, height: H } = Dimensions.get('window');
 const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
@@ -110,13 +111,7 @@ const TL: Record<string, Record<TKeys, string>> = {
 const tl = (lang: string, k: TKeys) => (TL[lang] ?? TL.en)[k] ?? TL.en[k];
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
-const extractYear = (ev: any): number => {
-  const r = String(ev?.eventDate ?? ev?.event_date ?? ev?.year ?? '').trim();
-  if (/^-?\d{1,4}$/.test(r)) return parseInt(r);
-  if (r.includes('-') && r.split('-')[0].length === 4) return parseInt(r.split('-')[0]);
-  const m = r.match(/-?\d{1,4}/);
-  return m ? parseInt(m[0]) : 0;
-};
+const extractYear = (ev: any): number => sharedExtractYear(ev) ?? 0;
 
 const toRoman = (n: number): string => {
   if (n <= 0) return '—';
@@ -144,8 +139,7 @@ const centuryLabel = (n: number, lang: string): string => {
   }
 };
 
-const formatYear = (y: number, lang: string): string =>
-  y < 0 ? `${Math.abs(y)} ${tl(lang, 'bc')}` : `${y}`;
+const formatYear = (y: number, lang: string): string => sharedFormatYear(y, lang);
 
 const centuryRange = (century: number): string => {
   const start = (century - 1) * 100 + 1;

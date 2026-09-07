@@ -32,6 +32,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { haptic } from '../utils/haptics';
 import { HISTORICAL_FIGURES, HistoricalFigure } from '../data/historicalFigures';
+import { extractYear as sharedExtractYear, formatYear as sharedFormatYear } from '../utils/year';
 
 const { width: W, height: H } = Dimensions.get('window');
 const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
@@ -163,18 +164,10 @@ const T: Record<string, Record<TKey, string>> = {
 
 const tx = (lang: string, k: TKey) => (T[lang] ?? T.en)[k] ?? T.en[k];
 
-const formatYear = (y: number, lang: string): string => {
-  if (y < 0) return `${Math.abs(y)} ${tx(lang, 'bc')}`;
-  return `${y} ${tx(lang, 'ad')}`;
-};
+const formatYear = (y: number, lang: string): string =>
+  sharedFormatYear(y, lang, { era: 'ad' });
 
-const extractYear = (ev: any): number => {
-  const r = String(ev?.eventDate ?? ev?.event_date ?? ev?.year ?? '').trim();
-  if (/^-?\d{1,4}$/.test(r)) return parseInt(r);
-  if (r.includes('-') && r.split('-')[0].length === 4) return parseInt(r.split('-')[0]);
-  const m = r.match(/-?\d{1,4}/);
-  return m ? parseInt(m[0]) : 0;
-};
+const extractYear = (ev: any): number => sharedExtractYear(ev) ?? 0;
 
 const CATEGORY_ICONS: Record<string, React.ComponentType<any>> = {
   ruler: Crown,
@@ -312,7 +305,7 @@ const WorldEventRow = ({ event, isDark, theme, language }: {
   language: string;
 }) => {
   const year = extractYear(event);
-  const yearLabel = year < 0 ? `${Math.abs(year)} BC` : `${year} AD`;
+  const yearLabel = formatYear(year, language);
   const title = event.titleTranslations?.[language] ?? event.titleTranslations?.en ?? '';
   const cat = (event.category ?? '').toLowerCase();
   const CAT_COLORS: Record<string, string> = {

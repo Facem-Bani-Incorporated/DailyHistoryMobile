@@ -4,6 +4,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
 import { Dimensions, Platform, StyleSheet, Text, View } from 'react-native';
 
+import { extractYear, formatYear } from '../utils/year';
+
 const { width: W } = Dimensions.get('window');
 const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
 
@@ -18,17 +20,9 @@ interface ShareCardProps {
   imageIndex?: number;
 }
 
-const extractYear = (event: any): string => {
-  const rawDate = event?.eventDate ?? event?.event_date ?? event?.year ?? '';
-  const s = String(rawDate).trim();
-  if (/^\d{4}$/.test(s)) return s;
-  if (s.includes('-') && s.split('-')[0].length === 4) return s.split('-')[0];
-  return '';
-};
-
-const yearsAgo = (year: string): string => {
+const yearsAgo = (year: number | null): string => {
   if (!year) return '';
-  const diff = new Date().getFullYear() - parseInt(year, 10);
+  const diff = new Date().getFullYear() - year;
   if (diff <= 0) return '';
   return `${diff} years ago`;
 };
@@ -40,12 +34,13 @@ const formatDate = (): string => {
 export const ShareCard = ({ event, language, cardRef, imageIndex = 0 }: ShareCardProps) => {
   if (!event) return null;
 
-  const year = extractYear(event);
+  const yearNum = extractYear(event);
+  const year = formatYear(yearNum, language);
   const title = event.titleTranslations?.[language] ?? event.titleTranslations?.en ?? '';
   const category = (event.category ?? 'HISTORY').replace(/_/g, ' ').toUpperCase();
   const gallery: string[] = event.gallery ?? [];
   const imageUri = gallery[imageIndex] ?? gallery[0];
-  const ago = yearsAgo(year);
+  const ago = yearsAgo(yearNum);
 
   return (
     <View ref={cardRef} collapsable={false} style={s.card}>

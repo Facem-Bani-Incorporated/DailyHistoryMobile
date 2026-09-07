@@ -2,6 +2,7 @@
 // plus the deterministic daily story pick. Mirrors utils/dailyChallenge.ts.
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from '../store/useAuthStore';
+import { extractYear as sharedExtractYear } from './year';
 
 export const YEAR_QUIZ_XP = 500;    // awarded only when the year is guessed within 3 tries
 export const YEAR_QUIZ_TRIES = 3;
@@ -37,12 +38,7 @@ export async function markYearQuizDone(iso: string = todayIso()): Promise<void> 
 
 // ── Daily pick ────────────────────────────────────────────────────────────────
 
-export const extractYear = (e: any): number => {
-  const r = String(e?.eventDate ?? e?.event_date ?? e?.year ?? '').trim();
-  if (/^-?\d{1,4}$/.test(r)) return parseInt(r);
-  if (r.includes('-') && r.split('-')[0].length === 4) return parseInt(r.split('-')[0]);
-  return 0;
-};
+export const extractYear = (e: any): number => sharedExtractYear(e) ?? 0;
 
 /**
  * Deterministically picks today's mystery story from the pool: everyone (and every

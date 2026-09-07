@@ -87,6 +87,7 @@ import { useMapLayerPasses, useMapLayerPassStore } from '../store/useMapLayerPas
 import { usePaywallStore } from '../store/usePaywallStore';
 import { useCoinPopupStore } from '../store/useCoinPopupStore';
 import { useCoinData, useCoinStore } from '../store/useCoinStore';
+import { extractYear, formatEventYear } from '../utils/year';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental)
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -699,13 +700,6 @@ const snapToRoute = (
 };
 
 const getCat = (e: any): string => (e.category ?? '').toString().toLowerCase();
-const getYear = (e: any): string => {
-  const r = String(e.eventDate ?? e.event_date ?? e.year ?? '').trim();
-  if (/^\d{4}$/.test(r)) return r;
-  if (r.includes('-')) return r.split('-')[0];
-  return '';
-};
-
 // ─── Types ─────────────────────────────────────────────────────────────────────
 interface EventWithLocation {
   event: any;
@@ -849,7 +843,7 @@ const PreviewCard = ({
     item.event.summaryTranslations?.[language] ??
     item.event.summaryTranslations?.en ??
     '';
-  const year = getYear(item.event);
+  const year = formatEventYear(item.event, language);
   const locationLabel = item.city || item.label.split(',')[0]?.trim() || item.label;
 
   const cardBg = isDark ? '#1C1917' : '#FFFFFF';
@@ -942,7 +936,7 @@ const EventRow = React.memo(
       item.event.titleTranslations?.[language] ??
       item.event.titleTranslations?.en ??
       '';
-    const year = getYear(item.event);
+    const year = formatEventYear(item.event, language);
     const cityLabel = item.city || (item.label.includes(',') ? item.label.split(',')[0].trim() : '');
 
     return (
@@ -1016,7 +1010,7 @@ const CategorySection = ({
       </TouchableOpacity>
       {expanded &&
         cat.events.map((item, i) => (
-          <View key={`${getYear(item.event)}-${item.label}-${i}`}>
+          <View key={`${extractYear(item.event) ?? ''}-${item.label}-${i}`}>
             <EventRow
               item={item}
               language={language}

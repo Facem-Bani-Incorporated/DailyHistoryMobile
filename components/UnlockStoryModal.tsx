@@ -36,6 +36,7 @@ import { useCoins, useCoinStore, useIsEventUnlocked, useProUnlocksLeft } from '.
 import { getEventId } from '../store/useSavedStore';
 import { useUnlockStore } from '../store/useUnlockStore';
 import { haptic } from '../utils/haptics';
+import { formatEventYear } from '../utils/year';
 import EventImage from './EventImage';
 import { StoryModal } from './StoryModal';
 
@@ -128,8 +129,7 @@ export default function UnlockStoryModal() {
   const title =
     event?.titleTranslations?.[language] ?? event?.titleTranslations?.en ?? '';
   const category = (event?.category ?? 'HISTORY').replace(/_/g, ' ');
-  const rawDate = event?.eventDate ?? event?.event_date ?? '';
-  const year = rawDate ? String(rawDate).slice(0, 4) : '';
+  const year = formatEventYear(event, language);
 
   const hasCoins = coins >= COIN_COST_EVENT;
   // Coins buy a few PRO stories a day, not the catalogue. Past the daily

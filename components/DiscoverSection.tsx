@@ -25,6 +25,7 @@ import { useGamificationStore } from '../store/useGamificationStore';
 import { getEventId } from '../store/useSavedStore';
 import { usePaywallStore } from '../store/usePaywallStore';
 import { haptic } from '../utils/haptics';
+import { extractYear, formatEventYear, formatYear } from '../utils/year';
 import { StoryModal } from './StoryModal';
 
 const GAP = 8;
@@ -44,15 +45,6 @@ interface DiscoverSectionProps {
 }
 
 /* ── Utilities ────────────────────────────── */
-const extractYear = (event: any): string => {
-  const raw = event?.eventDate ?? event?.event_date ?? event?.year;
-  if (!raw) return '';
-  const s = String(raw).trim();
-  if (/^\d{4}$/.test(s)) return s;
-  const y = new Date(s).getFullYear();
-  return isNaN(y) ? '' : String(y);
-};
-
 const ERA_LABELS: Record<string, Record<string, string>> = {
   en: { antiquity: 'Antiquity', classical: 'Classical', medieval: 'Medieval', early_modern: 'Early Modern', xix: 'XIX Century', xx: 'XX Century', contemporary: 'Contemporary' },
   ro: { antiquity: 'Antichitate', classical: 'Clasic', medieval: 'Medieval', early_modern: 'Epoca Modernă', xix: 'Sec. XIX', xx: 'Sec. XX', contemporary: 'Contemporan' },
@@ -246,8 +238,8 @@ const HeroCard = ({
   const title = event.titleTranslations?.[lang] ?? event.titleTranslations?.en ?? '';
   const narrative = event.narrativeTranslations?.[lang] ?? event.narrativeTranslations?.en ?? '';
   const category = (event.category ?? 'HISTORY').replace(/_/g, ' ');
-  const year = extractYear(event);
-  const yearNum = parseInt(year) || 0;
+  const yearNum = extractYear(event) ?? 0;
+  const year = formatYear(yearNum, lang);
   const accent = getCatColor(event.category);
   const pro = isProEvent(event);
   const locked = pro && !subscribed && !unlocked;
@@ -335,8 +327,8 @@ const EditorialCard = ({
 }: { event: any; lang: string; number: number; onPress: () => void; height: number; isRead?: boolean; subscribed?: boolean; unlocked?: boolean }) => {
   const title = event.titleTranslations?.[lang] ?? event.titleTranslations?.en ?? '';
   const category = (event.category ?? 'HISTORY').replace(/_/g, ' ');
-  const year = extractYear(event);
-  const yearNum = parseInt(year) || 0;
+  const yearNum = extractYear(event) ?? 0;
+  const year = formatYear(yearNum, lang);
   const accent = getCatColor(event.category);
   const pro = isProEvent(event);
   const locked = pro && !subscribed && !unlocked;
@@ -412,7 +404,7 @@ const CuratedCard = ({
 }: { event: any; lang: string; number: number; onPress: () => void; width: number; height: number; isRead?: boolean; subscribed?: boolean; unlocked?: boolean }) => {
   const title = event.titleTranslations?.[lang] ?? event.titleTranslations?.en ?? '';
   const category = (event.category ?? 'HISTORY').replace(/_/g, ' ');
-  const year = extractYear(event);
+  const year = formatEventYear(event, lang);
   const accent = getCatColor(event.category);
   const pro = isProEvent(event);
   const locked = pro && !subscribed && !unlocked;
@@ -468,7 +460,7 @@ const ExtrasWideCard = ({
   const title = event.titleTranslations?.[lang] ?? event.titleTranslations?.en ?? '';
   const narrative = event.narrativeTranslations?.[lang] ?? event.narrativeTranslations?.en ?? '';
   const category = (event.category ?? 'HISTORY').replace(/_/g, ' ');
-  const year = extractYear(event);
+  const year = formatEventYear(event, lang);
   const accent = getCatColor(event.category);
   const pro = isProEvent(event);
   const locked = pro && !subscribed && !unlocked;
@@ -573,7 +565,7 @@ const ExtrasTileCard = ({
 }: { event: any; lang: string; onPress: () => void; width: number; isRead?: boolean; subscribed?: boolean; unlocked?: boolean }) => {
   const title = event.titleTranslations?.[lang] ?? event.titleTranslations?.en ?? '';
   const category = (event.category ?? 'HISTORY').replace(/_/g, ' ');
-  const year = extractYear(event);
+  const year = formatEventYear(event, lang);
   const accent = getCatColor(event.category);
   const pro = isProEvent(event);
   const locked = pro && !subscribed && !unlocked;

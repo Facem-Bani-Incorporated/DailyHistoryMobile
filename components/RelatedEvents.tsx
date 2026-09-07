@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 import { useLanguage } from '../context/LanguageContext';
 import { getEventId } from '../store/useSavedStore';
+import { extractYear, formatYear } from '../utils/year';
 
 const T: Record<string, Record<string, string>> = {
   en: { related: 'Related Events', sameCategory: 'Same category', sameEra: 'Same era', sameCentury: 'Same century' },
@@ -35,11 +36,8 @@ const CAT_COLORS: Record<string, string> = {
   exploration: '#06B6D4', religion_phil: '#8B6F47',
 };
 
-function extractYear(event: any): number {
-  if (event?.year && Number(event.year) > 100) return Number(event.year);
-  const raw = event?.eventDate ?? event?.event_date ?? '';
-  const match = String(raw).match(/^(\d{3,4})/);
-  return match ? parseInt(match[1], 10) : 0;
+function eventYear(event: any): number {
+  return extractYear(event) ?? 0;
 }
 
 function getCatColor(cat: string): string {
@@ -68,7 +66,7 @@ export default function RelatedEvents({ currentEvent, allEvents, theme, isDark, 
 
     const currentId = getEventId(currentEvent);
     const currentCat = (currentEvent.category ?? '').toLowerCase().trim();
-    const currentYear = extractYear(currentEvent);
+    const currentYear = eventYear(currentEvent);
     const currentDecade = Math.floor(currentYear / 10) * 10;
     const currentCentury = Math.floor(currentYear / 100) * 100;
 
@@ -79,7 +77,7 @@ export default function RelatedEvents({ currentEvent, allEvents, theme, isDark, 
       if (evtId === currentId) continue;
 
       const evtCat = (evt.category ?? '').toLowerCase().trim();
-      const evtYear = extractYear(evt);
+      const evtYear = eventYear(evt);
       const evtDecade = Math.floor(evtYear / 10) * 10;
       const evtCentury = Math.floor(evtYear / 100) * 100;
 
@@ -136,7 +134,7 @@ export default function RelatedEvents({ currentEvent, allEvents, theme, isDark, 
       <View style={rs.list}>
         {relatedEvents.map(({ event, reason }, i) => {
           const title = event.titleTranslations?.[language] ?? event.titleTranslations?.en ?? '';
-          const year = extractYear(event);
+          const year = eventYear(event);
           const cat = (event.category ?? '').replace(/_/g, ' ').toUpperCase();
           const catColor = getCatColor(event.category ?? '');
           const imageUri = event.gallery?.[0];
@@ -160,9 +158,9 @@ export default function RelatedEvents({ currentEvent, allEvents, theme, isDark, 
                     <Bookmark size={14} color={catColor + '60'} strokeWidth={1.5} />
                   </View>
                 )}
-                {year > 0 && (
+                {year !== 0 && (
                   <View style={rs.yearBadge}>
-                    <Text style={rs.yearText}>{year}</Text>
+                    <Text style={rs.yearText}>{formatYear(year, language)}</Text>
                   </View>
                 )}
               </View>

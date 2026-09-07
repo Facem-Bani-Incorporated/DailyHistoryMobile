@@ -4,6 +4,8 @@ import * as Notifications from 'expo-notifications';
 import { SchedulableTriggerInputTypes } from 'expo-notifications';
 import { Platform } from 'react-native';
 
+import { formatEventYear } from './year';
+
 // ── Configure notification handler ──
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -608,7 +610,7 @@ export function buildPersonalizedNotification(
   }
 
   // ── Extract data ──
-  const year = extractYearFromEvent(bestEvent);
+  const year = extractYearFromEvent(bestEvent, language);
   const emoji = getCategoryEmoji(bestEvent.category);
   const shortTitle =
     bestEvent.titleTranslations?.[language] ??
@@ -665,12 +667,8 @@ export async function fireTestNotification(
 // HELPERS
 // ══════════════════════════════════════════════════════════════
 
-function extractYearFromEvent(event: any): string {
-  if (event.year && Number(event.year) > 100) return String(event.year);
-  const raw = event.eventDate ?? event.event_date ?? '';
-  const s = String(raw).trim();
-  const match = s.match(/^(\d{3,4})/);
-  return match ? match[1] : '';
+function extractYearFromEvent(event: any, language: string): string {
+  return formatEventYear(event, language);
 }
 
 function getCategoryEmoji(_category?: string): string {

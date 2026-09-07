@@ -7,15 +7,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { captureRef } from 'react-native-view-shot';
 import { Image } from 'expo-image';
 import { useTheme } from '../context/ThemeContext';
+import { formatEventYear } from '../utils/year';
 import { ShareCard } from './Sharecard';
-
-const extractYear = (event: any): string => {
-  const rawDate = event?.eventDate ?? event?.event_date ?? event?.year ?? '';
-  const s = String(rawDate).trim();
-  if (/^\d{4}$/.test(s)) return s;
-  if (s.includes('-') && s.split('-')[0].length === 4) return s.split('-')[0];
-  return '';
-};
 
 interface Props {
   visible: boolean;
@@ -43,7 +36,7 @@ export const SharePickerModal = ({ visible, event, language, gallery, onClose }:
       const uri = await captureRef(shareCardRef, { format: 'png', quality: 1 });
       if (await Sharing.isAvailableAsync()) {
         const title = event?.titleTranslations?.[language] ?? event?.titleTranslations?.en ?? '';
-        const year = extractYear(event);
+        const year = formatEventYear(event, language);
         await Sharing.shareAsync(uri, {
           dialogTitle: `${title} (${year})`,
           mimeType: 'image/png',
